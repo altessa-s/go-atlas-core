@@ -205,7 +205,7 @@ func accessMasks(abi int) (read, write uint64) {
 // createRuleset wraps landlock_create_ruleset(2).
 func createRuleset(handledAccessFs uint64) (int, error) {
 	attr := unix.LandlockRulesetAttr{
-		Access_fs: handledAccessFs,
+		Handled_access_fs: handledAccessFs,
 	}
 	r1, _, errno := unix.Syscall(
 		unix.SYS_LANDLOCK_CREATE_RULESET,
