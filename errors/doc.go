@@ -56,4 +56,10 @@
 //		// Error format: "failed to publish message on topic 'events': <original error>"
 //		return nil
 //	}
+//
+// # Network Errors
+//
+// Classifiers for net, net/url and crypto/x509 errors live in the
+// [github.com/altessa-s/go-atlas-core/errors/network] subpackage, which keeps
+// this package free of those dependencies.
 package errors

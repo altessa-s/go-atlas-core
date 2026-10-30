@@ -2,7 +2,7 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-package errors_test
+package network_test
 
 import (
 	"errors"
@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"testing"
 
-	coreerrs "github.com/altessa-s/go-atlas-core/errors"
+	"github.com/altessa-s/go-atlas-core/errors/network"
 )
 
 // TestIsConnectionRefused_SyscallErrorWrap pins the realistic error shape
@@ -24,92 +24,77 @@ func TestIsConnectionRefused_SyscallErrorWrap(t *testing.T) {
 		Net: "tcp",
 		Err: os.NewSyscallError("connect", syscall.ECONNREFUSED),
 	}
-	if !coreerrs.IsConnectionRefused(opErr) {
+	if !network.IsConnectionRefused(opErr) {
 		t.Error("should detect ECONNREFUSED wrapped in *os.SyscallError inside *net.OpError")
 	}
-	if !coreerrs.IsConnectionRefused(&url.Error{Op: "Get", URL: "http://x", Err: opErr}) {
+	if !network.IsConnectionRefused(&url.Error{Op: "Get", URL: "http://x", Err: opErr}) {
 		t.Error("should detect ECONNREFUSED through a *url.Error layer")
 	}
 }
 
 func TestIsURLError(t *testing.T) {
 	urlErr := &url.Error{Op: "Get", URL: "http://x", Err: errors.New("fail")}
-	if !coreerrs.IsURLError(urlErr) {
+	if !network.IsURLError(urlErr) {
 		t.Error("should detect url.Error")
 	}
-	if coreerrs.IsURLError(errors.New("plain")) {
+	if network.IsURLError(errors.New("plain")) {
 		t.Error("should not detect plain error")
 	}
-	if coreerrs.IsURLError(nil) {
+	if network.IsURLError(nil) {
 		t.Error("should not detect nil")
 	}
 }
 
 func TestIsCertUnknownAuthority(t *testing.T) {
 	// Non-url.Error should not match
-	if coreerrs.IsCertUnknownAuthority(errors.New("other")) {
+	if network.IsCertUnknownAuthority(errors.New("other")) {
 		t.Error("should not detect plain error")
 	}
-	if coreerrs.IsCertUnknownAuthority(nil) {
+	if network.IsCertUnknownAuthority(nil) {
 		t.Error("should not detect nil")
 	}
 	// url.Error with non-cert inner error
 	urlErr := &url.Error{Op: "Get", URL: "https://x", Err: errors.New("other")}
-	if coreerrs.IsCertUnknownAuthority(urlErr) {
+	if network.IsCertUnknownAuthority(urlErr) {
 		t.Error("should not detect url.Error with plain inner error")
 	}
 }
 
 func TestIsNetworkError_Nil(t *testing.T) {
-	if coreerrs.IsNetworkError(nil) {
+	if network.IsNetworkError(nil) {
 		t.Error("should not detect nil")
 	}
 }
 
 func TestIsRequestTimeoutError_NonTimeout(t *testing.T) {
-	if coreerrs.IsRequestTimeoutError(nil) {
+	if network.IsRequestTimeoutError(nil) {
 		t.Error("should not detect nil")
 	}
-	if coreerrs.IsRequestTimeoutError(errors.New("plain")) {
+	if network.IsRequestTimeoutError(errors.New("plain")) {
 		t.Error("should not detect plain error")
 	}
 }
 
 func TestIsResourceRedirects_Nil(t *testing.T) {
-	if coreerrs.IsResourceRedirects(nil) {
+	if network.IsResourceRedirects(nil) {
 		t.Error("should not detect nil")
 	}
-	if coreerrs.IsResourceRedirects(errors.New("no redirects")) {
+	if network.IsResourceRedirects(errors.New("no redirects")) {
 		t.Error("should not detect non-redirect error")
 	}
 }
 
 func TestIsUnsupportedProtocolScheme_Nil(t *testing.T) {
-	if coreerrs.IsUnsupportedProtocolScheme(nil) {
+	if network.IsUnsupportedProtocolScheme(nil) {
 		t.Error("should not detect nil")
 	}
 }
 
 func TestIsConnectionRefused_Nil(t *testing.T) {
-	if coreerrs.IsConnectionRefused(nil) {
+	if network.IsConnectionRefused(nil) {
 		t.Error("should not detect nil")
 	}
-	if coreerrs.IsConnectionRefused(errors.New("other")) {
+	if network.IsConnectionRefused(errors.New("other")) {
 		t.Error("should not detect plain error")
-	}
-}
-
-func TestWrapNilCases(t *testing.T) {
-	if coreerrs.Wrap(nil, "ctx") != nil {
-		t.Error("Wrap(nil) should be nil")
-	}
-	if coreerrs.WrapOperation(nil, "op") != nil {
-		t.Error("WrapOperation(nil) should be nil")
-	}
-	if coreerrs.WrapField(nil, "f") != nil {
-		t.Error("WrapField(nil) should be nil")
-	}
-	if coreerrs.WrapOperationWithContext(nil, "op", "ctx") != nil {
-		t.Error("WrapOperationWithContext(nil) should be nil")
 	}
 }

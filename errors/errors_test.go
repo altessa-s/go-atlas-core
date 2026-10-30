@@ -82,3 +82,18 @@ func TestStandardErrors(t *testing.T) {
 	base := std_errors.New("oops")
 	require.Equal(t, "failed to create Redis provider: oops", errors.Provider("Redis", base).Error())
 }
+
+func TestWrapNilCases(t *testing.T) {
+	if errors.Wrap(nil, "ctx") != nil {
+		t.Error("Wrap(nil) should be nil")
+	}
+	if errors.WrapOperation(nil, "op") != nil {
+		t.Error("WrapOperation(nil) should be nil")
+	}
+	if errors.WrapField(nil, "f") != nil {
+		t.Error("WrapField(nil) should be nil")
+	}
+	if errors.WrapOperationWithContext(nil, "op", "ctx") != nil {
+		t.Error("WrapOperationWithContext(nil) should be nil")
+	}
+}

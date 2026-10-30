@@ -2,7 +2,7 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-package errors
+package network
 
 import (
 	"crypto/x509"
@@ -22,7 +22,7 @@ import (
 //
 // Example:
 //
-//	if errors.IsNetworkError(err) { /* handle network issue */ }
+//	if network.IsNetworkError(err) { /* handle network issue */ }
 func IsNetworkError(err error) bool {
 	if err == nil {
 		return false
@@ -40,7 +40,7 @@ func IsNetworkError(err error) bool {
 //
 // Example:
 //
-//	if errors.IsRequestTimeoutError(err) { /* retry or fail */ }
+//	if network.IsRequestTimeoutError(err) { /* retry or fail */ }
 func IsRequestTimeoutError(err error) bool {
 	if err == nil {
 		return false
@@ -75,7 +75,7 @@ var (
 //
 // Example:
 //
-//	if errors.IsURLError(err) { /* check URL format */ }
+//	if network.IsURLError(err) { /* check URL format */ }
 func IsURLError(err error) bool {
 	if err == nil {
 		return false
@@ -91,7 +91,7 @@ func IsURLError(err error) bool {
 //
 // Example:
 //
-//	if errors.IsResourceRedirects(err) { /* too many redirects */ }
+//	if network.IsResourceRedirects(err) { /* too many redirects */ }
 func IsResourceRedirects(err error) bool {
 	if err == nil {
 		return false
@@ -108,7 +108,7 @@ func IsResourceRedirects(err error) bool {
 //
 // Example:
 //
-//	if errors.IsUnsupportedProtocolScheme(err) { /* use http or https */ }
+//	if network.IsUnsupportedProtocolScheme(err) { /* use http or https */ }
 func IsUnsupportedProtocolScheme(err error) bool {
 	if err == nil {
 		return false
@@ -127,7 +127,7 @@ func IsUnsupportedProtocolScheme(err error) bool {
 //
 // Example:
 //
-//	if errors.IsCertUnknownAuthority(err) { /* add CA to trust store */ }
+//	if network.IsCertUnknownAuthority(err) { /* add CA to trust store */ }
 func IsCertUnknownAuthority(err error) bool {
 	if err == nil {
 		return false
@@ -147,7 +147,7 @@ func IsCertUnknownAuthority(err error) bool {
 //
 // Example:
 //
-//	if errors.IsConnectionRefused(err) { /* service unavailable */ }
+//	if network.IsConnectionRefused(err) { /* service unavailable */ }
 func IsConnectionRefused(err error) bool {
 	if err == nil {
 		return false

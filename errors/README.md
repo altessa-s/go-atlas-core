@@ -4,8 +4,8 @@
 import "github.com/altessa-s/go-atlas-core/errors"
 ```
 
-Package `errors` provides error classification, wrapping, and network error inspection utilities. All functions are nil-safe and preserve the full error
-chain for `errors.Is` / `errors.As` unwrapping across any number of nested wrappers.
+Package `errors` provides error classification and wrapping utilities. All functions are nil-safe and preserve the full error chain for `errors.Is` /
+`errors.As` unwrapping across any number of nested wrappers. Network, URL and TLS error classifiers live in [`errors/network`](network/).
 
 ## Wrapping
 
@@ -14,7 +14,7 @@ chain for `errors.Is` / `errors.As` unwrapping across any number of nested wrapp
 | `Wrap`                     | `<msg>: <err>`                                          |
 | `Wrapf`                    | `<format args>: <err>`                                  |
 | `WrapOperation`            | `failed to <operation>: <err>`                          |
-| `WrapOperationWithContext` | `failed to <operation> on <context>: <err>`             |
+| `WrapOperationWithContext` | `failed to <operation> on <scope>: <err>`               |
 | `WrapField`                | `field '<name>': <err>`                                 |
 | `JoinWrap`                 | `<sentinel>: <cause>` — both stay matchable via `errors.Is` |
 
@@ -22,7 +22,7 @@ chain for `errors.Is` / `errors.As` unwrapping across any number of nested wrapp
 
 | Function   | Message format                                    |
 |------------|---------------------------------------------------|
-| `Required` | `<dependency> is required for <context>`          |
+| `Required` | `<dependency> is required for <consumer>`         |
 | `Provider` | `failed to create <type> provider: <err>`         |
 
 ## Canonical sentinels
@@ -52,12 +52,5 @@ with `errors.Is`. The gRPC errstatus interceptor maps them with `WithCanonicalRu
 
 ## Network checks
 
-| Function                       | Detects                                          |
-|--------------------------------|--------------------------------------------------|
-| `IsNetworkError`               | Any `net.Error`                                  |
-| `IsRequestTimeoutError`        | `net.Error` or `*url.Error` with `Timeout()`     |
-| `IsURLError`                   | Any `*url.Error`                                 |
-| `IsConnectionRefused`          | `syscall.ECONNREFUSED` through URL/net layers    |
-| `IsResourceRedirects`          | "stopped after N redirects"                      |
-| `IsUnsupportedProtocolScheme`  | "unsupported protocol scheme"                    |
-| `IsCertUnknownAuthority`       | `x509.UnknownAuthorityError` inside `*url.Error` |
+Provided by [`errors/network`](network/): `IsNetworkError`, `IsRequestTimeoutError`, `IsURLError`, `IsConnectionRefused`, `IsResourceRedirects`,
+`IsUnsupportedProtocolScheme`, `IsCertUnknownAuthority`.

@@ -126,7 +126,7 @@ func WrapField(err error, fieldName string) error {
 	return fmt.Errorf("field '%s': %w", fieldName, err)
 }
 
-// WrapOperationWithContext wraps err with a "failed to <operation> on <context>: ..."
+// WrapOperationWithContext wraps err with a "failed to <operation> on <scope>: ..."
 // message using the %w verb, preserving the error chain for [errors.Is] and [errors.As].
 // Returns nil when err is nil, making it safe to call unconditionally.
 //
@@ -139,11 +139,11 @@ func WrapField(err error, fieldName string) error {
 //	    return errors.WrapOperationWithContext(err, "create consumer", "stream 'events'")
 //	}
 //	// Error message: "failed to create consumer on stream 'events': <original error>"
-func WrapOperationWithContext(err error, operation, context string) error {
+func WrapOperationWithContext(err error, operation, scope string) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("failed to %s on %s: %w", operation, context, err)
+	return fmt.Errorf("failed to %s on %s: %w", operation, scope, err)
 }
 
 // Wrap wraps err with a plain context message using the %w verb, preserving the
@@ -201,7 +201,7 @@ func JoinWrap(sentinel, cause error) error {
 	return fmt.Errorf("%w: %w", sentinel, cause)
 }
 
-// Required returns an error with the message "<dependency> is required for <context>".
+// Required returns an error with the message "<dependency> is required for <consumer>".
 // Use this during initialization or construction to signal that a mandatory
 // dependency was not provided.
 //
@@ -213,8 +213,8 @@ func JoinWrap(sentinel, cause error) error {
 //	    return errors.Required("database", "UserRepository")
 //	}
 //	// Error message: "database is required for UserRepository"
-func Required(dependency, context string) error {
-	return fmt.Errorf("%s is required for %s", dependency, context)
+func Required(dependency, consumer string) error {
+	return fmt.Errorf("%s is required for %s", dependency, consumer)
 }
 
 // Provider returns an error indicating that a provider of the given type could not
