@@ -75,7 +75,7 @@ feat(providers/anthropic): support structured outputs
 fix(retry): stop retrying once the context is canceled
 docs(README): add quick start examples
 test(schema): add benchmark for schema derivation
-build(deps): update go-atlas
+build(deps): bump golang.org/x/sys
 ```
 
 ### Automated Validation
