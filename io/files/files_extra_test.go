@@ -56,3 +56,47 @@ func TestDirIsEmpty_NonExistent(t *testing.T) {
 	_, err := DirIsEmpty("/nonexistent/dir/path")
 	require.Error(t, err, "DirIsEmpty on non-existent dir should error")
 }
+
+// TestCheckRegular_StatError exercises checkRegular's Stat-failure branch:
+// Stat on an already-closed *os.File reliably errors without relying on
+// any platform-specific descriptor trickery.
+func TestCheckRegular_StatError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.txt")
+	require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	_, err = checkRegular(f, path)
+	require.Error(t, err)
+}
+
+// TestFindFile_RelativeFilePath_MixedSearchPaths exercises FindFile's
+// relative-filePath logic end to end: a relative baseSearchPath that
+// doesn't exist (continuing the search) followed by an absolute
+// baseSearchPath that does contain the target.
+func TestFindFile_RelativeFilePath_MixedSearchPaths(t *testing.T) {
+	if CurrentExecutableDir() == "" {
+		t.Skip("CurrentExecutableDir() returned empty in this environment")
+	}
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "needle.txt")
+	require.NoError(t, os.WriteFile(testFile, []byte("x"), 0o600))
+
+	found := FindFile("needle.txt", []string{"does-not-exist-rel-dir", tmpDir})
+	require.Equal(t, testFile, found)
+}
+
+// TestFindFile_RelativeFilePath_NotFound exercises the "no match found"
+// return path of FindFile's relative-filePath logic.
+func TestFindFile_RelativeFilePath_NotFound(t *testing.T) {
+	if CurrentExecutableDir() == "" {
+		t.Skip("CurrentExecutableDir() returned empty in this environment")
+	}
+
+	found := FindFile("definitely-missing-needle.txt", []string{t.TempDir()})
+	require.Equal(t, "", found)
+}

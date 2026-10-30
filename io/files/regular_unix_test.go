@@ -49,6 +49,34 @@ func TestOpenRegular(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestReadRegular(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	regular := filepath.Join(dir, "a.yaml")
+	require.NoError(t, os.WriteFile(regular, []byte("x: 1\n"), 0o600))
+	fifo := filepath.Join(dir, "fifo")
+	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
+
+	got, err := files.ReadRegular(regular)
+	require.NoError(t, err)
+	require.Equal(t, "x: 1\n", string(got))
+
+	_, err = files.ReadRegular(filepath.Join(dir, "missing"))
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := files.ReadRegular(fifo)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, files.ErrNotRegular)
+	case <-time.After(5 * time.Second):
+		t.Fatal("reading a FIFO without a writer blocked")
+	}
+}
+
 func TestOpenRegularIn(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

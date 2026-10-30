@@ -224,6 +224,43 @@ func TestWalk_LastOptionWins(t *testing.T) {
 	}
 }
 
+// TestWalk_EntryIsDirAndInfo exercises Entry.IsDir and Entry.Info, which
+// Walk itself never calls (collect only uses Entry.Name and Entry.Path).
+func TestWalk_EntryIsDirAndInfo(t *testing.T) {
+	root := makeTree(t)
+
+	var sawDir, sawFile bool
+	for entry, err := range files.Walk(root) {
+		require.NoError(t, err)
+
+		info, infoErr := entry.Info()
+		require.NoError(t, infoErr, "Entry.Info() for %q", entry.Path)
+		require.Equal(t, entry.IsDir(), info.IsDir(), "Entry.IsDir() disagrees with Entry.Info().IsDir() for %q", entry.Path)
+
+		if entry.Name() == "sub" {
+			sawDir = true
+			require.True(t, entry.IsDir())
+		}
+		if entry.Name() == "notes.txt" {
+			sawFile = true
+			require.False(t, entry.IsDir())
+		}
+	}
+	require.True(t, sawDir, "expected to see directory entry 'sub'")
+	require.True(t, sawFile, "expected to see file entry 'notes.txt'")
+}
+
+// TestWalk_WithExtensions_BlankEntriesIgnored exercises the
+// trim-to-empty "continue" branch in WithExtensions: a whitespace-only
+// extension value is ignored rather than registered as a literal "."
+// extension.
+func TestWalk_WithExtensions_BlankEntriesIgnored(t *testing.T) {
+	root := makeTree(t)
+	names, _ := collect(t, root, files.WithExtensions("  ", ".so"))
+	want := []string{"a.so", "b.SO"}
+	require.Equal(t, want, names)
+}
+
 func TestWalk_NonexistentRoot(t *testing.T) {
 	const root = "/definitely/does/not/exist/xyz123"
 	_, errs := collect(t, root)
@@ -271,6 +308,31 @@ func TestWalk_SymlinkNotFollowedByDefault(t *testing.T) {
 	names, _ = collect(t, root, files.WithRecursive(), files.WithFollowSymlinks())
 	want = []string{"link", "link/deep.txt", "target", "target/deep.txt"}
 	require.Equal(t, want, names, "follow")
+}
+
+// TestWalk_EntryType_Symlink exercises fileTypeFromMode's symlink branch,
+// which the name-only assertions in TestWalk_SymlinkNotFollowedByDefault
+// never reach.
+func TestWalk_EntryType_Symlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks unreliable on windows in CI")
+	}
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	require.NoError(t, os.WriteFile(target, []byte("x"), 0o644))
+	require.NoError(t, os.Symlink(target, filepath.Join(root, "link")))
+
+	var gotType files.FileType
+	var found bool
+	for entry, err := range files.Walk(root) {
+		require.NoError(t, err)
+		if entry.Name() == "link" {
+			found = true
+			gotType = entry.Type()
+		}
+	}
+	require.True(t, found, "expected to see the symlink entry")
+	require.Equal(t, files.FileTypeSymlink, gotType)
 }
 
 func TestWalk_BrokenSymlinkSurfacesError(t *testing.T) {
