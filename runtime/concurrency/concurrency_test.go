@@ -91,13 +91,14 @@ func TestConnectionPoolAwareConcurrency(t *testing.T) {
 	t.Run("LimitedConnections", func(t *testing.T) {
 		limit := 5
 		fn := concurrency.ConnectionPoolAwareConcurrency(func() int { return limit }, 0)
-		require.Equal(t, limit, fn())
+		// The CPU-based limit still caps the result on small runners.
+		require.Equal(t, min(limit, defaultMax), fn())
 	})
 
 	t.Run("ReservedConnections", func(t *testing.T) {
 		avail := 10
 		reserved := 4
 		fn := concurrency.ConnectionPoolAwareConcurrency(func() int { return avail }, reserved)
-		require.Equal(t, avail-reserved, fn())
+		require.Equal(t, min(avail-reserved, defaultMax), fn())
 	})
 }
