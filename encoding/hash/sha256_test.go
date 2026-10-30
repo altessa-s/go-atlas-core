@@ -5,8 +5,11 @@
 package hash_test
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
+	"hash/crc32"
 	"io"
 	"strings"
 	"testing"
@@ -14,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/altessa-s/go-atlas-core/encoding/hash"
+
+	gohash "hash"
 )
 
 func TestSHA256(t *testing.T) {
@@ -166,4 +171,36 @@ func TestHexSum(t *testing.T) {
 		stdH.Write([]byte(input))
 		require.Equal(t, hash.HexSum(stdH), sh.SumHex())
 	})
+}
+
+// wideHash is a [gohash.Hash] whose digest is wider than any standard hash,
+// exercising the heap fallback of the hex encoding behind [hash.HexSum].
+type wideHash struct{ sum []byte }
+
+func (w *wideHash) Write(p []byte) (int, error) { return len(p), nil }
+func (w *wideHash) Sum(b []byte) []byte         { return append(b, w.sum...) }
+func (w *wideHash) Reset()                      {}
+func (w *wideHash) Size() int                   { return len(w.sum) }
+func (w *wideHash) BlockSize() int              { return 1 }
+
+func TestHexSum_DigestSizes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		h    gohash.Hash
+	}{
+		{"crc32_4_bytes", crc32.NewIEEE()},
+		{"sha512_64_bytes", sha512.New()},
+		{"wide_65_bytes", &wideHash{sum: bytes.Repeat([]byte{0xab}, 65)}},
+		{"wide_256_bytes", &wideHash{sum: bytes.Repeat([]byte{0x5c}, 256)}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tc.h.Write([]byte("data"))
+			require.Equal(t, hex.EncodeToString(tc.h.Sum(nil)), hash.HexSum(tc.h))
+		})
+	}
 }

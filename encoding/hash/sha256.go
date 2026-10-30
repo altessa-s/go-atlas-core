@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"hash"
 	"io"
+	"strings"
 	"unsafe"
 )
 
@@ -26,7 +27,7 @@ import (
 // See [SHA256HexWithSalt] for a salted variant.
 func SHA256HexBytes(b []byte) string {
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	return hexString(sum[:])
 }
 
 // SHA256HexString returns the lowercase hex-encoded SHA-256 digest of s.
@@ -89,14 +90,23 @@ func SHA256HexString(s string) string {
 //
 // #nosec G103 -- zero-copy for read-only hashing
 func SHA256HexWithPrefix(prefix, s string) string {
+	var sum [sha256.Size]byte
 	if s == "" {
-		return prefix + hex.EncodeToString(sha256.New().Sum(nil))
+		sum = sha256.Sum256(nil)
+	} else {
+		// Zero-allocation conversion from string to []byte for hashing.
+		// Safe because sha256.Sum256 only reads from the slice.
+		sum = sha256.Sum256(unsafe.Slice(unsafe.StringData(s), len(s)))
 	}
-	// Zero-allocation conversion from string to []byte for hashing.
-	// Safe because sha256.Sum256 only reads from the slice.
-	b := unsafe.Slice(unsafe.StringData(s), len(s))
-	sum := sha256.Sum256(b)
-	return prefix + hex.EncodeToString(sum[:])
+	var dst [2 * sha256.Size]byte
+	hex.Encode(dst[:], sum[:])
+	// One allocation for the result: prefix + string(dst[:]) would allocate
+	// the converted digest as well.
+	var out strings.Builder
+	out.Grow(len(prefix) + len(dst))
+	out.WriteString(prefix)
+	out.Write(dst[:])
+	return out.String()
 }
 
 // SHA256HexWithSalt returns the lowercase hex-encoded SHA-256 digest of the
@@ -120,7 +130,8 @@ func SHA256HexWithSalt(data, salt []byte) string {
 	h := sha256.New()
 	h.Write(salt)
 	h.Write(data)
-	return hex.EncodeToString(h.Sum(nil))
+	var sum [sha256.Size]byte
+	return hexString(h.Sum(sum[:0]))
 }
 
 // SHA256HexStringWithSalt returns the lowercase hex-encoded SHA-256 digest of
@@ -149,7 +160,8 @@ func SHA256HexStringWithSalt(s, salt string) string {
 	if s != "" {
 		h.Write(unsafe.Slice(unsafe.StringData(s), len(s)))
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	var sum [sha256.Size]byte
+	return hexString(h.Sum(sum[:0]))
 }
 
 // Hasher accumulates a running digest over successive Write calls.
@@ -182,8 +194,26 @@ func (s *SHA256Hasher) Write(p []byte) (int, error) { return s.h.Write(p) }
 
 // SumHex returns the lowercase hex-encoded SHA-256 digest of all bytes written so far.
 // It does not reset the hash state; subsequent writes continue accumulating.
-func (s *SHA256Hasher) SumHex() string { return hex.EncodeToString(s.h.Sum(nil)) }
+func (s *SHA256Hasher) SumHex() string { return hexString(s.h.Sum(nil)) }
 
 // HexSum returns the lowercase hex-encoded current digest of h.
 // It does not reset the hash state.
-func HexSum(h hash.Hash) string { return hex.EncodeToString(h.Sum(nil)) }
+func HexSum(h hash.Hash) string { return hexString(h.Sum(nil)) }
+
+// maxStackDigest is the largest digest, in bytes, that [hexString] encodes in
+// a stack buffer: 64 covers SHA-512 and every shorter hash.
+const maxStackDigest = 64
+
+// hexString returns the lowercase hex encoding of sum, like
+// [hex.EncodeToString], whose scratch buffer is sized at run time and
+// therefore heap-allocated: for a digest of up to [maxStackDigest] bytes the
+// scratch lives on the stack, leaving the result string as the only
+// allocation.
+func hexString(sum []byte) string {
+	var dst [2 * maxStackDigest]byte
+	if n := hex.EncodedLen(len(sum)); n <= len(dst) {
+		hex.Encode(dst[:n], sum)
+		return string(dst[:n])
+	}
+	return hex.EncodeToString(sum)
+}

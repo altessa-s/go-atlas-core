@@ -30,6 +30,31 @@ func BenchmarkSHA256HexString(b *testing.B) {
 	})
 }
 
+func BenchmarkSHA256HexWithPrefix(b *testing.B) {
+	s := strings.Repeat("a", 1024)
+	for b.Loop() {
+		hash.SHA256HexWithPrefix("cache:v1:", s)
+	}
+}
+
+func BenchmarkSHA256HexWithSalt(b *testing.B) {
+	data := []byte(strings.Repeat("a", 1024))
+	salt := []byte("0123456789abcdef")
+
+	b.Run("Bytes", func(b *testing.B) {
+		for b.Loop() {
+			hash.SHA256HexWithSalt(data, salt)
+		}
+	})
+
+	b.Run("String", func(b *testing.B) {
+		s, saltStr := string(data), string(salt)
+		for b.Loop() {
+			hash.SHA256HexStringWithSalt(s, saltStr)
+		}
+	})
+}
+
 func BenchmarkSHA256Hasher(b *testing.B) {
 	data := []byte(strings.Repeat("a", 1024))
 
