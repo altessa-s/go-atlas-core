@@ -2,27 +2,27 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-package concurrency
+package concurrency_test
 
 import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/altessa-s/go-atlas-core/runtime/concurrency"
+	"github.com/altessa-s/go-atlas-core/time/clock"
 )
 
-func BenchmarkGetCachedMemStats(b *testing.B) {
-	InvalidateMemStatsCache()
-	SetMemStatsCacheTTL(time.Second)
+func BenchmarkMemStatsCacheGet(b *testing.B) {
+	cache := concurrency.NewMemStatsCache(time.Second, clock.Real())
 
-	b.ResetTimer()
 	for b.Loop() {
-		_ = getCachedMemStats()
+		_ = cache.Get()
 	}
 }
 
 func BenchmarkRuntimeReadMemStats(b *testing.B) {
 	var m runtime.MemStats
-	b.ResetTimer()
 	for b.Loop() {
 		runtime.ReadMemStats(&m)
 	}

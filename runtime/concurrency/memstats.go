@@ -11,56 +11,75 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/altessa-s/go-atlas-core/time/clock"
+	"github.com/altessa-s/go-atlas-core/types/nilcheck"
 )
 
 // DefaultMemStatsCacheTTL is the default time-to-live for the cached
 // runtime.MemStats snapshot used by [MemoryAwareConcurrency] and
 // [AdaptiveConcurrency]. It balances data freshness against the cost
 // of runtime.ReadMemStats, which triggers a stop-the-world pause.
-// Adjust it with [SetMemStatsCacheTTL].
+// Use [NewMemStatsCache] for a cache with another TTL.
 const DefaultMemStatsCacheTTL = time.Second
 
-// cachedMemStats holds the cached memory statistics with TTL-based invalidation.
-// This reduces the frequency of runtime.ReadMemStats calls, which cause
-// stop-the-world pauses of 50-200μs each.
-type cachedMemStats struct {
+// MemStatsCache caches runtime.MemStats snapshots with TTL-based
+// invalidation. This reduces the frequency of runtime.ReadMemStats calls,
+// which cause stop-the-world pauses of 50-200μs each.
+//
+// Pass [MemStatsCache.RuntimeHeadroom] to [WithAvailableMemory] to drive
+// [MemoryAwareConcurrency] or [AdaptiveConcurrency] from a dedicated cache;
+// without it they share an internal cache with [DefaultMemStatsCacheTTL].
+// A MemStatsCache is safe for concurrent use.
+type MemStatsCache struct {
 	stats       atomic.Pointer[runtime.MemStats]
-	lastUpdated atomic.Int64 // Unix nanoseconds
-	mu          sync.Mutex   // Protects update
-	ttl         atomic.Int64 // TTL in nanoseconds
+	lastUpdated atomic.Int64 // Unix nanoseconds; 0 means stale
+	mu          sync.Mutex   // Serializes refreshes
+	ttl         time.Duration
+	clock       clock.Clock
 }
 
-// globalMemStatsCache is the package-level cached memory stats.
-var globalMemStatsCache = &cachedMemStats{}
+// defaultMemStatsCache backs the default [MemorySource]. It is never
+// reconfigured: callers that need another TTL or clock build their own
+// [MemStatsCache].
+var defaultMemStatsCache = NewMemStatsCache(DefaultMemStatsCacheTTL, clock.Real())
 
-func init() {
-	globalMemStatsCache.ttl.Store(int64(DefaultMemStatsCacheTTL))
+// NewMemStatsCache returns a cache whose snapshots stay valid for ttl as
+// measured by clk. Shorter durations provide fresher data at the expense of
+// more frequent stop-the-world pauses; longer durations reduce pauses but
+// may cause concurrency decisions to use stale data.
+//
+// Recommended values:
+//   - 100ms: latency-sensitive applications needing fresh memory readings
+//   - 1s (default): good balance for most applications
+//   - 5s: applications where memory pressure changes slowly
+//
+// A negative ttl is replaced with [DefaultMemStatsCacheTTL]; a zero ttl
+// disables caching. A nil clk is replaced with clock.Real().
+func NewMemStatsCache(ttl time.Duration, clk clock.Clock) *MemStatsCache {
+	if ttl < 0 {
+		ttl = DefaultMemStatsCacheTTL
+	}
+	if nilcheck.IsNil(clk) {
+		clk = clock.Real()
+	}
+	return &MemStatsCache{ttl: ttl, clock: clk}
 }
 
-// getCachedMemStats returns cached memory statistics, refreshing if stale.
-// This significantly reduces STW pauses by caching ReadMemStats results.
+// Get returns the cached memory statistics, refreshing them when stale.
+// The returned pointer MUST be treated as read-only; it points directly into
+// the cache to avoid copying the 4.8 KB runtime.MemStats struct on every call.
 //
 // The cache uses a TTL-based invalidation strategy:
-//   - If cache is fresh (within TTL), returns cached values immediately
-//   - If cache is stale, one goroutine refreshes while others get stale data
-//   - This prevents thundering herd on cache expiration
-func getCachedMemStats() *runtime.MemStats {
-	return globalMemStatsCache.get()
-}
-
-// get returns the cached memory stats, refreshing if necessary.
-// The returned pointer MUST be treated as read-only; it points directly into the cache
-// to avoid copying the 4.8 KB runtime.MemStats struct on every call.
-func (c *cachedMemStats) get() *runtime.MemStats {
-	now := time.Now().UnixNano()
-	lastUpdated := c.lastUpdated.Load()
-	ttl := c.ttl.Load()
-
+//   - If the cache is fresh (within TTL), it returns the cached values immediately
+//   - If the cache is stale, one goroutine refreshes while others get stale data
+//   - This prevents a thundering herd on cache expiration
+func (c *MemStatsCache) Get() *runtime.MemStats {
 	// Fast path: get current pointer
 	current := c.stats.Load()
 
 	// Check if cache is still fresh and we have data
-	if current != nil && lastUpdated > 0 && now-lastUpdated < ttl {
+	if current != nil && c.fresh() {
 		return current
 	}
 
@@ -77,12 +96,8 @@ func (c *cachedMemStats) get() *runtime.MemStats {
 	defer c.mu.Unlock()
 
 	// Double-check after acquiring lock (another goroutine might have updated)
-	// Use fresh timestamp for accurate check
-	nowAfterLock := time.Now().UnixNano()
-	lastUpdated = c.lastUpdated.Load()
 	current = c.stats.Load()
-	ttl = c.ttl.Load()
-	if current != nil && lastUpdated > 0 && nowAfterLock-lastUpdated < ttl {
+	if current != nil && c.fresh() {
 		return current
 	}
 
@@ -92,48 +107,34 @@ func (c *cachedMemStats) get() *runtime.MemStats {
 	runtime.ReadMemStats(newStats)
 
 	c.stats.Store(newStats)
-	c.lastUpdated.Store(time.Now().UnixNano())
+	c.lastUpdated.Store(c.clock.Now().UnixNano())
 
 	return newStats
 }
 
-// SetMemStatsCacheTTL configures how long cached memory statistics remain valid
-// before the next call to runtime.ReadMemStats. Shorter durations provide
-// fresher data at the expense of more frequent stop-the-world pauses;
-// longer durations reduce pauses but may cause concurrency decisions to use
-// stale data.
-//
-// Recommended values:
-//   - 100ms: latency-sensitive applications needing fresh memory readings
-//   - 1s (default): good balance for most applications
-//   - 5s: applications where memory pressure changes slowly
-//
-// Negative values are replaced with [DefaultMemStatsCacheTTL].
-// SetMemStatsCacheTTL is safe for concurrent use.
-func SetMemStatsCacheTTL(ttl time.Duration) {
-	if ttl < 0 {
-		ttl = DefaultMemStatsCacheTTL
-	}
-	globalMemStatsCache.ttl.Store(int64(ttl))
+// fresh reports whether the last refresh is still within the TTL.
+func (c *MemStatsCache) fresh() bool {
+	lastUpdated := c.lastUpdated.Load()
+	return lastUpdated > 0 && c.clock.Now().UnixNano()-lastUpdated < int64(c.ttl)
 }
 
-// InvalidateMemStatsCache marks the cached memory statistics as stale, causing
-// the next concurrency-limit evaluation to call runtime.ReadMemStats. Use this
-// after large allocations or deallocations where fresh data is critical.
-// InvalidateMemStatsCache is safe for concurrent use.
-func InvalidateMemStatsCache() {
-	globalMemStatsCache.lastUpdated.Store(0)
+// Invalidate marks the cached memory statistics as stale, causing the next
+// [MemStatsCache.Get] to call runtime.ReadMemStats. Use this after large
+// allocations or deallocations where fresh data is critical.
+func (c *MemStatsCache) Invalidate() {
+	c.lastUpdated.Store(0)
 }
 
-// runtimeMemoryHeadroom measures the remaining Go runtime memory budget set
-// through GOMEMLIMIT/debug.SetMemoryLimit. Runtime-managed memory is Sys minus
-// HeapReleased, as defined by SetMemoryLimit; it is not machine free RAM.
-func runtimeMemoryHeadroom() (uint64, bool) {
+// RuntimeHeadroom is a [MemorySource] that measures the remaining Go runtime
+// memory budget set through GOMEMLIMIT/debug.SetMemoryLimit, reading memory
+// statistics through c. Runtime-managed memory is Sys minus HeapReleased, as
+// defined by SetMemoryLimit; it is not machine free RAM.
+func (c *MemStatsCache) RuntimeHeadroom() (uint64, bool) {
 	limit := debug.SetMemoryLimit(-1)
 	if limit == math.MaxInt64 {
 		return 0, false
 	}
-	return memoryHeadroom(getCachedMemStats(), limit)
+	return memoryHeadroom(c.Get(), limit)
 }
 
 func memoryHeadroom(stats *runtime.MemStats, limit int64) (uint64, bool) {

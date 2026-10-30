@@ -13,5 +13,5 @@ package concurrency
 type MemorySource func() (availableBytes uint64, known bool)
 
 type memoryOptions struct {
-	availableMemory MemorySource `optgen:"default=runtimeMemoryHeadroom,notnil"`
+	availableMemory MemorySource `optgen:"default=defaultMemStatsCache.RuntimeHeadroom,notnil"`
 }

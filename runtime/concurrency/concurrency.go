@@ -122,7 +122,8 @@ func DefaultLimitFunc() int {
 //
 // Memory stats are cached with a TTL (default 1 second) to avoid frequent
 // runtime.ReadMemStats calls which cause stop-the-world pauses.
-// Use SetMemStatsCacheTTL to adjust the cache duration if needed.
+// Pass WithAvailableMemory(cache.RuntimeHeadroom) with a [MemStatsCache]
+// from [NewMemStatsCache] to use another TTL or clock.
 //
 // Parameters:
 //   - lowMemoryMB: memory threshold (in MB) below which concurrency is set to 1
@@ -187,7 +188,8 @@ func LoadAwareConcurrency(getLoad func() float64, highLoadThreshold, mediumLoadT
 //
 // Memory stats are cached with a TTL (default 1 second) to avoid frequent
 // runtime.ReadMemStats calls which cause stop-the-world pauses.
-// Use SetMemStatsCacheTTL to adjust the cache duration if needed.
+// Pass WithAvailableMemory(cache.RuntimeHeadroom) with a [MemStatsCache]
+// from [NewMemStatsCache] to use another TTL or clock.
 //
 // Parameters:
 //   - memoryLowMB: available memory (MB) below which concurrency drops to 25%

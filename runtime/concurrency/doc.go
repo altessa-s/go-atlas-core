@@ -15,6 +15,11 @@
 //   - Load-aware: adjusts limits based on system load averages
 //   - Adaptive: combines multiple factors for complex resource management
 //
+// Memory-aware and adaptive limits read runtime.MemStats through a TTL cache.
+// Inject a [MemStatsCache] with WithAvailableMemory(cache.RuntimeHeadroom) to
+// choose its TTL and clock; otherwise an internal cache with
+// [DefaultMemStatsCacheTTL] is shared.
+//
 // # Batch Processing
 //
 // The batch processor allows concurrent execution of functions over slices with

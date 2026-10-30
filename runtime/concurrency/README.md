@@ -75,9 +75,10 @@ A positive `WithLimitFunc` result takes precedence; otherwise a positive `WithCo
 ## Memory budgets
 
 `MemoryAwareConcurrency` and `AdaptiveConcurrency` use the remaining Go runtime budget configured through `GOMEMLIMIT` or `debug.SetMemoryLimit`. The
-remaining bytes are `max(0, limit - (MemStats.Sys - MemStats.HeapReleased))`; statistics are cached for `DefaultMemStatsCacheTTL` (one second) — tune
-with `SetMemStatsCacheTTL`, force a refresh with `InvalidateMemStatsCache`. This measures runtime headroom, not free machine RAM. Without a finite
-budget, the memory strategy uses `DefaultLimitFunc` and adaptive mode skips memory scaling.
+remaining bytes are `max(0, limit - (MemStats.Sys - MemStats.HeapReleased))`; statistics are cached for `DefaultMemStatsCacheTTL` (one second) in an
+internal, fixed cache. For another TTL or a test clock, build a `MemStatsCache` with `NewMemStatsCache(ttl, clk)` and pass
+`WithAvailableMemory(cache.RuntimeHeadroom)`; `cache.Invalidate()` forces a refresh. This measures runtime headroom, not free machine RAM. Without a
+finite budget, the memory strategy uses `DefaultLimitFunc` and adaptive mode skips memory scaling.
 
 Pass `WithAvailableMemory(source)` to either strategy to supply a thread-safe `MemorySource` for a container or host budget. It returns available bytes
 and whether the budget is known. Returning `(0, true)` means exhausted; `(0, false)` means unknown. Callbacks should cache expensive probes.

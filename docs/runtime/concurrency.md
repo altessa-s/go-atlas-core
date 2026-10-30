@@ -334,7 +334,7 @@ permanent failures (e.g. not-found, validation errors, authentication failures).
 
 Use an `atomic.Bool` with `CompareAndSwap` to ensure only one goroutine executes a periodic cycle at a time. This is lighter than a mutex when the
 goal is to skip overlapping invocations rather than queue them. For scheduler-driven cycles, do not hand-roll the guard — embed
-`scheduler.ManagedTask` from `core/scheduler`, which owns both the single-flight guard and the scheduler-managed flag:
+`schedtask.ManagedTask` from [`go-atlas/service/scheduler/task`](https://github.com/altessa-s/go-atlas/tree/develop/service/scheduler/task), which owns both the single-flight guard and the scheduler-managed flag:
 
 ```go
 if err := o.dispatchTask.TryRun(ctx, o.runDispatchCycle); err != nil {

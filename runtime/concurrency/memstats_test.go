@@ -2,11 +2,7 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-// Tests of the shared cache run serially (no t.Parallel) because they mutate
-// the package-level mem-stats cache singleton (globalMemStatsCache) via
-// SetMemStatsCacheTTL and InvalidateMemStatsCache.
-
-package concurrency
+package concurrency_test
 
 import (
 	"runtime"
@@ -15,126 +11,102 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/altessa-s/go-atlas-core/runtime/concurrency"
+	"github.com/altessa-s/go-atlas-core/time/clock"
 )
 
-func TestGetCachedMemStats_ReturnsSameDataWithinTTL(t *testing.T) {
-	// Reset cache state
-	InvalidateMemStatsCache()
-	SetMemStatsCacheTTL(time.Second)
-	t.Cleanup(func() { SetMemStatsCacheTTL(DefaultMemStatsCacheTTL) })
-
-	// First call should populate cache
-	stats1 := getCachedMemStats()
-	require.NotNil(t, stats1, "getCachedMemStats returned nil")
-
-	// Second call within TTL should return cached data
-	stats2 := getCachedMemStats()
-	require.NotNil(t, stats2, "getCachedMemStats returned nil on second call")
-
-	require.Equal(t, stats1.Sys, stats2.Sys, "Sys values should be the same (cached)")
+func newFakeClock() *clock.Fake {
+	return clock.NewFake(time.Unix(1_700_000_000, 0))
 }
 
-func TestGetCachedMemStats_RefreshesAfterTTL(t *testing.T) {
-	// Set a very short TTL for testing
-	InvalidateMemStatsCache()
-	SetMemStatsCacheTTL(10 * time.Millisecond)
-	t.Cleanup(func() { SetMemStatsCacheTTL(DefaultMemStatsCacheTTL) })
+func TestMemStatsCache_ReturnsSameDataWithinTTL(t *testing.T) {
+	t.Parallel()
+	clk := newFakeClock()
+	cache := concurrency.NewMemStatsCache(time.Second, clk)
 
-	// First call
-	stats1 := getCachedMemStats()
-	require.NotNil(t, stats1, "getCachedMemStats returned nil")
+	stats1 := cache.Get()
+	require.NotNil(t, stats1)
 
-	// Wait for TTL to expire
-	time.Sleep(20 * time.Millisecond)
-
-	// Allocate some memory to potentially change stats
-	data := make([]byte, 1024*1024) // 1MB
-	_ = data
-
-	// Second call should get fresh data
-	stats2 := getCachedMemStats()
-	require.NotNil(t, stats2, "getCachedMemStats returned nil after TTL")
-
-	// We can't guarantee values changed, but the call should succeed
-	// and return valid data
-	require.NotZero(t, stats2.Sys, "Sys should be non-zero")
+	clk.Advance(time.Second - time.Nanosecond)
+	require.Same(t, stats1, cache.Get(), "a snapshot within the TTL must be served from the cache")
 }
 
-func TestGetCachedMemStats_ConcurrentAccess(t *testing.T) {
-	InvalidateMemStatsCache()
-	SetMemStatsCacheTTL(50 * time.Millisecond)
-	t.Cleanup(func() { SetMemStatsCacheTTL(DefaultMemStatsCacheTTL) })
+func TestMemStatsCache_RefreshesAfterTTL(t *testing.T) {
+	t.Parallel()
+	clk := newFakeClock()
+	cache := concurrency.NewMemStatsCache(10*time.Millisecond, clk)
+
+	stats1 := cache.Get()
+	require.NotNil(t, stats1)
+
+	clk.Advance(10 * time.Millisecond)
+	stats2 := cache.Get()
+	require.NotSame(t, stats1, stats2, "an expired snapshot must be refreshed")
+	require.NotZero(t, stats2.Sys)
+}
+
+func TestMemStatsCache_Invalidate(t *testing.T) {
+	t.Parallel()
+	cache := concurrency.NewMemStatsCache(time.Hour, newFakeClock())
+
+	stats1 := cache.Get()
+	require.Same(t, stats1, cache.Get())
+
+	cache.Invalidate()
+	require.NotSame(t, stats1, cache.Get(), "Invalidate must force a refresh")
+}
+
+func TestMemStatsCache_ZeroTTLDisablesCaching(t *testing.T) {
+	t.Parallel()
+	cache := concurrency.NewMemStatsCache(0, newFakeClock())
+
+	require.NotSame(t, cache.Get(), cache.Get())
+}
+
+func TestNewMemStatsCache_Defaults(t *testing.T) {
+	t.Parallel()
+	clk := newFakeClock()
+	cache := concurrency.NewMemStatsCache(-1, clk)
+
+	stats1 := cache.Get()
+	clk.Advance(concurrency.DefaultMemStatsCacheTTL - time.Nanosecond)
+	require.Same(t, stats1, cache.Get(), "a negative TTL must fall back to DefaultMemStatsCacheTTL")
+	clk.Advance(time.Nanosecond)
+	require.NotSame(t, stats1, cache.Get())
+
+	require.NotNil(t, concurrency.NewMemStatsCache(time.Second, nil).Get(), "a nil clock must fall back to the real clock")
+}
+
+func TestMemStatsCache_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
+	cache := concurrency.NewMemStatsCache(50*time.Millisecond, clock.Real())
 
 	const numGoroutines = 100
 	var wg sync.WaitGroup
-
 	results := make(chan *runtime.MemStats, numGoroutines)
 
 	for range numGoroutines {
 		wg.Go(func() {
-			stats := getCachedMemStats()
-			results <- stats
+			results <- cache.Get()
 		})
 	}
 
 	wg.Wait()
 	close(results)
 
-	// All results should be non-nil
 	count := 0
 	for stats := range results {
 		require.NotNil(t, stats, "got nil stats from concurrent call")
 		count++
 	}
-
 	require.Equal(t, numGoroutines, count)
 }
 
-func TestInvalidateMemStatsCache(t *testing.T) {
-	InvalidateMemStatsCache()
-	SetMemStatsCacheTTL(time.Hour) // Long TTL
-	t.Cleanup(func() { SetMemStatsCacheTTL(DefaultMemStatsCacheTTL) })
-
-	// First call populates cache
-	stats1 := getCachedMemStats()
-	require.NotNil(t, stats1, "getCachedMemStats returned nil")
-
-	// Invalidate cache
-	InvalidateMemStatsCache()
-
-	// Next call should refresh (though values might be same)
-	stats2 := getCachedMemStats()
-	require.NotNil(t, stats2, "getCachedMemStats returned nil after invalidation")
-}
-
-func TestMemoryHeadroom(t *testing.T) {
+func TestMemStatsCache_AsMemorySource(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name                string
-		limit               int64
-		sys, released, want uint64
-		known               bool
-	}{
-		{"budget", 100, 80, 20, 40, true},
-		{"exhausted", 50, 80, 20, 0, true},
-		{"zero", 0, 80, 20, 0, true},
-		{"unknown", -1, 80, 20, 0, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got, known := memoryHeadroom(&runtime.MemStats{Sys: tc.sys, HeapReleased: tc.released}, tc.limit)
-			require.Equal(t, tc.want, got)
-			require.Equal(t, tc.known, known)
-		})
-	}
-}
+	cache := concurrency.NewMemStatsCache(time.Hour, newFakeClock())
 
-func TestSetMemStatsCacheTTL_NegativeValue(t *testing.T) {
-	// Negative TTL should default to DefaultMemStatsCacheTTL
-	SetMemStatsCacheTTL(-1)
-	t.Cleanup(func() { SetMemStatsCacheTTL(DefaultMemStatsCacheTTL) })
-
-	ttl := time.Duration(globalMemStatsCache.ttl.Load())
-	require.Equal(t, DefaultMemStatsCacheTTL, ttl)
+	limit := concurrency.MemoryAwareConcurrency(100, 500, 1000, concurrency.WithAvailableMemory(cache.RuntimeHeadroom))
+	require.GreaterOrEqual(t, limit(), concurrency.MinConcurrencyLimit)
 }
