@@ -6,8 +6,9 @@ import "github.com/altessa-s/go-atlas-core/<package>"
 
 Foundation packages of the [go-atlas](https://github.com/altessa-s/go-atlas) toolkit, usable on their own. Packages use only the Go standard
 library and each other — with narrow, package-scoped exceptions: `io/spoolbudget` uses `golang.org/x/sync/semaphore`, `collections/lru` uses
-`hashicorp/golang-lru`, `scheduler` uses `robfig/cron`, and the Linux sandboxing packages (`runtime/capabilities`, `landlock`, `nonewprivs`,
-`rlimits`, `seccomp`) use `golang.org/x/sys/unix`. Each package can be imported independently without pulling in the rest of the module.
+`hashicorp/golang-lru`, and the Linux sandboxing packages (`runtime/capabilities`, `landlock`, `nonewprivs`,
+`rlimits`, `seccomp`) use `golang.org/x/sys/unix`. `text/charset` uses `golang.org/x/text` for charset lookup and decoding; Linux seccomp tests
+use `golang.org/x/net/bpf` to interpret filters. Each package can be imported independently without pulling in the rest of the module.
 
 ## Packages
 
@@ -16,12 +17,11 @@ library and each other — with narrow, package-scoped exceptions: `io/spoolbudg
 | [collections](./collections) | Generic maps, slices and LRU utilities, iterators, pools                    |
 | [context](./context)         | Context timeout helpers                                                     |
 | [encoding](./encoding)       | Hashing, serialization, composite keys and entity-tags (ETags)              |
-| [errors](./errors)           | Error wrapping, construction, and classification                            |
+| [errors](./errors)           | Error wrapping, construction, classification; network checks (`network`)    |
 | [id](./id)                   | Service identity                                                            |
 | [io](./io)                   | Buffer pools, limited readers, file-system helpers, spooling, WAL           |
 | [retry](./retry)             | Stdlib-only retry loop with pluggable delay policies                        |
 | [runtime](./runtime)         | Shutdown hooks, concurrency, singleflight, signals, panics, sandboxing      |
-| [scheduler](./scheduler)     | Task scheduling interface and priority model                                |
 | [text](./text)               | String manipulation, interning, secure storage, charsets                    |
 | [time](./time)               | Time formatting, calendar dates (`time/civil`), clocks (`time/clock`)       |
 | [types](./types)             | Bits, constraints, nil checks, optional, pointers, redacted strings, result |
@@ -39,7 +39,7 @@ library and each other — with narrow, package-scoped exceptions: `io/spoolbudg
 |-----------------|------------------------------------------------------|
 | `make test`     | Run all tests                                        |
 | `make lint`     | golangci-lint with the repo config (`.golangci.yml`) |
-| `make generate` | Install `optgen` from `devtools` and run go generate |
+| `make generate` | Install `optgen` and run go generate                 |
 | `make bench`    | Run all benchmarks                                   |
 
-`devtools/go.mod` resolves `optgen` from a sibling go-atlas checkout (`replace` to `../../go-atlas.cel`) until go-atlas is tagged.
+`make generate` installs `optgen` from a sibling [go-optgen](https://github.com/altessa-s/go-optgen) checkout (`OPTGEN_DIR`, default `../go-optgen`).
