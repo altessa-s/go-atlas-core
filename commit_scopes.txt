@@ -2,8 +2,7 @@
 # Use these scopes in conventional commits: type(scope): description
 # Example: fix(runtime/concurrency): stop workers when the context is canceled
 
-# Root-level scopes
-root                        # Repository-wide changes (go.mod, Makefile, configs)
+# Repository scopes (omit the scope for repository-wide changes)
 deps                        # Dependency management
 README                      # Root README
 docs                        # Documentation
