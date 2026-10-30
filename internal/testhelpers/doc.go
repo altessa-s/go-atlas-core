@@ -4,8 +4,10 @@
 
 // Package testhelpers provides the test doubles and fixtures shared by the
 // go-atlas-core packages: a network error double ([MockNetError]), an I/O
-// double ([MockReadCloser]), sample structs ([Person], [User]) and the stress
-// test duration knob ([StressDuration]).
+// double ([MockReadCloser]), sample structs ([Person], [User]), the stress
+// test duration knob ([StressDuration]) and goroutine leak checks
+// ([VerifyNoLeaks], [GoroutineTracker]) built on the runtime's goroutineleak
+// profile.
 //
 // The package depends only on the standard library.
 package testhelpers
