@@ -47,6 +47,7 @@ type HookGroup struct {
 	mu    sync.Mutex
 	hooks []ShutdownHook
 	once  sync.Once
+	err   error
 }
 
 // OnShutdown registers a hook to run when [HookGroup.Shutdown] is invoked.
@@ -60,16 +61,16 @@ func (g *HookGroup) OnShutdown(hook ShutdownHook) {
 }
 
 // Shutdown runs the group's hooks in LIFO order, at most once regardless of
-// how many times it is called. Errors are collected and joined via
+// how many times it is called. Every call returns the same result.
+// Errors are collected and joined via
 // [errors.Join]; a failing hook does not prevent the rest from running. Each
 // hook receives ctx, so a caller can bound the whole sequence with a deadline.
 //
 // Hooks registered after Shutdown starts are not run: the set is snapshotted
 // up front so a hook cannot extend the sequence it is part of.
 func (g *HookGroup) Shutdown(ctx context.Context) error {
-	var errs []error
-
 	g.once.Do(func() {
+		var errs []error
 		g.mu.Lock()
 		hooks := g.hooks
 		g.mu.Unlock()
@@ -85,9 +86,10 @@ func (g *HookGroup) Shutdown(ctx context.Context) error {
 				fmt.Fprintf(os.Stderr, "shutdown hook error: %v\n", err)
 			}
 		}
+		g.err = errors.Join(errs...)
 	})
 
-	return errors.Join(errs...)
+	return g.err
 }
 
 // processHooks is the implicit group behind [OnShutdown] and

@@ -194,3 +194,21 @@ func TestHookGroup_PassesContextToHooks(t *testing.T) {
 	require.NoError(t, group.Shutdown(context.WithValue(t.Context(), ctxKey{}, "deadline-carrier")))
 	require.Equal(t, "deadline-carrier", got)
 }
+
+func TestHookGroup_PreservesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("shutdown failed")
+	var group coreruntime.HookGroup
+	group.OnShutdown(func(context.Context) error { return sentinel })
+	results := make([]error, 8)
+	var wg sync.WaitGroup
+	for i := range results {
+		wg.Go(func() { results[i] = group.Shutdown(t.Context()) })
+	}
+	wg.Wait()
+	for _, err := range results {
+		require.ErrorIs(t, err, sentinel)
+		require.Same(t, results[0], err)
+	}
+	require.Same(t, results[0], group.Shutdown(t.Context()))
+}
