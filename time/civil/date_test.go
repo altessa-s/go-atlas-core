@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/altessa-s/go-atlas-core/time/civil"
+	"github.com/altessa-s/go-atlas-core/time/clock"
 )
 
 func TestNewValidates(t *testing.T) {
@@ -204,4 +205,41 @@ func TestZeroDateHasNoInstant(t *testing.T) {
 	require.Equal(t, "2026-10-09 00:00:00 +0000 UTC", civil.MustNew(2026, time.October, 9).Time().String())
 	require.Equal(t, time.Friday, civil.MustNew(2026, time.October, 9).Weekday())
 	require.Equal(t, -1, civil.Date{}.Compare(civil.MustNew(1, time.January, 1)), "no date sorts first")
+}
+
+func TestTodayFrom(t *testing.T) {
+	t.Parallel()
+
+	// 2026-03-01 02:00 UTC is still 28 February in UTC-5.
+	instant := time.Date(2026, time.March, 1, 2, 0, 0, 0, time.UTC)
+	newYork := time.FixedZone("UTC-5", -5*60*60)
+	tokyo := time.FixedZone("UTC+9", 9*60*60)
+
+	tests := []struct {
+		name string
+		loc  *time.Location
+		want civil.Date
+	}{
+		{name: "UTC", loc: time.UTC, want: civil.MustNew(2026, time.March, 1)},
+		{name: "west of UTC is the previous day", loc: newYork, want: civil.MustNew(2026, time.February, 28)},
+		{name: "east of UTC", loc: tokyo, want: civil.MustNew(2026, time.March, 1)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, civil.TodayFrom(clock.NewFake(instant), tc.loc))
+		})
+	}
+}
+
+func TestTodayFromFollowsClock(t *testing.T) {
+	t.Parallel()
+
+	loc := time.FixedZone("UTC-5", -5*60*60)
+	fake := clock.NewFake(time.Date(2026, time.March, 1, 4, 59, 0, 0, time.UTC))
+	require.Equal(t, civil.MustNew(2026, time.February, 28), civil.TodayFrom(fake, loc))
+
+	fake.Advance(time.Minute)
+	require.Equal(t, civil.MustNew(2026, time.March, 1), civil.TodayFrom(fake, loc))
 }

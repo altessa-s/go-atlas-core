@@ -5,11 +5,15 @@
 package civil
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/altessa-s/go-atlas-core/time/clock"
+
+	jsonv1 "encoding/json"
 )
 
 // ErrInvalidDate is returned when a value is not a valid calendar date in
@@ -80,9 +84,16 @@ func Of(t time.Time) Date {
 	return Date{Year: y, Month: m, Day: d}
 }
 
-// Today returns the current date in loc.
+// Today returns the current date in loc. It is [TodayFrom] with
+// [clock.Real].
 func Today(loc *time.Location) Date {
-	return Of(time.Now().In(loc))
+	return TodayFrom(clock.Real(), loc)
+}
+
+// TodayFrom returns the date in loc at the instant reported by c. Inject a
+// [clock.Fake] to make code that depends on today's date testable.
+func TodayFrom(c clock.Clock, loc *time.Location) Date {
+	return Of(c.Now().In(loc))
 }
 
 // DaysIn returns the number of days in month m of year y.
@@ -217,33 +228,65 @@ type legacyDate struct {
 	Day   int
 }
 
-// UnmarshalJSON accepts a "YYYY-MM-DD" string, "" or null for the zero
-// Date, and the legacy object form {"Year":…,"Month":…,"Day":…}. An object
-// holding a non-zero invalid date fails with [ErrInvalidDate].
-func (d *Date) UnmarshalJSON(b []byte) error {
-	b = bytes.TrimSpace(b)
-	switch {
-	case bytes.Equal(b, []byte("null")):
+// MarshalJSONTo implements [json.MarshalerTo]: a "YYYY-MM-DD" JSON string,
+// or "" for the zero Date, the same text as [Date.MarshalText]. An invalid non-zero date fails with
+// [ErrInvalidDate].
+func (d Date) MarshalJSONTo(enc *jsontext.Encoder) error {
+	if !d.IsZero() && !d.Valid() {
+		_, err := d.MarshalText()
+		return err
+	}
+	return enc.WriteToken(jsontext.String(d.String()))
+}
+
+// UnmarshalJSONFrom implements [json.UnmarshalerFrom]. It accepts a
+// "YYYY-MM-DD" string, "" or null for the zero Date, and the legacy object
+// form {"Year":…,"Month":…,"Day":…}. An object holding a non-zero invalid
+// date, or any other JSON value, fails with [ErrInvalidDate].
+func (d *Date) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	switch dec.PeekKind() {
+	case 'n':
+		if _, err := dec.ReadToken(); err != nil {
+			return err
+		}
 		*d = Date{}
 		return nil
-	case len(b) > 0 && b[0] == '{':
-		var l legacyDate
-		if err := json.Unmarshal(b, &l); err != nil {
-			return fmt.Errorf("%w: %w", ErrInvalidDate, err)
+	case '"':
+		tok, err := dec.ReadToken()
+		if err != nil {
+			return err
 		}
-		v := Date(l)
-		if !v.IsZero() && !v.Valid() {
-			return fmt.Errorf("%w: %04d-%02d-%02d", ErrInvalidDate, v.Year, int(v.Month), v.Day)
-		}
-		*d = v
-		return nil
+		return d.UnmarshalText([]byte(tok.String()))
 	default:
-		var s string
-		if err := json.Unmarshal(b, &s); err != nil {
-			return fmt.Errorf("%w: %w", ErrInvalidDate, err)
+		v, err := dec.ReadValue()
+		if err != nil {
+			return err
 		}
-		return d.UnmarshalText([]byte(s))
+		return d.unmarshalOther(v)
 	}
+}
+
+// unmarshalOther decodes a JSON value that is neither a string nor null:
+// the legacy object form, or an error for every other kind. The value is
+// decoded with [jsonv1.DefaultOptionsV1] — case-insensitive member names,
+// duplicate names allowed — the rules encoding/json applied to these
+// documents when they were written, whichever codec reads them now.
+func (d *Date) unmarshalOther(v jsontext.Value) error {
+	if v.Kind() != '{' {
+		var s string
+		err := json.Unmarshal(v, &s, jsonv1.DefaultOptionsV1())
+		return fmt.Errorf("%w: %w", ErrInvalidDate, err)
+	}
+	var l legacyDate
+	if err := json.Unmarshal(v, &l, jsonv1.DefaultOptionsV1()); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidDate, err)
+	}
+	date := Date(l)
+	if !date.IsZero() && !date.Valid() {
+		return fmt.Errorf("%w: %04d-%02d-%02d", ErrInvalidDate, date.Year, int(date.Month), date.Day)
+	}
+	*d = date
+	return nil
 }
 
 func cmpInt(a, b int) int {

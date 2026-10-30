@@ -12,6 +12,7 @@ another day. No external dependencies.
 | `New(y, m, d)` / `MustNew` | Validated constructor (years 1–9999); `ErrInvalidDate` otherwise |
 | `Parse(s)` | `"YYYY-MM-DD"`; `""` yields the zero date |
 | `Of(t)` / `Today(loc)` | Calendar date of an instant in its location / today in `loc` |
+| `TodayFrom(c, loc)` | Today in `loc` per a [`clock.Clock`](../clock/README.md); inject `clock.NewFake` in tests |
 | `IsZero`, `Valid`, `String` | Zero means "no date" and formats as `""` |
 | `Time`, `In(loc)`, `Weekday` | Midnight of the date in UTC / in `loc` |
 | `Compare`, `Before`, `After`, `AddDays`, `DaysSince` | Ordering and day arithmetic over the whole 1–9999 range |
@@ -25,10 +26,14 @@ date. An anchor day below 1 gives the 1st. `Weekday` of the zero `Date` is meani
 
 ## Encoding
 
-- **Text / JSON**: `"YYYY-MM-DD"`, the zero date as `""`. `UnmarshalJSON` also accepts the legacy object form `{"Year":2026,"Month":10,"Day":9}` written
+- **Text / JSON**: `"YYYY-MM-DD"`, the zero date as `""`. `UnmarshalJSONFrom` also accepts the legacy object form `{"Year":2026,"Month":10,"Day":9}` written
   by encoding/json for date structs without text methods, so stored documents keep decoding after a service adopts this type. Encoding an invalid
   non-zero date fails with `ErrInvalidDate`.
 - **JSON `null`** decodes to the zero date.
+- **encoding/json/v2**: JSON is implemented by `MarshalJSONTo` / `UnmarshalJSONFrom` only (no `MarshalJSON` / `UnmarshalJSON`); `encoding/json`
+  calls them too and produces and accepts exactly what it did before, and both codecs write identical bytes for every date. The legacy object form is
+  always decoded with the `encoding/json` (v1) rules — case-insensitive member names — whichever codec reads it. Under v2 a string holding invalid
+  UTF-8 is a syntax error rather than `ErrInvalidDate`.
 - **MongoDB**: `data/mongo/bsoncodec.NewRegistry` registers the codec — the `"YYYY-MM-DD"` string, the zero date as `""`. The codec applies `Valid`, so
   year 0 is refused when writing and reading.
 

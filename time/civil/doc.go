@@ -17,10 +17,15 @@
 // # Text and JSON
 //
 // A Date marshals as its "YYYY-MM-DD" string ([Date.MarshalText]); that
-// form sorts in date order. [Date.UnmarshalJSON] also accepts the object
+// form sorts in date order. [Date.UnmarshalJSONFrom] also accepts the object
 // form {"Year":2026,"Month":10,"Day":9} that encoding/json produced for
 // date structs without text methods, so documents written before a service
 // adopted this type still decode.
+//
+// JSON is implemented by [Date.MarshalJSONTo] and [Date.UnmarshalJSONFrom],
+// the encoding/json/v2 interfaces, which encoding/json also calls; the two
+// codecs emit identical bytes for every date. The legacy object form is
+// decoded with the encoding/json (v1) rules whichever codec reads it.
 //
 // # Usage
 //
@@ -28,6 +33,10 @@
 //	next := due.AddMonthsClamped(1, 31) // 2026-02-28
 //	today := civil.Today(loc)
 //	if today.After(due) { ... }
+//
+// [TodayFrom] reads the instant from an injected
+// [github.com/altessa-s/go-atlas-core/time/clock.Clock], so tests can pin
+// today's date with a fake clock; [Today] uses the real clock.
 //
 // The MongoDB codec for Date is registered by
 // [github.com/altessa-s/go-atlas/data/mongo/bsoncodec.NewRegistry].
