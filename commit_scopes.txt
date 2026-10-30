@@ -39,7 +39,6 @@ runtime/rlimits             # Resource limits
 runtime/seccomp             # Linux seccomp filters
 runtime/signals             # OS signal dispatch
 runtime/singleflight        # Keyed singleflight
-scheduler                   # Task scheduling interface
 text                        # Text helpers
 text/charset                # Charsets
 text/strings                # String helpers
