@@ -102,3 +102,32 @@ func TestWithReadPaths_Accumulates(t *testing.T) {
 	)
 	require.Equal(t, []string{"/etc", "/usr/lib"}, o.readPaths)
 }
+
+// TestWithReadWritePaths_NilAndEmptyAreNoop mirrors
+// TestWithReadPaths_NilAndEmptyAreNoop for the sibling optgen-generated
+// option.
+func TestWithReadWritePaths_NilAndEmptyAreNoop(t *testing.T) {
+	cases := []struct {
+		name string
+		opt  Option
+	}{
+		{"no args", WithReadWritePaths()},
+		{"nil slice", WithReadWritePaths(nil...)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := newOptions(tc.opt)
+			require.Empty(t, o.readWritePaths)
+		})
+	}
+}
+
+// TestWithReadWritePaths_Accumulates mirrors TestWithReadPaths_Accumulates
+// for the sibling optgen-generated option.
+func TestWithReadWritePaths_Accumulates(t *testing.T) {
+	o := newOptions(
+		WithReadWritePaths("/var/lib/myservice"),
+		WithReadWritePaths("/var/log/myservice"),
+	)
+	require.Equal(t, []string{"/var/lib/myservice", "/var/log/myservice"}, o.readWritePaths)
+}
