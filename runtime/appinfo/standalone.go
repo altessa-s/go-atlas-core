@@ -15,4 +15,4 @@ package appinfo
 
 // IsStandalone reports whether the binary was built with the "standalone"
 // build tag. When true, [EnvLabel] returns [StandaloneLabel].
-var IsStandalone = true
+const IsStandalone = true
