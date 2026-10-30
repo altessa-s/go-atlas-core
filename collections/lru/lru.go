@@ -14,27 +14,50 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-// Cacher defines the interface for LRU cache operations.
-type Cacher[K comparable, V any] interface {
+// Reader is the read side of an LRU cache: lookups, membership, size, and
+// iteration. Depend on it where code only consults a cache that something
+// else populates.
+type Reader[K comparable, V any] interface {
 	// Get retrieves a value from the cache.
 	Get(key K) (value V, ok bool)
-	// Put adds or updates a value in the cache.
-	Put(key K, value V) (evicted bool)
-	// Remove removes a key from the cache.
-	Remove(key K) (present bool)
 	// Has checks if a key exists in the cache without affecting its position.
 	Has(key K) bool
 	// Len returns the number of items in the cache.
 	Len() int
-	// Purge removes all items from the cache.
-	Purge()
 	// Keys returns an iterator over all keys in the cache.
 	Keys() iter.Seq[K]
 	// All returns an iterator over all key-value pairs in the cache.
 	All() iter.Seq2[K, V]
+}
+
+// Writer is the write side of an LRU cache: inserting, removing, and
+// purging entries. Depend on it where code only populates or invalidates a
+// cache.
+type Writer[K comparable, V any] interface {
+	// Put adds or updates a value in the cache.
+	Put(key K, value V) (evicted bool)
+	// Remove removes a key from the cache.
+	Remove(key K) (present bool)
+	// Purge removes all items from the cache.
+	Purge()
+}
+
+// Loader is a read-through cache: it returns the cached value for a key or
+// computes and stores it on a miss. Depend on it where code only needs
+// memoized loads.
+type Loader[K comparable, V any] interface {
 	// GetOrCompute retrieves a value or computes it using the provided function.
 	// Uses singleflight to deduplicate concurrent computations for the same key.
 	GetOrCompute(ctx context.Context, key K, fn func(ctx context.Context) (V, error)) (V, error)
+}
+
+// Cacher is the full LRU cache interface, composed of [Reader], [Writer], and
+// [Loader]. Every cache in this package satisfies it; prefer the narrower
+// interfaces in signatures that need only part of it.
+type Cacher[K comparable, V any] interface {
+	Reader[K, V]
+	Writer[K, V]
+	Loader[K, V]
 }
 
 // Cache is a thread-safe LRU cache.

@@ -15,6 +15,11 @@ Package `lru` provides generic thread-safe LRU cache implementations. Supports s
 | `ShardedCache`   | `NewShardedCache(size, opts...)` | Lock contention is the bottleneck; trades memory for parallel access |
 | `ExpirableCache` | `NewExpirableCache(size, ttl)`   | Entries stop being true with age, not just take up room              |
 | `Cacher`         | --                               | The interface all three satisfy                                      |
+| `Reader`         | --                               | Code only reads: `Get`, `Has`, `Len`, `Keys`, `All`                  |
+| `Writer`         | --                               | Code only writes: `Put`, `Remove`, `Purge`                           |
+| `Loader`         | --                               | Code only needs read-through loads: `GetOrCompute`                   |
+
+`Cacher` embeds `Reader`, `Writer`, and `Loader`; accept the narrowest one a function needs.
 
 ## Bounding staleness
 
