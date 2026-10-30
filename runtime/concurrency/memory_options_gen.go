@@ -3,17 +3,13 @@
 
 package concurrency
 
-import (
-	"github.com/altessa-s/go-atlas-core/types/nilcheck"
-)
-
-// Option is a functional option for configuring memoryOptions.
+// MemoryOption is a functional option for configuring memoryOptions.
 type MemoryOption func(o *memoryOptions)
 
 // WithAvailableMemory sets the availableMemory option.
 func WithAvailableMemory(v MemorySource) MemoryOption {
 	return func(o *memoryOptions) {
-		if nilcheck.IsNil(v) {
+		if v == nil {
 			return
 		}
 		o.availableMemory = v

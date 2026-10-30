@@ -3,7 +3,7 @@
 
 package files
 
-// Option is a functional option for configuring walkOptions.
+// WalkOption is a functional option for configuring walkOptions.
 type WalkOption func(o *walkOptions)
 
 // WithFollowSymlinks enables the followSymlinks option.

@@ -5,8 +5,6 @@ package landlock
 
 import (
 	"strings"
-
-	"github.com/altessa-s/go-atlas-core/collections/slices"
 )
 
 // Option is a functional option for configuring options.
@@ -22,7 +20,18 @@ func WithReadPaths(v ...string) Option {
 		for i, element := range v {
 			transformed[i] = strings.TrimSpace(element)
 		}
-		transformed = slices.Deduplicate(transformed)
+		{
+			seen := make(map[string]struct{}, len(transformed))
+			deduped := make([]string, 0, len(transformed))
+			for _, item := range transformed {
+				if _, ok := seen[item]; ok {
+					continue
+				}
+				seen[item] = struct{}{}
+				deduped = append(deduped, item)
+			}
+			transformed = deduped
+		}
 		o.readPaths = append(o.readPaths, transformed...)
 	}
 }
@@ -37,7 +46,18 @@ func WithReadWritePaths(v ...string) Option {
 		for i, element := range v {
 			transformed[i] = strings.TrimSpace(element)
 		}
-		transformed = slices.Deduplicate(transformed)
+		{
+			seen := make(map[string]struct{}, len(transformed))
+			deduped := make([]string, 0, len(transformed))
+			for _, item := range transformed {
+				if _, ok := seen[item]; ok {
+					continue
+				}
+				seen[item] = struct{}{}
+				deduped = append(deduped, item)
+			}
+			transformed = deduped
+		}
 		o.readWritePaths = append(o.readWritePaths, transformed...)
 	}
 }

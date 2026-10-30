@@ -5,11 +5,11 @@ package signals
 
 import (
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/altessa-s/go-atlas-core/runtime"
 	"github.com/altessa-s/go-atlas-core/time/clock"
-	"github.com/altessa-s/go-atlas-core/types/nilcheck"
 )
 
 // Option is a functional option for configuring options.
@@ -18,8 +18,13 @@ type Option func(o *options)
 // WithClock sets the clock option.
 func WithClock(v clock.Clock) Option {
 	return func(o *options) {
-		if nilcheck.IsNil(v) {
+		switch rv := reflect.ValueOf(v); rv.Kind() {
+		case reflect.Invalid:
 			return
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+			if rv.IsNil() {
+				return
+			}
 		}
 		o.clock = v
 	}
@@ -52,7 +57,7 @@ func WithHandlerTimeout(v time.Duration) Option {
 // WithShutdownHooks sets the shutdownHooks option.
 func WithShutdownHooks(v runtime.ShutdownHook) Option {
 	return func(o *options) {
-		if nilcheck.IsNil(v) {
+		if v == nil {
 			return
 		}
 		o.shutdownHooks = v
@@ -81,6 +86,18 @@ func WithSignals(v ...os.Signal) Option {
 	return func(o *options) {
 		if len(v) == 0 {
 			return
+		}
+		{
+			seen := make(map[os.Signal]struct{}, len(v))
+			deduped := make([]os.Signal, 0, len(v))
+			for _, item := range v {
+				if _, ok := seen[item]; ok {
+					continue
+				}
+				seen[item] = struct{}{}
+				deduped = append(deduped, item)
+			}
+			v = deduped
 		}
 		o.signals = v
 	}

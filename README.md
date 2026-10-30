@@ -53,4 +53,4 @@ profile — so earlier toolchains cannot build it.
 | `make generate` | Install `optgen` and run go generate                 |
 | `make bench`    | Run all benchmarks                                   |
 
-`make generate` installs `optgen` from a sibling [go-optgen](https://github.com/altessa-s/go-optgen) checkout (`OPTGEN_DIR`, default `../go-optgen`).
+`make generate` installs [`optgen`](https://github.com/altessa-s/go-optgen) at the version pinned in `devtools/go.mod`.

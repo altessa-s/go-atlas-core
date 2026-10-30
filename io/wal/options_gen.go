@@ -6,8 +6,6 @@ package wal
 import (
 	"log/slog"
 	"time"
-
-	"github.com/altessa-s/go-atlas-core/types/nilcheck"
 )
 
 // Option is a functional option for configuring options.
@@ -26,7 +24,7 @@ func WithFsyncInterval(v time.Duration) Option {
 // WithFsyncTicker sets the fsyncTicker option.
 func WithFsyncTicker(v TickerFunc) Option {
 	return func(o *options) {
-		if nilcheck.IsNil(v) {
+		if v == nil {
 			return
 		}
 		o.fsyncTicker = v

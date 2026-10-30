@@ -4,8 +4,9 @@
 package intern
 
 import (
+	"reflect"
+
 	"github.com/altessa-s/go-atlas-core/time/clock"
-	"github.com/altessa-s/go-atlas-core/types/nilcheck"
 )
 
 // Option is a functional option for configuring options.
@@ -14,8 +15,13 @@ type Option func(o *options)
 // WithClock sets the clock option.
 func WithClock(v clock.Clock) Option {
 	return func(o *options) {
-		if nilcheck.IsNil(v) {
+		switch rv := reflect.ValueOf(v); rv.Kind() {
+		case reflect.Invalid:
 			return
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+			if rv.IsNil() {
+				return
+			}
 		}
 		o.clock = v
 	}
