@@ -5,10 +5,9 @@ import "github.com/altessa-s/go-atlas-core/<package>"
 ```
 
 Foundation packages for Go services and libraries: error wrapping, retries, bounded concurrency, singleflight, shutdown hooks, signals, panics,
-Linux sandboxing, collections, encoding, I/O (spool, WAL), text, time and type helpers. Packages use only the Go standard
-library and each other — with narrow, package-scoped exceptions: `io/spoolbudget` uses `golang.org/x/sync/semaphore`, and the Linux sandboxing packages (`runtime/capabilities`, `landlock`, `nonewprivs`,
-`rlimits`, `seccomp`) use `golang.org/x/sys/unix`. `text/charset` uses `golang.org/x/text` for charset lookup and decoding; Linux seccomp tests
-use `golang.org/x/net/bpf` to interpret filters. Each package can be imported independently without pulling in the rest of the module.
+Linux sandboxing, collections, encoding, I/O (spool, WAL), text, time and type helpers.
+
+Each package can be imported independently without pulling in the rest of the module.
 
 ## Requirements
 
