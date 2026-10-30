@@ -10,7 +10,6 @@ docs                        # Documentation
 
 # Packages
 collections                 # Generic collection helpers
-collections/lru             # LRU caches
 collections/maps            # Map helpers, ImmutableMap
 collections/slices          # Slice helpers
 context                     # Context timeout helpers
