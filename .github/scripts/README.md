@@ -40,7 +40,7 @@ GITHUB_EVENT_NAME=push .github/scripts/validate-commits.sh
 feat(data/mongo): add cursor pagination support
 fix(transport/http): handle nil pointer in retry logic
 docs: update installation instructions
-test(core/retry): add benchmark for exponential backoff
+test(retry): add benchmark for exponential backoff
 chore(deps): update dependencies to latest versions
 ```
 

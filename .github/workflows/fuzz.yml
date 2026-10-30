@@ -13,7 +13,7 @@ on:
         description: "Per-target fuzz budget (Go duration, e.g. 2m)"
         default: "2m"
       fuzzpkg:
-        description: "Package pattern to fuzz (e.g. ./core/io/wal)"
+        description: "Package pattern to fuzz (e.g. ./io/wal)"
         default: "./..."
 
 permissions:
