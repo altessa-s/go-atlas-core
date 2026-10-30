@@ -6,8 +6,7 @@ package id
 
 import (
 	"errors"
-
-	"github.com/altessa-s/go-atlas-core/runtime/appinfo"
+	"os"
 )
 
 // ErrInvalidEnv is returned by [NewEnv] and [NewWithEnvProvider] when the
@@ -29,7 +28,7 @@ type Env struct {
 //
 // Returns [ErrInvalidEnv] if the variable is not set or is empty.
 func NewEnv(envName string) (*Env, error) {
-	val := appinfo.Env(envName)
+	val := os.Getenv(envName)
 	if val == "" {
 		return nil, ErrInvalidEnv
 	}

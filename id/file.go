@@ -13,8 +13,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/altessa-s/go-atlas-core/runtime/panics"
-
 	coreerrs "github.com/altessa-s/go-atlas-core/errors"
 )
 
@@ -60,7 +58,11 @@ func NewFile(filePath string) (*File, error) {
 // It is intended for program-level initialization where failure is
 // unrecoverable.
 func MustNewFile(filePath string) *File {
-	return panics.MustResult(NewFile(filePath))
+	f, err := NewFile(filePath)
+	if err != nil {
+		panic(err)
+	}
+	return f
 }
 
 // ID returns the Service ID, lazily initializing it on the first call.

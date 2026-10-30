@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/altessa-s/go-atlas-core/runtime/panics"
 	"github.com/altessa-s/go-atlas-core/types/nilcheck"
 
 	coreerrs "github.com/altessa-s/go-atlas-core/errors"
@@ -74,7 +73,11 @@ func New(filePath string, env ...string) (*Service, error) {
 //
 //	s := id.MustNew("/tmp/service.id", "SERVICE_ID")
 func MustNew(filePath string, env ...string) *Service {
-	return panics.MustResult(New(filePath, env...))
+	s, err := New(filePath, env...)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 // NewWithProvider creates a [Service] backed by a caller-supplied [Provider].
@@ -100,7 +103,11 @@ func NewWithProvider(provider Provider) (*Service, error) {
 //
 //	s := id.MustNewWithProvider(myProvider)
 func MustNewWithProvider(provider Provider) *Service {
-	return panics.MustResult(NewWithProvider(provider))
+	s, err := NewWithProvider(provider)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 // NewWithEnvProvider creates a [Service] backed by an [Env] provider that
@@ -144,7 +151,11 @@ func NewWithFileProvider(filePath string) (*Service, error) {
 //
 //	s := id.MustNewWithFileProvider("/var/lib/app/service.id")
 func MustNewWithFileProvider(filePath string) *Service {
-	return panics.MustResult(NewWithFileProvider(filePath))
+	s, err := NewWithFileProvider(filePath)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 // NewStaticProvider creates a [Service] backed by a [Static] provider that
@@ -166,7 +177,11 @@ func NewStaticProvider(idVal string) (*Service, error) {
 //
 //	s := id.MustNewStaticProvider("my-service-12345")
 func MustNewStaticProvider(idVal string) *Service {
-	return panics.MustResult(NewStaticProvider(idVal))
+	s, err := NewStaticProvider(idVal)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 // ID delegates to the underlying [Provider] and returns the Service ID.
