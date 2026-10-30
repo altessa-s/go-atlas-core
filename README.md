@@ -1,5 +1,12 @@
 # go-atlas-core
 
+[![CI](https://github.com/altessa-s/go-atlas-core/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/altessa-s/go-atlas-core/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/altessa-s/go-atlas-core.svg)](https://pkg.go.dev/github.com/altessa-s/go-atlas-core)
+[![Go Report Card](https://goreportcard.com/badge/github.com/altessa-s/go-atlas-core)](https://goreportcard.com/report/github.com/altessa-s/go-atlas-core)
+[![Release](https://img.shields.io/github/v/release/altessa-s/go-atlas-core)](https://github.com/altessa-s/go-atlas-core/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/altessa-s/go-atlas-core)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 ```go
 import "github.com/altessa-s/go-atlas-core/<package>"
 ```
