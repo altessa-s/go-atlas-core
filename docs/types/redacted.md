@@ -9,24 +9,24 @@ import "github.com/altessa-s/go-atlas-core/types/redacted"
 ```
 
 `RedactedString` keeps `reflect.Kind == reflect.String`. Decoders that honor the unmarshal interfaces call its methods: `gopkg.in/yaml.v3` invokes
-`UnmarshalYAML` (the callback form), the Mongo v2 BSON driver invokes `UnmarshalBSONValue`, and `encoding/json` invokes `UnmarshalJSON`. Code that
+`UnmarshalYAML` (the callback form), the Mongo v2 BSON driver invokes `UnmarshalBSONValue`, and `encoding/json` and `encoding/json/v2` invoke `UnmarshalJSONFrom`. Code that
 populates fields purely through reflection (e.g. setting a `reflect.String` value directly) bypasses them, which is safe because the underlying kind
 is `string`.
 
-> **Not a secure-memory primitive.** `RedactedString` is a cheap log/marshal guard. For credentials that must be zeroed from memory after use,
-> reach for [`core/text/strings.SecureString`](../text/strings.md) directly — or call `RedactedString.SecureString()` for a one-shot bridge.
+> **Not a secure-memory primitive.** `RedactedString` is a cheap log/marshal guard. For credentials that must be zeroed from memory after use, reach for
+> [`core/text/strings/secure.String`](../text/strings.md#secure-strings) directly — or call `RedactedString.SecureString()` for a one-shot bridge.
 
 ---
 
 ## API overview
 
-| Symbol group  | Members                                                                                                              |
-|---------------|----------------------------------------------------------------------------------------------------------------------|
-| Stringers     | `String`, `GoString`                                                                                                 |
-| Logging       | `LogValue`                                                                                                           |
-| Accessors     | `Expose`, `IsEmpty`, `IsZero`                                                                                        |
-| Conversions   | `SecureString`                                                                                                       |
-| Serialization | `MarshalJSON`, `UnmarshalJSON`, `MarshalYAML`, `UnmarshalYAML`, `MarshalText`, `UnmarshalText`, `MarshalBSONValue`, `UnmarshalBSONValue` |
+| Symbol group  | Members                                                                                                                                        |
+|---------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| Stringers     | `String`, `GoString`                                                                                                                           |
+| Logging       | `LogValue`                                                                                                                                     |
+| Accessors     | `Expose`, `IsEmpty`, `IsZero`                                                                                                                  |
+| Conversions   | `SecureString`                                                                                                                                 |
+| Serialization | `MarshalJSONTo`, `MarshalJSON`, `UnmarshalJSONFrom`, `MarshalYAML`, `UnmarshalYAML`, `MarshalText`, `UnmarshalText`, `MarshalBSONValue`, `UnmarshalBSONValue` |
 
 ---
 
@@ -70,8 +70,8 @@ client, err := mongo.Connect(options.Client().ApplyURI(cfg.URI.Expose()))
 
 ### SecureString
 
-`SecureString() *strings.SecureString` converts the redacted value into a pooled, memory-zeroing
-[`core/text/strings.SecureString`](../text/strings.md). The caller owns `Clear()`:
+`SecureString() *secure.String` converts the redacted value into a pooled, memory-zeroing
+[`core/text/strings/secure.String`](../text/strings.md#secure-strings). The caller owns `Clear()`:
 
 ```go
 ss := cfg.Password.SecureString()
@@ -83,21 +83,21 @@ useSecret(ss)
 
 ## Serialization
 
-`RedactedString` implements `json.Marshaler` / `json.Unmarshaler`, `yaml.Marshaler` / `yaml.Unmarshaler` (`gopkg.in/yaml.v3`),
+`RedactedString` implements `json.MarshalerTo` / `json.UnmarshalerFrom` (`encoding/json/v2`, also honored by `encoding/json`), `yaml.Marshaler` / `yaml.Unmarshaler` (`gopkg.in/yaml.v3`),
 `encoding.TextMarshaler` / `encoding.TextUnmarshaler`, and `bson.ValueMarshaler` / `bson.ValueUnmarshaler`
 (`go.mongodb.org/mongo-driver/v2`). `Marshal` always emits the placeholder `<redacted>`; `Unmarshal` stores the incoming string verbatim — so a
 value loaded from YAML/JSON/BSON is exposed by `Expose()` but re-serializing the same struct redacts it again.
 
-| Direction      | `RedactedString("secret")` | Empty (`""`)               | Notes                                                                     |
-|----------------|----------------------------|----------------------------|---------------------------------------------------------------------------|
-| JSON marshal   | `"\u003credacted\u003e"`   | `"\u003credacted\u003e"`   | `encoding/json` HTML-escapes `<` / `>` as `\u003c` / `\u003e` on the wire |
-| JSON unmarshal | `RedactedString("secret")` | `RedactedString("")`       | JSON `null` is accepted and clears the value; object/number/bool rejected |
-| YAML marshal   | `<redacted>\n`             | `<redacted>\n`             | `gopkg.in/yaml.v3`                                                        |
-| YAML unmarshal | `RedactedString("secret")` | `RedactedString("")`       | Scalar string only; sequence/mapping nodes are rejected                   |
-| Text marshal   | `[]byte("<redacted>")`     | `[]byte("<redacted>")`     | Used by `url.Values`, `http.Header`, log/slog text fallback               |
-| Text unmarshal | `RedactedString("secret")` | `RedactedString("")`       | Stores incoming bytes verbatim                                            |
-| BSON marshal   | BSON string `<redacted>`   | omitted (with `omitempty`) | `IsZero` returning `true` for `""` triggers `bson:",omitempty"`           |
-| BSON unmarshal | `RedactedString("secret")` | `RedactedString("")`       | BSON string; BSON null clears to `""`; other BSON types are rejected      |
+| Direction      | `RedactedString("secret")` | Empty (`""`)               | Notes                                                                        |
+|----------------|----------------------------|----------------------------|------------------------------------------------------------------------------|
+| JSON marshal   | `"<redacted>"`             | `"<redacted>"`             | `encoding/json/v2`; `encoding/json` HTML-escapes to `"\u003credacted\u003e"` |
+| JSON unmarshal | `RedactedString("secret")` | `RedactedString("")`       | JSON `null` is accepted and clears the value; object/number/bool rejected    |
+| YAML marshal   | `<redacted>\n`             | `<redacted>\n`             | `gopkg.in/yaml.v3`                                                           |
+| YAML unmarshal | `RedactedString("secret")` | `RedactedString("")`       | Scalar string only; sequence/mapping nodes are rejected                      |
+| Text marshal   | `[]byte("<redacted>")`     | `[]byte("<redacted>")`     | Used by `url.Values`, `http.Header`, log/slog text fallback                  |
+| Text unmarshal | `RedactedString("secret")` | `RedactedString("")`       | Stores incoming bytes verbatim                                               |
+| BSON marshal   | BSON string `<redacted>`   | omitted (with `omitempty`) | `IsZero` returning `true` for `""` triggers `bson:",omitempty"`              |
+| BSON unmarshal | `RedactedString("secret")` | `RedactedString("")`       | BSON string; BSON null clears to `""`; other BSON types are rejected         |
 
 ```go
 type Database struct {
@@ -130,8 +130,8 @@ library, so `RedactedString` works as a Mongo field type with the default regist
 
 - **Already-public identifiers** that just look like secrets (account IDs, tenant slugs). `RedactedString` actively prevents inspection, which is
   the wrong default for non-secret data.
-- **Credentials that must be zeroed from memory after use.** Use [`core/text/strings.SecureString`](../text/strings.md) directly, or bridge with
-  `RedactedString.SecureString()` followed by `defer ss.Clear()`.
+- **Credentials that must be zeroed from memory after use.** Use [`core/text/strings/secure.String`](../text/strings.md#secure-strings) directly, or
+  bridge with `RedactedString.SecureString()` followed by `defer ss.Clear()`.
 - **Generic optionality.** Reach for [`Optional[T]`](optional.md) when the question is "present or absent", not "redact in output".
 - **Programmatic comparisons against the underlying value.** Use `s.Expose() == "expected"` rather than relying on `==` against an untyped
   constant (which works only because the underlying kind is `string` — easy to break later).
@@ -144,7 +144,7 @@ library, so `RedactedString` works as a Mongo field type with the default regist
   `0 allocs/op` (measured at ~1.6 ns/op on Apple M4 Pro).
 - **`MarshalText` allocates once** (~16 B) to return the placeholder as a fresh `[]byte` — `encoding.TextMarshaler`'s contract forbids returning
   a shared backing array.
-- **`MarshalJSON` allocates twice** (40 B/op, 2 allocs/op measured on Apple M4 Pro) because it calls `json.Marshal` on the placeholder.
+- **`MarshalJSONTo` writes the placeholder token straight into the caller's encoder**; it allocates nothing of its own.
 - **`MarshalBSONValue` / `UnmarshalBSONValue`** hand-encode / decode the BSON string with `encoding/binary`; `MarshalBSONValue` allocates one
   small buffer for the encoded value, and `UnmarshalBSONValue` copies the payload into the string.
 
@@ -161,4 +161,5 @@ was split into per-capability schema packages.
 - [optional.md](optional.md) — sibling type for "value or absent".
 - [result.md](result.md) — sibling type for "value or error".
 - `core/types/redacted/README.md` — package-level reference next to the source.
-- [`core/text/strings.SecureString`](../text/strings.md) — pooled, memory-zeroing companion for credentials that must be wiped after use.
+- [`core/text/strings/secure.String`](../text/strings.md#secure-strings) — pooled, memory-zeroing companion for credentials that must be wiped after
+  use.

@@ -5,23 +5,23 @@
 package redacted_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/types/redacted"
 )
 
-func BenchmarkMarshalJSON(b *testing.B) {
+func BenchmarkMarshalJSONTo(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
 	var sink []byte
 	for b.Loop() {
-		out, _ := s.MarshalJSON()
+		out, _ := json.Marshal(s)
 		sink = out
 	}
 	_ = sink
 }
 
-func BenchmarkUnmarshalJSON(b *testing.B) {
+func BenchmarkUnmarshalJSONFrom(b *testing.B) {
 	data := []byte(`"super-secret"`)
 	var s redacted.RedactedString
 	for b.Loop() {

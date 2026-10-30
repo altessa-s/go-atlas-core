@@ -5,11 +5,12 @@
 package redacted
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 // URL is a named string type for URLs that may embed credentials
@@ -49,20 +50,54 @@ func (u URL) IsEmpty() bool { return u == "" }
 // IsZero reports whether the underlying value is the empty string.
 func (u URL) IsZero() bool { return u == "" }
 
-// MarshalJSON implements json.Marshaler, emitting the masked URL.
-func (u URL) MarshalJSON() ([]byte, error) {
-	return json.Marshal(maskURL(string(u)))
+// MarshalJSONTo implements [encoding/json/v2.MarshalerTo], emitting the
+// masked URL as a JSON string. Each byte of invalid UTF-8 in the masked URL
+// is written as U+FFFD under every codec, as encoding/json does, instead of
+// failing under encoding/json/v2.
+func (u URL) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(replaceInvalidUTF8(maskURL(string(u)))))
 }
 
-// UnmarshalJSON implements json.Unmarshaler, storing a JSON string verbatim.
-// JSON null clears the value; other JSON types are rejected.
-func (u *URL) UnmarshalJSON(data []byte) error {
-	var v string
-	if err := json.Unmarshal(data, &v); err != nil {
-		return fmt.Errorf("redacted: unmarshal json: %w", err)
+// MarshalJSON implements the legacy json.Marshaler interface for encoders
+// that do not know [encoding/json/v2.MarshalerTo] (goccy/go-json, jsoniter,
+// ...). Without it such encoders reflect on the underlying string and emit
+// the unmasked URL. encoding/json and encoding/json/v2 prefer [URL.MarshalJSONTo].
+func (u URL) MarshalJSON() ([]byte, error) {
+	return jsontext.AppendQuote(nil, replaceInvalidUTF8(maskURL(string(u))))
+}
+
+// UnmarshalJSONFrom implements [encoding/json/v2.UnmarshalerFrom], storing a
+// JSON string verbatim. JSON null clears the value; other JSON types are
+// rejected.
+func (u *URL) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	v, err := decodeJSONString(dec)
+	if err != nil {
+		return err
 	}
 	*u = URL(v)
 	return nil
+}
+
+// replaceInvalidUTF8 returns s with each byte that is not part of a valid
+// UTF-8 sequence replaced by U+FFFD — one replacement per byte, as
+// encoding/json writes them, unlike [strings.ToValidUTF8], which collapses
+// runs.
+func replaceInvalidUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 2*utf8.UTFMax)
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 1 {
+			b.WriteRune(utf8.RuneError)
+		} else {
+			b.WriteString(s[i : i+size])
+		}
+		i += size
+	}
+	return b.String()
 }
 
 // MarshalYAML implements yaml.Marshaler, emitting the masked URL scalar.

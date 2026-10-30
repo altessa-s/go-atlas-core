@@ -21,7 +21,7 @@
 // RedactedString keeps reflect.Kind == reflect.String. Decoders that
 // honor the unmarshal interfaces call its methods: gopkg.in/yaml.v3
 // invokes UnmarshalYAML, the Mongo v2 BSON driver UnmarshalBSONValue,
-// and encoding/json UnmarshalJSON. Code that sets fields purely through
+// and encoding/json and encoding/json/v2 UnmarshalJSONFrom. Code that sets fields purely through
 // reflection bypasses them, which is safe because the underlying kind
 // is string. Marshal emits <redacted>; Unmarshal restores the plain
 // underlying value.
@@ -41,20 +41,26 @@
 // # When NOT to use
 //
 // For credentials that must be zeroed from memory after use, reach
-// for core/text/strings.SecureString instead. RedactedString is a
+// for core/text/strings/secure.String instead. RedactedString is a
 // cheap log/marshal guard, not a secure-memory primitive; the
 // SecureString method on RedactedString is provided as a one-shot
 // bridge for callers that need both behaviors.
 //
 // # Serialization
 //
-// RedactedString implements json.Marshaler / json.Unmarshaler,
-// the YAML marshaler / callback unmarshaler, encoding.TextMarshaler /
+// RedactedString implements the encoding/json/v2 MarshalerTo /
+// UnmarshalerFrom interfaces, the YAML marshaler / callback unmarshaler, encoding.TextMarshaler /
 // encoding.TextUnmarshaler and bson.ValueMarshaler /
 // bson.ValueUnmarshaler. Marshal always emits the placeholder
 // "<redacted>"; Unmarshal stores the incoming string verbatim into
 // the underlying value. IsZero returns true for the empty string,
 // letting `bson:",omitempty"` strip empty fields entirely.
+//
+// JSON goes through MarshalJSONTo / UnmarshalJSONFrom, which both
+// encoding/json and encoding/json/v2 call. Each codec emits the placeholder
+// or the masked URL, never the secret. Both types also keep a MarshalJSON
+// method as a safety net for third-party encoders that only know
+// json.Marshaler and would otherwise reflect on the underlying string.
 //
 // This package has no external production dependencies. The fixed BSON string
 // redaction hook uses only the standard library and works without a custom

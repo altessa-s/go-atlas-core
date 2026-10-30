@@ -6,7 +6,8 @@ package redacted
 
 import (
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 )
 
@@ -15,24 +16,44 @@ const (
 	bsonNullType   byte = 0x0a
 )
 
-// MarshalJSON implements json.Marshaler, emitting the placeholder as a
-// JSON string. The underlying secret is never written.
-func (s RedactedString) MarshalJSON() ([]byte, error) {
-	return json.Marshal(placeholder)
+// MarshalJSONTo implements [json.MarshalerTo], emitting the placeholder as
+// a JSON string escaped per the options of enc: "<redacted>" under
+// [json.Marshal], "\u003credacted\u003e" under encoding/json, which
+// HTML-escapes. The underlying secret is never written.
+func (s RedactedString) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(placeholder))
 }
 
-// UnmarshalJSON implements json.Unmarshaler. It accepts any JSON
+// MarshalJSON implements the legacy json.Marshaler interface for encoders
+// that do not know [json.MarshalerTo] (goccy/go-json, jsoniter, ...).
+// Without it such encoders reflect on the underlying string and emit the
+// secret. encoding/json and encoding/json/v2 prefer [RedactedString.MarshalJSONTo].
+func (s RedactedString) MarshalJSON() ([]byte, error) {
+	return jsontext.AppendQuote(nil, placeholder)
+}
+
+// UnmarshalJSONFrom implements [json.UnmarshalerFrom]. It accepts any JSON
 // string and stores it verbatim into the underlying value, so config
-// loaders and Mongo decoders that route through json.Unmarshal restore
-// the plain text. JSON null clears the value; any other non-string
-// JSON value (object, array, number, bool) is rejected.
-func (s *RedactedString) UnmarshalJSON(data []byte) error {
-	var v string
-	if err := json.Unmarshal(data, &v); err != nil {
-		return fmt.Errorf("redacted: unmarshal json: %w", err)
+// loaders that route through JSON restore the plain text. JSON null clears
+// the value; any other JSON value (object, array, number, bool) is
+// rejected.
+func (s *RedactedString) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	v, err := decodeJSONString(dec)
+	if err != nil {
+		return err
 	}
 	*s = RedactedString(v)
 	return nil
+}
+
+// decodeJSONString decodes a JSON string, or null as "", with the options
+// of dec, wrapping failures with the package prefix.
+func decodeJSONString(dec *jsontext.Decoder) (string, error) {
+	var v string
+	if err := json.UnmarshalDecode(dec, &v); err != nil {
+		return "", fmt.Errorf("redacted: unmarshal json: %w", err)
+	}
+	return v, nil
 }
 
 // MarshalYAML implements yaml.Marshaler, emitting the placeholder

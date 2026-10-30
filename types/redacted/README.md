@@ -10,33 +10,34 @@ placeholder `<redacted>` in every standard output context — `fmt`, `log/slog`,
 user-info password of a URL (see [URL](#url)).
 
 `RedactedString` keeps `reflect.Kind == reflect.String`. Decoders that honor the unmarshal interfaces call its methods — `yaml.v3` invokes
-`UnmarshalYAML`, the Mongo v2 driver `UnmarshalBSONValue`, `encoding/json` `UnmarshalJSON` — while code that sets fields purely through reflection
+`UnmarshalYAML`, the Mongo v2 driver `UnmarshalBSONValue`, `encoding/json` and `encoding/json/v2` `UnmarshalJSONFrom` — while code that sets fields purely through reflection
 bypasses them, which is safe because the underlying kind is `string`.
 
 ## Methods
 
-| Method                                     | Description                                                                       |
-|--------------------------------------------|-----------------------------------------------------------------------------------|
-| `String() string`                          | `"<redacted>"` (fmt.Stringer)                                                     |
-| `GoString() string`                        | `"RedactedString{<redacted>}"` (fmt.GoStringer; used by `%#v`)                    |
-| `LogValue() slog.Value`                    | `slog.StringValue("<redacted>")` (slog.LogValuer)                                 |
-| `Expose() string`                          | Underlying plain text — the **only** path to the secret                           |
-| `IsEmpty() bool`                           | `s == ""`                                                                         |
-| `IsZero() bool`                            | Same as `IsEmpty`; lets `bson:",omitempty"` strip empty fields                    |
-| `SecureString() *strings.SecureString`     | Convert to a pooled, memory-zeroing `SecureString` — caller owns `Clear()`        |
-| `MarshalJSON() ([]byte, error)`            | `"<redacted>"` (JSON string)                                                      |
-| `UnmarshalJSON([]byte) error`              | Stores a JSON string verbatim; JSON `null` clears the value; other types rejected |
-| `MarshalYAML() (any, error)`               | `"<redacted>"` scalar (yaml.v3)                                                   |
-| `UnmarshalYAML(func(any) error) error`          | Decodes a scalar string into the underlying value                                 |
-| `MarshalText() ([]byte, error)`            | `[]byte("<redacted>")`                                                            |
-| `UnmarshalText([]byte) error`              | Stores incoming bytes verbatim                                                    |
-| `MarshalBSONValue() (byte, []byte, error)` | BSON string `<redacted>`                                                          |
-| `UnmarshalBSONValue(byte, []byte) error`   | Decodes a BSON string into the underlying value; BSON null clears it to `""`      |
+| Method                                       | Description                                                                       |
+|----------------------------------------------|-----------------------------------------------------------------------------------|
+| `String() string`                            | `"<redacted>"` (fmt.Stringer)                                                     |
+| `GoString() string`                          | `"RedactedString{<redacted>}"` (fmt.GoStringer; used by `%#v`)                    |
+| `LogValue() slog.Value`                      | `slog.StringValue("<redacted>")` (slog.LogValuer)                                 |
+| `Expose() string`                            | Underlying plain text — the **only** path to the secret                           |
+| `IsEmpty() bool`                             | `s == ""`                                                                         |
+| `IsZero() bool`                              | Same as `IsEmpty`; lets `bson:",omitempty"` strip empty fields                    |
+| `SecureString() *secure.String`              | Convert to a pooled, memory-zeroing `secure.String` — caller owns `Clear()`       |
+| `MarshalJSONTo(*jsontext.Encoder) error`     | `"<redacted>"` (JSON string; encoding/json/v2)                                    |
+| `MarshalJSON() ([]byte, error)`              | `"<redacted>"` for third-party encoders that only know `json.Marshaler`           |
+| `UnmarshalJSONFrom(*jsontext.Decoder) error` | Stores a JSON string verbatim; JSON `null` clears the value; other types rejected |
+| `MarshalYAML() (any, error)`                 | `"<redacted>"` scalar (yaml.v3)                                                   |
+| `UnmarshalYAML(func(any) error) error`       | Decodes a scalar string into the underlying value                                 |
+| `MarshalText() ([]byte, error)`              | `[]byte("<redacted>")`                                                            |
+| `UnmarshalText([]byte) error`                | Stores incoming bytes verbatim                                                    |
+| `MarshalBSONValue() (byte, []byte, error)`   | BSON string `<redacted>`                                                          |
+| `UnmarshalBSONValue(byte, []byte) error`     | Decodes a BSON string into the underlying value; BSON null clears it to `""`      |
 
 ## URL
 
 `URL` is a named `string` for URLs that may embed credentials (proxy URLs, DSNs written as URLs). Unlike `RedactedString` it keeps the URL readable:
-`String`, `GoString`, `LogValue`, `MarshalJSON`, `MarshalYAML` and `MarshalText` render it with the user-info password replaced by `xxxxx`
+`String`, `GoString`, `LogValue`, `MarshalJSONTo`, `MarshalYAML` and `MarshalText` render it with the user-info password replaced by `xxxxx`
 (`url.URL.Redacted`). A value that does not parse, holds an `@` outside a parsed user info (`user:pass@host:3128` without a scheme), or holds more than
 one `@` (an unencoded `/` in the password moves part of it into the host and path) renders as `<redacted>`; `HasAmbiguousUserInfo()` reports that case
 so validators can reject such URLs. `Unmarshal*` store the input verbatim, `Expose()` returns the plain text, and `IsEmpty` / `IsZero` report the empty
@@ -54,11 +55,17 @@ u, _ := url.Parse(cfg.URL.Expose()) // intentional, plain text
 
 ## Serialization
 
-`RedactedString` implements `json.Marshaler` / `json.Unmarshaler`, the YAML marshaler / callback unmarshaler (`gopkg.in/yaml.v3`),
+`RedactedString` implements `json.MarshalerTo` / `json.UnmarshalerFrom` (`encoding/json/v2`), the YAML marshaler / callback unmarshaler (`gopkg.in/yaml.v3`),
 `encoding.TextMarshaler` / `encoding.TextUnmarshaler`, and `bson.ValueMarshaler` / `bson.ValueUnmarshaler` (`go.mongodb.org/mongo-driver/v2`). `Marshal`
 always emits the placeholder `<redacted>`; `Unmarshal` stores the incoming string verbatim, so a value loaded from YAML/JSON/BSON is exposed by
 `Expose()` but re-serializing the same struct redacts it again. `IsZero` returning `true` for the empty string makes `bson:",omitempty"` strip empty
 fields entirely from the on-the-wire document.
+
+JSON goes through `MarshalJSONTo` / `UnmarshalJSONFrom`. Both `encoding/json` and `encoding/json/v2` call them, so the secret never reaches the wire:
+`"\u003credacted\u003e"` under `encoding/json` (HTML-escaped) and `"<redacted>"` under `encoding/json/v2`, the masked URL for `URL` (invalid UTF-8 in
+it written as U+FFFD under both). Decoding follows the calling codec: `encoding/json/v2` rejects a string holding invalid UTF-8 that `encoding/json`
+replaces with U+FFFD. Both types keep `MarshalJSON` (marshal side only) so third-party encoders that only know `json.Marshaler` (goccy/go-json,
+jsoniter, ...) still redact instead of reflecting on the underlying string.
 
 This package has no external production imports. Its fixed BSON redaction encoding uses stdlib and works without a custom registry. YAML decoding uses
 the callback interface supported by yaml.v3.
@@ -75,8 +82,8 @@ cfg := DatabaseConfig{URI: "mongodb://user:pass@host/db"}
 slog.Info("connecting", "cfg", cfg)
 // level=INFO msg=connecting cfg.uri=<redacted>
 
-raw, _ := json.Marshal(cfg)
-// raw == {"uri":"\u003credacted\u003e"} (encoding/json HTML-escapes < and >)
+raw, _ := json.Marshal(cfg) // encoding/json/v2
+// raw == {"uri":"<redacted>"} (encoding/json writes "\u003credacted\u003e")
 
 conn := cfg.URI.Expose() // intentional, plain text
 client, _ := mongo.Connect(options.Client().ApplyURI(conn))
@@ -97,7 +104,7 @@ access-control boundary.
 
 ## When NOT to use
 
-- **Credentials that must be zeroed from memory after use** — use [`core/text/strings.SecureString`](../../text/strings) directly, or call
+- **Credentials that must be zeroed from memory after use** — use [`core/text/strings/secure.String`](../../text/strings/secure) directly, or call
   `RedactedString.SecureString()` for a one-shot bridge.
 - **Already-public identifiers** that just happen to look like secrets (e.g. account IDs). `RedactedString` actively prevents inspection, which is the
   wrong default for non-secret data.
