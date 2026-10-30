@@ -23,19 +23,19 @@ zero value of `Optional[T]` is a valid `None`.
 
 ## Methods
 
-| Method                                     | Description                                                          |
-|--------------------------------------------|----------------------------------------------------------------------|
-| `Get() (T, bool)`                          | Underlying pair; the bridge back to idiomatic Go control flow        |
-| `Value() T`                                | Contained value (zero value of `T` if `Optional` is `None`)          |
-| `IsSome() bool`                            | Reports whether the `Optional` carries a value                       |
-| `IsNone() bool`                            | Reports whether the `Optional` is empty                              |
-| `OrDefault(def T) T`                       | Contained value if `Some`, otherwise `def`                           |
-| `OrElse(fn) T`                             | Contained value if `Some`, otherwise `fn()` (only invoked on `None`) |
-| `IsZero() bool`                            | `true` when `None`; lets `bson:",omitempty"` strip `None` fields     |
-| `MarshalBSONValue() (byte, []byte, error)` | Rejects unconfigured BSON with `ErrBSONCodecRequired`                     |
-| `UnmarshalBSONValue(byte, []byte) error`   | Rejects unconfigured BSON without changing the value      |
-| `MarshalJSON() ([]byte, error)`            | Some → `json.Marshal(v)`; None → `null`                              |
-| `UnmarshalJSON([]byte) error`              | JSON `null` → None; otherwise decode into `T` and store as Some      |
+| Method                                       | Description                                                          |
+|----------------------------------------------|----------------------------------------------------------------------|
+| `Get() (T, bool)`                            | Underlying pair; the bridge back to idiomatic Go control flow        |
+| `Value() T`                                  | Contained value (zero value of `T` if `Optional` is `None`)          |
+| `IsSome() bool`                              | Reports whether the `Optional` carries a value                       |
+| `IsNone() bool`                              | Reports whether the `Optional` is empty                              |
+| `OrDefault(def T) T`                         | Contained value if `Some`, otherwise `def`                           |
+| `OrElse(fn) T`                               | Contained value if `Some`, otherwise `fn()` (only invoked on `None`) |
+| `IsZero() bool`                              | `true` when `None`; lets `bson:",omitempty"` strip `None` fields     |
+| `MarshalBSONValue() (byte, []byte, error)`   | Rejects unconfigured BSON with `ErrBSONCodecRequired`                |
+| `UnmarshalBSONValue(byte, []byte) error`     | Rejects unconfigured BSON without changing the value                 |
+| `MarshalJSONTo(*jsontext.Encoder) error`     | Some → `v` in the caller's codec; None → `null` (encoding/json/v2)   |
+| `UnmarshalJSONFrom(*jsontext.Decoder) error` | JSON `null` → None; otherwise decode into `T` and store as Some      |
 
 ## Reflection helpers
 
@@ -54,7 +54,11 @@ For codecs and serializers that detect `Optional` fields by reflection; ordinary
 JSON support is built in: `Some(v)` encodes as `v`, `None` as `null`. Use `json:",omitzero"` to omit None fields with Go 1.25+. Present zero values
 remain present.
 
-Direct `UnmarshalJSON` calls accept JSON whitespace around `null`, which still becomes `None`. Each `MarshalJSON` result owns its byte buffer.
+JSON support is implemented with the `encoding/json/v2` interfaces `MarshalJSONTo` / `UnmarshalJSONFrom`; the type has no `MarshalJSON` /
+`UnmarshalJSON` methods. Both `encoding/json` and `encoding/json/v2` call them, and they encode `T` with the options of the calling codec: under
+`encoding/json` the bytes are exactly those the former `MarshalJSON` produced; under `encoding/json/v2`, `Some(v)` encodes and decodes like a bare `v`
+does in v2 — a nil slice as `[]`, invalid UTF-8 rejected, pointer-receiver marshalers of `T` called. Code that type-asserts `json.Marshaler` /
+`json.Unmarshaler` no longer matches `Optional`; call `json.Marshal` / `json.Unmarshal` (either version) instead.
 
 BSON uses [`data/mongo/bsoncodec.NewRegistry`](https://github.com/altessa-s/go-atlas/tree/develop/data/mongo/bsoncodec/README.md). Set the registry on Mongo client options or standalone BSON
 encoders and decoders. Without it, present Optional fields return `ErrBSONCodecRequired`; this prevents silent serialization as empty documents. None

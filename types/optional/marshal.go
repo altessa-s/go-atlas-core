@@ -5,13 +5,10 @@
 package optional
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 )
-
-// jsonNull is the canonical JSON encoding of None.
-const jsonNull = "null"
 
 // IsZero reports whether the Optional is None. It lets struct fields
 // tagged with `bson:",omitempty"` (and other libraries that consult
@@ -35,28 +32,37 @@ func (o *Optional[T]) UnmarshalBSONValue(_ byte, _ []byte) error {
 	return ErrBSONCodecRequired
 }
 
-// MarshalJSON encodes the Optional as JSON. Some(v) is encoded as v's
-// JSON form; None is encoded as the JSON literal null.
+// MarshalJSONTo implements [json.MarshalerTo]: None writes the JSON literal
+// null, Some(v) writes v's JSON form. The value is encoded with the options
+// of enc, so v follows the caller's codec: v2 semantics under [json.Marshal],
+// v1 semantics under encoding/json, whose output is unchanged from the
+// MarshalJSON method this replaced.
 //
-// To omit None fields entirely with Go 1.25+, use json:",omitzero".
-func (o Optional[T]) MarshalJSON() ([]byte, error) {
+// To omit None fields entirely, use json:",omitzero".
+func (o Optional[T]) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if !o.present {
-		return []byte(jsonNull), nil
+		return enc.WriteToken(jsontext.Null)
 	}
-	return json.Marshal(o.value)
+	// Pass the value, not &o.value: a non-addressable value keeps the v1
+	// rule that pointer-receiver MarshalJSON methods on T are not called.
+	return json.MarshalEncode(enc, o.value)
 }
 
-// UnmarshalJSON decodes JSON into the Optional. The JSON literal null
-// becomes None; any other input is decoded into T and stored as Some.
-// An absent field never invokes UnmarshalJSON, so the zero value of
-// Optional[T] (None) is the natural default.
-func (o *Optional[T]) UnmarshalJSON(data []byte) error {
-	if string(bytes.Trim(data, " \t\r\n")) == jsonNull {
+// UnmarshalJSONFrom implements [json.UnmarshalerFrom]: the JSON literal null
+// becomes None; any other value is decoded into T with the options of dec
+// and stored as Some. On error o is unchanged. An absent field never invokes
+// UnmarshalJSONFrom, so the zero value of Optional[T] (None) is the natural
+// default.
+func (o *Optional[T]) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == 'n' {
+		if _, err := dec.ReadToken(); err != nil {
+			return err
+		}
 		*o = None[T]()
 		return nil
 	}
 	var v T
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := json.UnmarshalDecode(dec, &v); err != nil {
 		return err
 	}
 	o.value = v

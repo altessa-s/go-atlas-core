@@ -5,6 +5,7 @@
 package optional_test
 
 import (
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,45 +13,45 @@ import (
 	"github.com/altessa-s/go-atlas-core/types/optional"
 )
 
-func BenchmarkMarshalJSON_Some(b *testing.B) {
+func BenchmarkMarshalJSONTo_Some(b *testing.B) {
 	opt := optional.Some("hello")
 	var (
 		raw []byte
 		err error
 	)
 	for b.Loop() {
-		raw, err = opt.MarshalJSON()
+		raw, err = json.Marshal(opt)
 	}
 	_, _ = raw, err
 }
 
-func BenchmarkMarshalJSON_None(b *testing.B) {
+func BenchmarkMarshalJSONTo_None(b *testing.B) {
 	opt := optional.None[string]()
 	var (
 		raw []byte
 		err error
 	)
 	for b.Loop() {
-		raw, err = opt.MarshalJSON()
+		raw, err = json.Marshal(opt)
 	}
 	_, _ = raw, err
 }
 
-func BenchmarkUnmarshalJSON_Some(b *testing.B) {
+func BenchmarkUnmarshalJSONFrom_Some(b *testing.B) {
 	in := []byte(`"hello"`)
 	var opt optional.Optional[string]
 	for b.Loop() {
-		if err := opt.UnmarshalJSON(in); err != nil {
+		if err := json.Unmarshal(in, &opt); err != nil {
 			require.NoError(b, err)
 		}
 	}
 }
 
-func BenchmarkUnmarshalJSON_Null(b *testing.B) {
+func BenchmarkUnmarshalJSONFrom_Null(b *testing.B) {
 	in := []byte("null")
 	var opt optional.Optional[string]
 	for b.Loop() {
-		if err := opt.UnmarshalJSON(in); err != nil {
+		if err := json.Unmarshal(in, &opt); err != nil {
 			require.NoError(b, err)
 		}
 	}

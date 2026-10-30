@@ -6,19 +6,22 @@ package optional_test
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/altessa-s/go-atlas-core/types/optional"
+
+	jsonv2 "encoding/json/v2"
 )
 
 func TestMarshalJSONNullBuffersAreIndependent(t *testing.T) {
 	t.Parallel()
 
-	a, err := optional.None[int]().MarshalJSON()
+	a, err := jsonv2.Marshal(optional.None[int]())
 	require.NoError(t, err)
-	b, err := optional.None[string]().MarshalJSON()
+	b, err := jsonv2.Marshal(optional.None[string]())
 	require.NoError(t, err)
 	require.Equal(t, "null", string(a))
 	require.Equal(t, "null", string(b))
@@ -49,7 +52,20 @@ func TestUnmarshalJSONWhitespace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			value := optional.Some(42)
-			err := value.UnmarshalJSON([]byte(tc.input))
+			err := jsonv2.Unmarshal([]byte(tc.input), &value)
+			if !tc.valid {
+				// v2 decodes in a single pass, so a trailing token is reported
+				// after the value was stored; only the error is pinned here.
+				var syntaxErr *jsontext.SyntacticError
+				require.ErrorAs(t, err, &syntaxErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, optional.None[int](), value)
+			}
+
+			// encoding/json (v1) callers keep their error type.
+			value = optional.Some(42)
+			err = json.Unmarshal([]byte(tc.input), &value)
 			if !tc.valid {
 				var syntaxErr *json.SyntaxError
 				require.ErrorAs(t, err, &syntaxErr)

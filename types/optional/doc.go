@@ -49,6 +49,14 @@
 // JSON support is built in: Some(v) encodes as v, None as null. Use the
 // json:",omitzero" field tag to omit None with Go 1.25+.
 //
+// JSON is implemented by [Optional.MarshalJSONTo] and
+// [Optional.UnmarshalJSONFrom], the encoding/json/v2 interfaces, which
+// encoding/json also calls. They encode and decode T with the options of the
+// calling codec, so under encoding/json the wire format is unchanged from
+// the former MarshalJSON method, and under encoding/json/v2 Some(v) behaves
+// like a bare v (v2 rejects invalid UTF-8 and encodes a nil slice as []).
+// Optional does not implement json.Marshaler or json.Unmarshaler.
+//
 // BSON support is provided by data/mongo/bsoncodec.NewRegistry. Configure the
 // Mongo client or standalone encoder/decoder with that registry. Unconfigured
 // BSON calls fail with ErrBSONCodecRequired instead of losing private fields.

@@ -18,14 +18,14 @@ heap allocation per `Some`.
 
 ## API overview
 
-| Symbol group  | Members                                                                  |
-|---------------|--------------------------------------------------------------------------|
-| Constructors  | `Some`, `None`, `Of`, `FromPtr`                                          |
-| Accessors     | `Get`, `Value`, `IsSome`, `IsNone`, `IsZero`                             |
-| Fallbacks     | `OrDefault`, `OrElse`                                                    |
-| Conversions   | `ToPtr`                                                                  |
-| Serialization | `MarshalBSONValue`, `UnmarshalBSONValue`, `MarshalJSON`, `UnmarshalJSON` |
-| Reflection    | `IsOptionalType`, `InnerType`, `GetReflect`, `SomeReflect`, `NoneReflect`|
+| Symbol group  | Members                                                                        |
+|---------------|--------------------------------------------------------------------------------|
+| Constructors  | `Some`, `None`, `Of`, `FromPtr`                                                |
+| Accessors     | `Get`, `Value`, `IsSome`, `IsNone`, `IsZero`                                   |
+| Fallbacks     | `OrDefault`, `OrElse`                                                          |
+| Conversions   | `ToPtr`                                                                        |
+| Serialization | `MarshalBSONValue`, `UnmarshalBSONValue`, `MarshalJSONTo`, `UnmarshalJSONFrom` |
+| Reflection    | `IsOptionalType`, `InnerType`, `GetReflect`, `SomeReflect`, `NoneReflect`      |
 
 ---
 
@@ -140,19 +140,20 @@ Note that `ToPtr` allocates: the returned pointer is the address of an internal 
 
 ## Serialization
 
-`Optional[T]` implements `json.Marshaler` / `json.Unmarshaler`, so it works out of the box with `encoding/json`. Its `MarshalBSONValue` /
+`Optional[T]` implements `json.MarshalerTo` / `json.UnmarshalerFrom` from `encoding/json/v2`, so it works out of the box with `encoding/json/v2`
+and, unchanged on the wire, with `encoding/json`. Its `MarshalBSONValue` /
 `UnmarshalBSONValue` hooks deliberately return `ErrBSONCodecRequired`: BSON support comes from the registry built by
 [`data/mongo/bsoncodec.NewRegistry()`](https://github.com/altessa-s/go-atlas/tree/develop/data/mongo/bsoncodec/README.md), which must be set on the Mongo client options or on standalone BSON
 encoders/decoders. Without it, encoding a present `Optional` field fails instead of silently writing an empty document. With the JSON methods or the
 registry, `Some(v)` is encoded as the underlying `v` and `None` as `null`. `Some(zero T)` is preserved through a round-trip when its encoding is
 not null (`0`, `false`, `""`); a present value that encodes as null — e.g. `Some[*int](nil)` — collapses to `None`, in JSON and BSON alike.
 
-| Direction        | `Some(v)`           | `None`              | Notes                                                                                  |
-|------------------|---------------------|---------------------|----------------------------------------------------------------------------------------|
-| BSON marshal     | underlying BSON `v` | BSON `null`         | Requires `bsoncodec.NewRegistry()`; with `IsZero`, `bson:",omitempty"` omits `None`    |
-| BSON unmarshal   | `Some(v)`           | `None`              | Requires `bsoncodec.NewRegistry()`; BSON `null` or an absent field decode to `None`    |
-| JSON marshal     | `json.Marshal(v)`   | literal `null`      | `json:",omitzero"` (Go 1.24+) consults `IsZero` and omits `None`; otherwise `null`     |
-| JSON unmarshal   | `Some(v)`           | `None`              | JSON `null` or an absent field both decode to `None`                                   |
+| Direction      | `Some(v)`            | `None`         | Notes                                                                               |
+|----------------|----------------------|----------------|-------------------------------------------------------------------------------------|
+| BSON marshal   | underlying BSON `v`  | BSON `null`    | Requires `bsoncodec.NewRegistry()`; with `IsZero`, `bson:",omitempty"` omits `None` |
+| BSON unmarshal | `Some(v)`            | `None`         | Requires `bsoncodec.NewRegistry()`; BSON `null` or an absent field decode to `None` |
+| JSON marshal   | `v` per caller codec | literal `null` | `json:",omitzero"` (Go 1.24+) consults `IsZero` and omits `None`; otherwise `null`  |
+| JSON unmarshal | `Some(v)`            | `None`         | JSON `null` or an absent field both decode to `None`                                |
 
 ```go
 type Doc struct {

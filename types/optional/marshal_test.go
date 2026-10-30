@@ -5,7 +5,7 @@
 package optional_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 	"time"
 
@@ -26,13 +26,13 @@ func TestIsZero(t *testing.T) {
 	require.False(t, optional.Some(time.Time{}).IsZero())
 }
 
-func TestMarshalJSON(t *testing.T) {
+func TestMarshalJSONTo(t *testing.T) {
 	t.Parallel()
 
 	t.Run("none_emits_null", func(t *testing.T) {
 		t.Parallel()
 
-		raw, err := optional.None[int]().MarshalJSON()
+		raw, err := json.Marshal(optional.None[int]())
 		require.NoError(t, err)
 		require.Equal(t, []byte("null"), raw)
 	})
@@ -40,7 +40,7 @@ func TestMarshalJSON(t *testing.T) {
 	t.Run("some_emits_underlying", func(t *testing.T) {
 		t.Parallel()
 
-		raw, err := optional.Some(42).MarshalJSON()
+		raw, err := json.Marshal(optional.Some(42))
 		require.NoError(t, err)
 		require.Equal(t, []byte("42"), raw)
 	})
@@ -48,20 +48,20 @@ func TestMarshalJSON(t *testing.T) {
 	t.Run("some_empty_string", func(t *testing.T) {
 		t.Parallel()
 
-		raw, err := optional.Some("").MarshalJSON()
+		raw, err := json.Marshal(optional.Some(""))
 		require.NoError(t, err)
 		require.Equal(t, []byte(`""`), raw)
 	})
 }
 
-func TestUnmarshalJSON(t *testing.T) {
+func TestUnmarshalJSONFrom(t *testing.T) {
 	t.Parallel()
 
 	t.Run("null_becomes_none", func(t *testing.T) {
 		t.Parallel()
 
 		o := optional.Some("seed")
-		require.NoError(t, o.UnmarshalJSON([]byte("null")))
+		require.NoError(t, json.Unmarshal([]byte("null"), &o))
 		require.True(t, o.IsNone())
 		require.Equal(t, "", o.Value())
 	})
@@ -70,7 +70,7 @@ func TestUnmarshalJSON(t *testing.T) {
 		t.Parallel()
 
 		var o optional.Optional[int]
-		require.NoError(t, o.UnmarshalJSON([]byte("42")))
+		require.NoError(t, json.Unmarshal([]byte("42"), &o))
 		require.True(t, o.IsSome())
 		require.Equal(t, 42, o.Value())
 	})
@@ -79,7 +79,7 @@ func TestUnmarshalJSON(t *testing.T) {
 		t.Parallel()
 
 		o := optional.Some(7)
-		require.Error(t, o.UnmarshalJSON([]byte("not-json")))
+		require.Error(t, json.Unmarshal([]byte("not-json"), &o))
 		v, ok := o.Get()
 		require.True(t, ok)
 		require.Equal(t, 7, v)
