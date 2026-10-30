@@ -9,15 +9,18 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/altessa-s/go-atlas-core/internal/testhelpers"
 	"github.com/altessa-s/go-atlas-core/runtime/singleflight"
 )
 
 func TestAdmissionAndCancellation(t *testing.T) {
 	t.Parallel()
+	testhelpers.VerifyNoLeaks(t)
 	g := singleflight.New[string, string](singleflight.WithMaxConcurrent(1))
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -45,6 +48,7 @@ func TestAdmissionAndCancellation(t *testing.T) {
 
 func TestDistinctKeysAndNilResult(t *testing.T) {
 	t.Parallel()
+	testhelpers.VerifyNoLeaks(t)
 	g := singleflight.New[any, any]()
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	go func() {
@@ -64,6 +68,7 @@ func TestDistinctKeysAndNilResult(t *testing.T) {
 
 func TestTimeoutAndAbnormalExit(t *testing.T) {
 	t.Parallel()
+	testhelpers.VerifyNoLeaks(t)
 	g := singleflight.New[string, int](singleflight.WithMaxConcurrent(1), singleflight.WithTimeout(time.Millisecond))
 	_, err := g.Do(t.Context(), "timeout", func(ctx context.Context) (int, error) { <-ctx.Done(); return 0, ctx.Err() })
 	require.ErrorIs(t, err, context.DeadlineExceeded)
@@ -79,9 +84,43 @@ func TestTimeoutAndAbnormalExit(t *testing.T) {
 
 func TestCanceledCallDoesNotStartWork(t *testing.T) {
 	t.Parallel()
+	testhelpers.VerifyNoLeaks(t)
 	g := singleflight.New[string, int]()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := g.Do(ctx, "key", func(context.Context) (int, error) { panic("canceled work started") })
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+// Work every caller abandoned keeps its capacity until the group's timeout
+// ends it, then exits and releases the capacity; its goroutine does not leak.
+// The bubble's fake clock makes the timeout instant and exact.
+func TestAbandonedWorkExitsOnGroupTimeout(t *testing.T) {
+	t.Parallel()
+	testhelpers.VerifyNoLeaks(t)
+	const timeout = 20 * time.Millisecond
+	synctest.Test(t, func(t *testing.T) {
+		g := singleflight.New[string, int](singleflight.WithMaxConcurrent(1), singleflight.WithTimeout(timeout))
+		entered := make(chan struct{})
+		ctx, cancel := context.WithCancel(t.Context())
+		go func() {
+			<-entered
+			cancel()
+		}()
+		_, err := g.Do(ctx, "abandoned", func(work context.Context) (int, error) {
+			close(entered)
+			<-work.Done()
+			return 0, work.Err()
+		})
+		require.ErrorIs(t, err, context.Canceled)
+
+		next := func(context.Context) (int, error) { return 1, nil }
+		_, err = g.Do(t.Context(), "next", next)
+		require.ErrorIs(t, err, singleflight.ErrOverloaded, "the abandoned work still holds the capacity")
+
+		synctest.Sleep(timeout)
+		v, err := g.Do(t.Context(), "next", next)
+		require.NoError(t, err)
+		require.Equal(t, 1, v)
+	})
 }
