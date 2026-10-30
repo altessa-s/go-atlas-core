@@ -30,6 +30,7 @@ returned by the next `Open` call. Consumers must be idempotent with respect to r
 | `WithMaxSegmentBytes`   | `DefaultMaxSegmentBytes` (64 MiB) | Roll-over size for a single segment file                             |
 | `WithMaxBytes`          | `DefaultMaxBytes` (0 = unlimited) | Soft cap on total bytes across all segments; `Append` returns `ErrFull` when exceeded |
 | `WithFsyncInterval`     | `DefaultFsyncInterval` (5 ms)     | Period between background fsync calls on the active segment          |
+| `WithFsyncTicker`       | `DefaultFsyncTicker` (`time.Ticker`) | `TickerFunc` started with the fsync interval that paces the background fsync; tests pass a hand-driven tick channel; `nil` is ignored |
 | `WithLogger`            | `slog.DiscardHandler`      | `*slog.Logger` used to surface background fsync errors                      |
 | `WithInsecurePermissions` | `false`                  | Restores legacy 0755/0644 creation and skips POSIX permission checks        |
 
@@ -41,6 +42,7 @@ returned by the next `Open` call. Consumers must be idempotent with respect to r
 | `Offset` | `{SegmentID, Position}` identifier; zero value means "no record"    |
 | `Record` | `{Offset, Payload}` returned from `Open` during recovery            |
 | `Stats`  | `{TotalBytes, Segments, Pending}` snapshot for metrics              |
+| `TickerFunc` | `func(d) (tick <-chan time.Time, stop func())` — the `WithFsyncTicker` seam |
 
 ## Sentinel errors
 

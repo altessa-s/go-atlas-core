@@ -10,6 +10,8 @@
 // writes from an unclean shutdown are detected and discarded during
 // recovery. A background goroutine fsyncs the active segment on a
 // configurable interval, trading throughput for a bounded loss window.
+// [WithFsyncTicker] replaces the [time.Ticker] that paces it, so tests can
+// trigger the background fsync deterministically.
 //
 // The package is payload-agnostic: it does not know or care what the bytes
 // mean. Higher-level components (dispatchers, outboxes, durable queues)

@@ -423,16 +423,24 @@ func TestWAL_AppendRacesClose(t *testing.T) {
 	_, err = w.Append([]byte("seed"))
 	require.NoError(t, err)
 
-	// Appender goroutines hammer the WAL until Close completes.
+	// Appender goroutines hammer the WAL until Close completes. Each one
+	// reports in once its first Append has returned, so Close is raced
+	// against appenders that are known to be looping. This is not a synctest
+	// bubble: Append does file I/O and takes a sync.Mutex, neither of which
+	// is durably blocking, so the appenders never let a bubble go idle.
 	const appenders = 8
 	var (
 		wg            sync.WaitGroup
+		inFlight      sync.WaitGroup
 		stop          atomic.Bool
 		panicsSeen    atomic.Int64
 		nonClosedErrs atomic.Int64
 	)
+	inFlight.Add(appenders)
 	for range appenders {
 		wg.Go(func() {
+			reportInFlight := sync.OnceFunc(inFlight.Done)
+			defer reportInFlight()
 			defer func() {
 				if r := recover(); r != nil {
 					panicsSeen.Add(1)
@@ -442,6 +450,7 @@ func TestWAL_AppendRacesClose(t *testing.T) {
 			payload := []byte("racer")
 			for !stop.Load() {
 				_, appendErr := w.Append(payload)
+				reportInFlight()
 				if appendErr != nil && !errors.Is(appendErr, ErrClosed) {
 					nonClosedErrs.Add(1)
 					t.Errorf("Append: unexpected error %v", appendErr)
@@ -451,15 +460,50 @@ func TestWAL_AppendRacesClose(t *testing.T) {
 		})
 	}
 
-	// Give appenders a moment to get in flight, then race Close against
-	// them. Close must complete without panicking the appenders.
-	time.Sleep(10 * time.Millisecond)
+	// Race Close against the in-flight appenders. Close must complete
+	// without panicking them.
+	inFlight.Wait()
 	require.NoError(t, w.Close())
 	stop.Store(true)
 	wg.Wait()
 
 	require.Zero(t, panicsSeen.Load(), "observed panics from Append")
 	require.Zero(t, nonClosedErrs.Load(), "observed non-ErrClosed errors from Append")
+}
+
+// TestWAL_FsyncTicker drives the background fsync through WithFsyncTicker:
+// the ticker is started with the fsync interval, each tick runs one fsync of
+// the active segment (here clearing a stale fault), and Close stops it.
+func TestWAL_FsyncTicker(t *testing.T) {
+	t.Parallel()
+
+	ticks := make(chan time.Time) // unbuffered: a send returns once the loop took the tick
+	var (
+		interval atomic.Int64
+		stopped  atomic.Bool
+	)
+	w, _ := newTestWAL(t,
+		WithFsyncInterval(time.Minute),
+		WithFsyncTicker(func(d time.Duration) (<-chan time.Time, func()) {
+			interval.Store(int64(d))
+			return ticks, func() { stopped.Store(true) }
+		}),
+	)
+	_, err := w.Append([]byte("payload"))
+	require.NoError(t, err)
+
+	errStale := errors.New("stale fsync failure")
+	w.lastFsyncErr.Store(&errStale)
+	require.ErrorIs(t, w.Faulted(), errStale, "no tick, no background fsync")
+
+	ticks <- time.Time{} // runs one background fsync
+	ticks <- time.Time{} // taken only after the previous fsync returned
+	require.Equal(t, time.Minute, time.Duration(interval.Load()))
+	require.NoError(t, w.Faulted(), "a successful tick-driven fsync clears the fault")
+
+	require.False(t, stopped.Load())
+	require.NoError(t, w.Close())
+	require.True(t, stopped.Load(), "Close stops the ticker")
 }
 
 // TestWAL_GroupCommit_ConcurrentAppendsRecoverExactly pins the group-commit

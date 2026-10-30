@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	coreerrs "github.com/altessa-s/go-atlas-core/errors"
 )
@@ -312,6 +311,8 @@ type rawRecord struct {
 
 // readSegment reads all valid records in path, stopping at the first
 // corrupt or partial record. Returns (records, validBytes, err).
+//
+// #nosec G304 -- path is a segment name listed inside the WAL directory the caller opened
 func readSegment(path string) ([]rawRecord, int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -353,6 +354,8 @@ func readSegment(path string) ([]rawRecord, int64, error) {
 // openNewActiveLocked opens a fresh active segment file. Caller need not
 // hold the locks when called from Open (single-threaded), but must hold
 // w.wmu and w.mu when called during a roll.
+//
+// #nosec G304 -- path joins the caller-opened WAL directory with a generated segment name
 func (w *WAL) openNewActiveLocked() error {
 	id := w.nextID
 	w.nextID++
@@ -588,14 +591,14 @@ func (w *WAL) removeAckedSegment(path string) {
 }
 
 func (w *WAL) fsyncLoop() {
-	ticker := time.NewTicker(w.opts.fsyncInterval)
-	defer ticker.Stop()
+	tick, stop := w.opts.fsyncTicker(w.opts.fsyncInterval)
+	defer stop()
 	for {
 		select {
 		case <-w.fsyncDone:
 			w.fsyncOnce()
 			return
-		case <-ticker.C:
+		case <-tick:
 			w.fsyncOnce()
 		}
 	}

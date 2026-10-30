@@ -25,6 +25,17 @@ const (
 	DefaultFsyncInterval = 5 * time.Millisecond
 )
 
+// TickerFunc starts a ticker that delivers a tick on the returned channel
+// every d until stop is called. It is the seam behind [WithFsyncTicker].
+type TickerFunc func(d time.Duration) (tick <-chan time.Time, stop func())
+
+// DefaultFsyncTicker is the [TickerFunc] used by [Open] when
+// [WithFsyncTicker] is not set: a [time.Ticker] stopped by stop.
+func DefaultFsyncTicker(d time.Duration) (tick <-chan time.Time, stop func()) {
+	t := time.NewTicker(d)
+	return t.C, t.Stop
+}
+
 // options holds the tunables of a [WAL]. Callers configure a WAL by
 // passing [Option] values to [Open]; the required on-disk directory is
 // supplied separately as a positional argument and therefore intentionally
@@ -45,6 +56,11 @@ type options struct {
 	// active segment. Shorter intervals reduce the loss window after a
 	// crash at the cost of throughput.
 	fsyncInterval time.Duration `optgen:"default=DefaultFsyncInterval"`
+	// fsyncTicker starts the ticker that paces the background fsync, called
+	// once with fsyncInterval when the fsync goroutine starts; stop runs when
+	// the goroutine exits on Close. Tests pass a ticker they drive by hand to
+	// trigger the background fsync deterministically. A nil value is ignored.
+	fsyncTicker TickerFunc `optgen:"default=DefaultFsyncTicker,notnil"`
 	// logger is the structured logger used to surface background fsync
 	// errors that would otherwise be silently dropped. When nil, a
 	// discard handler is installed by [Open] so call sites can emit

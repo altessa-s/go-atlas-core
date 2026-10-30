@@ -15,8 +15,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/altessa-s/go-atlas-core/io/wal"
 	"github.com/altessa-s/go-atlas-core/internal/testhelpers"
+	"github.com/altessa-s/go-atlas-core/io/wal"
 )
 
 // TestStressWAL runs group-committed Append from many producers against a
@@ -78,6 +78,8 @@ func TestStressWAL(t *testing.T) {
 				stop.Store(true)
 				return
 			}
+			// Real time on purpose: paces Sync against real file I/O and the
+			// real fsync loop; a synctest bubble cannot host file I/O.
 			time.Sleep(time.Millisecond)
 		}
 	})
@@ -114,7 +116,7 @@ func TestStressWAL(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(duration)
+	time.Sleep(duration) // real time on purpose: the stress run lasts ATLAS_STRESS_DURATION of wall clock
 	stop.Store(true)
 	wg.Wait()
 	<-consumerDone
