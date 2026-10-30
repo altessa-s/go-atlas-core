@@ -8,19 +8,21 @@ Package `signals` provides OS signal handling with priority-based execution and 
 
 ## Options
 
-| Option                | Default    | Description                          |
-|-----------------------|------------|--------------------------------------|
-| `WithSignals`         | —          | OS signals to listen for             |
-| `WithWorkerPoolSize`  | 10         | Max concurrent handler goroutines    |
-| `WithShutdownTimeout` | 30s        | Graceful shutdown deadline           |
-| `WithHandlerTimeout`  | 5s         | Per-handler execution timeout        |
-| `WithExecutionMode`   | Sequential | `SequentialMode` or `ParallelMode`   |
-| `WithErrorHandler`    | —          | Callback for handler errors/panics   |
-| `WithSignalChannelBuffer` | 1      | Buffer size of the OS signal channel |
+| Option                    | Default                    | Description                                                                            |
+|---------------------------|----------------------------|----------------------------------------------------------------------------------------|
+| `WithSignals`             | —                          | OS signals to listen for                                                               |
+| `WithWorkerPoolSize`      | 10                         | Max concurrent handler goroutines                                                      |
+| `WithShutdownTimeout`     | 30s                        | Graceful shutdown deadline                                                             |
+| `WithHandlerTimeout`      | 5s                         | Per-handler execution timeout                                                          |
+| `WithExecutionMode`       | Sequential                 | `SequentialMode` or `ParallelMode`                                                     |
+| `WithErrorHandler`        | —                          | Callback for handler errors/panics                                                     |
+| `WithSignalChannelBuffer` | 1                          | Buffer size of the OS signal channel                                                   |
+| `WithShutdownHooks`       | `runtime.RunShutdownHooks` | Hooks run at the end of `Shutdown`; pass `(*runtime.HookGroup).Shutdown` to scope them |
+| `WithClock`               | `clock.Real()`             | Clock driving the parallel-mode shutdown grace period                                  |
 
 ## Signal methods
 
-`New(opts...)` returns a `*Signal`; registration and start methods return the `SignalHandler` interface for chaining.
+`New(opts...)` returns a `*Signal`; registration and start methods return the same `*Signal` for chaining.
 
 | Method                                          | Description                                                       |
 |-------------------------------------------------|-------------------------------------------------------------------|
@@ -31,6 +33,9 @@ Package `signals` provides OS signal handling with priority-based execution and 
 | `Start()`                                       | Begin listening for the configured signals (idempotent)           |
 | `Shutdown(ctx)` / `Stop()`                      | Stop listening and wait for in-flight handlers (idempotent)       |
 | `Wait()`                                        | Block until the handler has stopped                               |
+
+On a `Shutdown` timeout the handler context is canceled and the shutdown hooks still run, but handlers that ignore cancellation keep running: their
+goroutines are not reclaimed.
 
 ## Priority levels
 

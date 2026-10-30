@@ -15,6 +15,8 @@
 //   - WithShutdownTimeout(duration): Graceful shutdown timeout (default: 30s).
 //   - WithHandlerTimeout(duration): Individual handler timeout (default: 5s).
 //   - WithExecutionMode(mode): Sequential or Parallel (default: Sequential).
+//   - WithShutdownHooks(fn): Hooks run at the end of Shutdown (default: runtime.RunShutdownHooks).
+//   - WithClock(c): Clock driving the parallel-mode grace period (default: clock.Real()).
 //
 // # Usage
 //

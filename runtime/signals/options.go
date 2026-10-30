@@ -9,6 +9,9 @@ package signals
 import (
 	"os"
 	"time"
+
+	"github.com/altessa-s/go-atlas-core/runtime"
+	"github.com/altessa-s/go-atlas-core/time/clock"
 )
 
 // Default configuration constants for [Signal] and its handler execution.
@@ -69,4 +72,11 @@ type options struct {
 	handlerTimeout      time.Duration `optgen:"default=DefaultHandlerTimeout"`
 	signalChannelBuffer int           `optgen:"default=DefaultSignalChannelBuffer"`
 	executionMode       ExecutionMode `optgen:"default=SequentialMode"`
+	// shutdownHooks runs after in-flight handlers finish (or the shutdown
+	// deadline expires) in [Signal.Shutdown]. It defaults to the process-wide
+	// [runtime.RunShutdownHooks]; pass a [runtime.HookGroup.Shutdown] method
+	// value to scope the hooks to a component.
+	shutdownHooks runtime.ShutdownHook `optgen:"default=runtime.RunShutdownHooks,notnil"`
+	// clock drives the parallel-mode grace period after a shutdown request.
+	clock clock.Clock `optgen:"default=clock.Real(),notnil"`
 }

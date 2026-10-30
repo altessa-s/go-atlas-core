@@ -14,10 +14,26 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/altessa-s/go-atlas-core/internal/testhelpers"
 	"github.com/altessa-s/go-atlas-core/runtime/signals"
 )
 
+// The tests in this file are serial: signal.Notify registrations and the
+// signals sent to the test process are process-wide. They cannot run in a
+// synctest bubble either: the signal package delivers to the subscribed
+// channel from the runtime's signal goroutine, which is outside any bubble,
+// and operating on a bubbled channel from outside the bubble panics. They
+// therefore poll with require.Eventually on real time instead of sleeping a
+// fixed duration.
+
+// handlerWait bounds how long a test waits for a signal to reach its handler.
+const handlerWait = 2 * time.Second
+
+// pollInterval is how often a test re-checks whether a handler has run.
+const pollInterval = 5 * time.Millisecond
+
 func TestSignal_AddHandler_Start_Stop(t *testing.T) {
+	testhelpers.VerifyNoLeaks(t)
 	var called atomic.Bool
 
 	s := signals.New(
@@ -37,15 +53,16 @@ func TestSignal_AddHandler_Start_Stop(t *testing.T) {
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Signal(syscall.SIGUSR1)
 
-	// Give handler time to run
-	time.Sleep(200 * time.Millisecond)
-
+	require.Eventually(t, called.Load, handlerWait, pollInterval, "handler was not called")
 	require.NoError(t, s.Stop())
-	require.True(t, called.Load(), "handler was not called")
 }
 
 func TestSignal_AddHandlerWithPriority(t *testing.T) {
+	testhelpers.VerifyNoLeaks(t)
+	// order is written by the handlers and read only after Stop, which waits
+	// for them; ran tells the test when both have run.
 	var order []int
+	var ran atomic.Int32
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR2),
 		signals.WithExecutionMode(signals.SequentialMode),
@@ -54,11 +71,13 @@ func TestSignal_AddHandlerWithPriority(t *testing.T) {
 
 	s.AddHandlerWithPriority(func(_ context.Context, _ os.Signal) error {
 		order = append(order, 2)
+		ran.Add(1)
 		return nil
 	}, signals.PriorityLow, syscall.SIGUSR2)
 
 	s.AddHandlerWithPriority(func(_ context.Context, _ os.Signal) error {
 		order = append(order, 1)
+		ran.Add(1)
 		return nil
 	}, signals.PriorityHigh, syscall.SIGUSR2)
 
@@ -67,8 +86,8 @@ func TestSignal_AddHandlerWithPriority(t *testing.T) {
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Signal(syscall.SIGUSR2)
 
-	time.Sleep(200 * time.Millisecond)
-	_ = s.Stop()
+	require.Eventually(t, func() bool { return ran.Load() == 2 }, handlerWait, pollInterval, "handlers did not run")
+	require.NoError(t, s.Stop())
 
 	require.Len(t, order, 2)
 	// Higher priority should run first
@@ -76,6 +95,7 @@ func TestSignal_AddHandlerWithPriority(t *testing.T) {
 }
 
 func TestSignal_BroadcastHandler(t *testing.T) {
+	testhelpers.VerifyNoLeaks(t)
 	var called atomic.Bool
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR1),
@@ -92,10 +112,8 @@ func TestSignal_BroadcastHandler(t *testing.T) {
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Signal(syscall.SIGUSR1)
 
-	time.Sleep(200 * time.Millisecond)
-	_ = s.Stop()
-
-	require.True(t, called.Load(), "broadcast handler was not called")
+	require.Eventually(t, called.Load, handlerWait, pollInterval, "broadcast handler was not called")
+	require.NoError(t, s.Stop())
 }
 
 func TestSignal_Shutdown(t *testing.T) {
@@ -146,6 +164,7 @@ func TestSignal_ShutdownNilContext_KeepsHandlerStoppable(t *testing.T) {
 }
 
 func TestSignal_ParallelMode(t *testing.T) {
+	testhelpers.VerifyNoLeaks(t)
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR1),
 		signals.WithExecutionMode(signals.ParallelMode),
@@ -166,13 +185,13 @@ func TestSignal_ParallelMode(t *testing.T) {
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Signal(syscall.SIGUSR1)
 
-	time.Sleep(300 * time.Millisecond)
-	_ = s.Stop()
-
-	require.Equal(t, int32(3), count.Load(), "expected 3 handlers called in parallel")
+	require.Eventually(t, func() bool { return count.Load() == 3 }, handlerWait, pollInterval,
+		"expected 3 handlers called in parallel, got %d", count.Load())
+	require.NoError(t, s.Stop())
 }
 
 func TestSignal_ErrorHandler(t *testing.T) {
+	testhelpers.VerifyNoLeaks(t)
 	var errCalled atomic.Bool
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR1),
@@ -182,9 +201,12 @@ func TestSignal_ErrorHandler(t *testing.T) {
 		}),
 	)
 
-	s.AddHandler(func(_ context.Context, _ os.Signal) error {
-		time.Sleep(500 * time.Millisecond) // will timeout
-		return nil
+	// The handler outlives its 50ms timeout and only returns once its context
+	// expires; whichever of the two the dispatcher observes first, the error
+	// handler is called (a TimeoutError or the context error).
+	s.AddHandler(func(ctx context.Context, _ os.Signal) error {
+		<-ctx.Done()
+		return ctx.Err()
 	}, syscall.SIGUSR1)
 
 	s.Start()
@@ -192,6 +214,6 @@ func TestSignal_ErrorHandler(t *testing.T) {
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Signal(syscall.SIGUSR1)
 
-	time.Sleep(300 * time.Millisecond)
-	_ = s.Stop()
+	require.Eventually(t, errCalled.Load, handlerWait, pollInterval, "error handler was not called")
+	require.NoError(t, s.Stop())
 }

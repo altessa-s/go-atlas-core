@@ -5,18 +5,17 @@
 package signals
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/altessa-s/go-atlas-core/runtime"
+	"github.com/altessa-s/go-atlas-core/time/clock"
 
 	corecontext "github.com/altessa-s/go-atlas-core/context"
 	coreerrs "github.com/altessa-s/go-atlas-core/errors"
@@ -44,9 +43,9 @@ type ContextHandler func(ctx context.Context, sig os.Signal) error
 type Priority int
 
 // Predefined [Priority] levels for signal handlers, ranging from 1 (lowest)
-// to 100 (highest). Custom values outside this range are supported but may
-// use a less optimized sorting path when handler counts exceed
-// [LargeHandlerCountThreshold].
+// to 100 (highest). Any other value is a valid custom priority: it is ordered
+// relative to the predefined levels, and handlers sharing a priority run in
+// registration order.
 const (
 	// PriorityLowest (1) is suitable for non-critical handlers such as logging
 	// and metrics collection.
@@ -73,47 +72,12 @@ const (
 	// handler slice collected before execution, reducing append allocations.
 	HandlerSliceInitialCapacity = 32
 
-	// PriorityBucketCount is the number of pre-allocated priority buckets
-	// used by the priority queue optimization for large handler sets.
+	// PriorityBucketCount is the number of pre-allocated priority buckets,
+	// one per predefined [Priority] level, used by the priority queue
+	// optimization for large handler sets. Custom priorities get their own
+	// buckets on demand.
 	PriorityBucketCount = 5
 )
-
-// SignalHandler defines the full lifecycle interface for signal handling:
-// registering handlers, starting the listener, waiting for completion, and
-// graceful shutdown. [Signal] is the primary implementation.
-type SignalHandler interface {
-	// AddHandler registers hdlr for the specified signals at [PriorityNormal].
-	AddHandler(hdlr ContextHandler, signals ...os.Signal) SignalHandler
-	// AddHandlerWithPriority registers hdlr with a custom [Priority].
-	AddHandlerWithPriority(hdlr ContextHandler, priority Priority, signals ...os.Signal) SignalHandler
-	// AddBroadcastHandler registers h to run on every received signal.
-	AddBroadcastHandler(h ContextHandler) SignalHandler
-	// Start begins listening for OS signals and dispatching to handlers.
-	Start() SignalHandler
-	// Stop is a convenience wrapper for Shutdown(context.Background()).
-	Stop() error
-	// Wait blocks until the signal handler stops processing.
-	Wait()
-	// Shutdown gracefully stops the handler, respecting the context deadline.
-	Shutdown(ctx context.Context) error
-}
-
-// priorityBucket represents a bucket of handlers for a specific priority level
-// This enables O(1) priority-based execution instead of O(n²) sorting
-type priorityBucket struct {
-	priority Priority
-	handlers []handlerEntry
-}
-
-// priorityQueue implements an optimized priority queue using buckets
-type priorityQueue struct {
-	buckets [PriorityBucketCount]*priorityBucket
-	// overflow collects handlers whose custom priority does not match any
-	// predefined bucket; getHandlersInOrder merges them into the correct
-	// position relative to the bucketed handlers.
-	overflow []handlerEntry
-	mutex    sync.RWMutex
-}
 
 // handlerEntry represents a single handler with its execution mode and timeout configuration.
 // It encapsulates either a regular Handler or a ContextHandler along with execution metadata.
@@ -163,6 +127,10 @@ type Signal struct {
 	shutdownTimeout time.Duration
 	// handlerTimeout defines the default timeout for individual handler execution
 	handlerTimeout time.Duration
+	// shutdownHooks runs the shutdown hooks at the end of Shutdown
+	shutdownHooks runtime.ShutdownHook
+	// clock drives the parallel-mode grace period after a shutdown request
+	clock clock.Clock
 
 	// executionMode determines how handlers are executed (sequential vs parallel)
 	executionMode ExecutionMode
@@ -187,6 +155,8 @@ type Signal struct {
 //   - WithHandlerTimeout: set timeout for individual handler execution
 //   - WithShutdownTimeout: set timeout for graceful shutdown
 //   - WithErrorHandler: configure custom error handling
+//   - WithShutdownHooks: replace the hooks run at the end of Shutdown
+//   - WithClock: inject the clock driving the parallel-mode grace period
 //
 // Example:
 //
@@ -214,6 +184,8 @@ func New(opts ...Option) *Signal {
 		executionMode:     o.executionMode,
 		signals:           o.signals,
 		errorHandler:      o.errorHandler,
+		shutdownHooks:     o.shutdownHooks,
+		clock:             o.clock,
 	}
 
 	// Create global context for coordinated shutdown
@@ -267,88 +239,11 @@ func (s *Signal) addBroadcastHandler(entry handlerEntry) {
 	s.broadcastHandlers = append(s.broadcastHandlers, entry)
 }
 
-// newPriorityQueue creates an optimized priority queue
-func newPriorityQueue() *priorityQueue {
-	pq := &priorityQueue{}
-	// Pre-allocate buckets for common priority levels
-	priorities := []Priority{PriorityHighest, PriorityHigh, PriorityNormal, PriorityLow, PriorityLowest}
-
-	for i, priority := range priorities {
-		if i < len(pq.buckets) {
-			pq.buckets[i] = &priorityBucket{
-				priority: priority,
-				handlers: make([]handlerEntry, 0, 4), // Small initial capacity
-			}
-		}
-	}
-
-	return pq
-}
-
-// addHandler adds a handler to the appropriate priority bucket
-func (pq *priorityQueue) addHandler(entry handlerEntry) {
-	pq.mutex.Lock()
-	defer pq.mutex.Unlock()
-
-	// Find the appropriate bucket
-	for _, bucket := range pq.buckets {
-		if bucket != nil && bucket.priority == entry.priority {
-			bucket.handlers = append(bucket.handlers, entry)
-			return
-		}
-	}
-
-	// Custom priority with no matching predefined bucket: collect it in the
-	// overflow slice so getHandlersInOrder can merge it at the correct
-	// position instead of misfiling it into the highest-priority bucket.
-	pq.overflow = append(pq.overflow, entry)
-}
-
-// getHandlersInOrder returns all handlers sorted by priority (high to low)
-func (pq *priorityQueue) getHandlersInOrder() []handlerEntry {
-	pq.mutex.RLock()
-	defer pq.mutex.RUnlock()
-
-	totalHandlers := len(pq.overflow)
-	for _, bucket := range pq.buckets {
-		if bucket != nil {
-			totalHandlers += len(bucket.handlers)
-		}
-	}
-
-	if totalHandlers == 0 {
-		return nil
-	}
-
-	// Pre-allocate result slice with exact capacity
-	result := make([]handlerEntry, 0, totalHandlers)
-
-	// Add handlers from highest to lowest priority buckets
-	for _, bucket := range pq.buckets {
-		if bucket != nil && len(bucket.handlers) > 0 {
-			result = append(result, bucket.handlers...)
-		}
-	}
-
-	// Merge overflow (custom-priority) handlers into the correct position.
-	// The stable sort preserves registration order within equal priorities;
-	// overflow priorities never collide with bucket priorities because
-	// addHandler routes exact matches into the buckets.
-	if len(pq.overflow) > 0 {
-		result = append(result, pq.overflow...)
-		slices.SortStableFunc(result, func(a, b handlerEntry) int {
-			return cmp.Compare(b.priority, a.priority)
-		})
-	}
-
-	return result
-}
-
 // AddHandler registers hdlr to be called at [PriorityNormal] when any of the
 // specified signals are received. Multiple handlers may be registered for the
 // same signal. A nil hdlr is silently ignored. The method returns s for
 // method chaining. It is safe to call from multiple goroutines.
-func (s *Signal) AddHandler(hdlr ContextHandler, signals ...os.Signal) SignalHandler {
+func (s *Signal) AddHandler(hdlr ContextHandler, signals ...os.Signal) *Signal {
 	if hdlr == nil {
 		return s
 	}
@@ -361,7 +256,7 @@ func (s *Signal) AddHandler(hdlr ContextHandler, signals ...os.Signal) SignalHan
 // signal received, regardless of signal type. A nil h is silently ignored.
 // The method returns s for method chaining. It is safe to call from multiple
 // goroutines.
-func (s *Signal) AddBroadcastHandler(h ContextHandler) SignalHandler {
+func (s *Signal) AddBroadcastHandler(h ContextHandler) *Signal {
 	if h == nil {
 		return s
 	}
@@ -383,7 +278,7 @@ func (s *Signal) AddBroadcastHandler(h ContextHandler) SignalHandler {
 //
 //	// Normal cleanup handler executes after
 //	handler.AddHandlerWithPriority(cleanupHandler, signals.PriorityNormal, syscall.SIGTERM)
-func (s *Signal) AddHandlerWithPriority(hdlr ContextHandler, priority Priority, signals ...os.Signal) SignalHandler {
+func (s *Signal) AddHandlerWithPriority(hdlr ContextHandler, priority Priority, signals ...os.Signal) *Signal {
 	if hdlr == nil {
 		return s
 	}
@@ -400,7 +295,7 @@ func (s *Signal) AddHandlerWithPriority(hdlr ContextHandler, priority Priority, 
 //
 //	// Critical logging executes first for all signals
 //	handler.AddBroadcastHandlerWithPriority(criticalLogger, signals.PriorityHighest)
-func (s *Signal) AddBroadcastHandlerWithPriority(h ContextHandler, priority Priority) SignalHandler {
+func (s *Signal) AddBroadcastHandlerWithPriority(h ContextHandler, priority Priority) *Signal {
 	if h == nil {
 		return s
 	}
@@ -412,7 +307,7 @@ func (s *Signal) AddBroadcastHandlerWithPriority(h ContextHandler, priority Prio
 // Start begins listening for the configured OS signals and dispatching them to
 // registered handlers. It is idempotent; calling it more than once has no
 // effect. The method returns s for method chaining.
-func (s *Signal) Start() SignalHandler {
+func (s *Signal) Start() *Signal {
 	if !s.started.CompareAndSwap(false, true) {
 		return s
 	}
@@ -434,10 +329,15 @@ func (s *Signal) Stop() error {
 
 // Shutdown gracefully stops the signal handler. It immediately stops
 // listening for new OS signals, then waits for all in-flight handlers to
-// complete. If ctx is canceled or times out before completion, shutdown
-// hooks are still attempted on a best-effort basis and a wrapped
-// context error is returned. Passing a nil ctx returns an error.
-// Shutdown is idempotent; subsequent calls after the first return nil.
+// complete, and finally runs the shutdown hooks (see [WithShutdownHooks];
+// the process-wide [runtime.RunShutdownHooks] by default). If ctx is
+// canceled or times out before completion, the handler context is canceled,
+// shutdown hooks are still attempted on a best-effort basis and a wrapped
+// context error is returned. Handlers that ignore cancellation of their
+// context keep running after Shutdown returns on timeout: their goroutines
+// are not reclaimed, and a later [Signal.Wait] blocks until they exit.
+// Passing a nil ctx returns an error. Shutdown is idempotent; subsequent
+// calls after the first return nil.
 func (s *Signal) Shutdown(ctx context.Context) error {
 	// Validated before the state change: rejecting a nil ctx after marking
 	// the handler stopped would leave the listener running with no way to
@@ -475,7 +375,7 @@ func (s *Signal) Shutdown(ctx context.Context) error {
 	case <-done:
 		// Graceful shutdown completed successfully
 		// Run global shutdown hooks
-		if err := runtime.RunShutdownHooks(ctx); err != nil {
+		if err := s.shutdownHooks(ctx); err != nil {
 			return err
 		}
 		s.globalCancel() // Cancel context after graceful completion
@@ -486,7 +386,7 @@ func (s *Signal) Shutdown(ctx context.Context) error {
 		// immediately instead of running on while hooks execute.
 		s.globalCancel()
 		// Still try to run hooks, best effort — the original ctx is expired.
-		runtime.RunShutdownHooks(context.Background()) //nolint:errcheck,contextcheck // best-effort during shutdown timeout, original ctx is expired
+		s.shutdownHooks(context.Background()) //nolint:errcheck,contextcheck // best-effort during shutdown timeout, original ctx is expired
 		return coreerrs.Wrap(ctx.Err(), "shutdown timeout")
 	}
 }
@@ -585,147 +485,6 @@ func (s *Signal) runHandlers(sig os.Signal) {
 	}
 }
 
-// insertionSortThreshold is the handler-count cutoff below which sortHandlers
-// uses the in-place insertion sort. For small slices insertion sort beats
-// counting sort on wall-clock because it has zero allocations and extremely
-// cache-friendly access; counting sort only catches up once n is large
-// enough to amortize its two buffer allocations.
-//
-// The value is empirical: see BenchmarkSortHandlers_Dispatch vs
-// BenchmarkSortHandlersByPriority_Insertion / _Counting. On Apple M4 Pro
-// with Go 1.25, insertion sort wins below ~32 entries and counting sort
-// dominates above it.
-const insertionSortThreshold = 32
-
-// countingSortMaxRange is the absolute cap on the distinct priority range the
-// counting sort will handle. If handlers use priorities spread across a
-// wider range, counting sort would allocate a wastefully large counts slice,
-// so the dispatcher falls back to insertion sort. This ceiling bounds the
-// worst-case memory regardless of input.
-const countingSortMaxRange = 1024
-
-// sortHandlers sorts handlers by priority in descending order (higher priority
-// first), preserving registration order among handlers of equal priority.
-//
-// It dispatches between two stable algorithms:
-//
-//   - For slices with at most [insertionSortThreshold] entries, the in-place
-//     insertion sort in [Signal.sortHandlersByPriority] runs in O(n²) but
-//     with zero allocations and excellent cache locality, which beats
-//     counting sort at small n.
-//   - For larger slices, [Signal.sortHandlersByPriorityCounting] runs a
-//     stable counting sort in O(n+k) where k is the observed priority
-//     range. Since the documented Priority constants occupy [1..100], k is
-//     tiny in practice and counting sort dominates asymptotically.
-//
-// If the observed priority range is pathologically wide — a caller using
-// custom values that exceed [countingSortMaxRange] distinct levels or are
-// more than 8× sparser than n — counting sort would allocate an unreasonably
-// large counts slice, so the dispatcher falls back to insertion sort. The
-// guardrail keeps memory bounded regardless of caller behavior.
-func (s *Signal) sortHandlers(handlers []handlerEntry) {
-	if len(handlers) <= insertionSortThreshold {
-		s.sortHandlersByPriority(handlers)
-		return
-	}
-	if !s.sortHandlersByPriorityCounting(handlers) {
-		s.sortHandlersByPriority(handlers)
-	}
-}
-
-// sortHandlersByPriority sorts handlers by priority in descending order
-// (higher priority first) using a stable in-place insertion sort. It is the
-// best algorithm for small handler counts and serves as the fallback for
-// [Signal.sortHandlers] when counting sort is not applicable.
-func (s *Signal) sortHandlersByPriority(handlers []handlerEntry) {
-	for i := 1; i < len(handlers); i++ {
-		current := handlers[i]
-		j := i - 1
-
-		// Move handlers with lower priority to the right.
-		for j >= 0 && handlers[j].priority < current.priority {
-			handlers[j+1] = handlers[j]
-			j--
-		}
-		handlers[j+1] = current
-	}
-}
-
-// sortHandlersByPriorityCounting performs a stable counting sort over
-// handlers keyed by priority, producing descending order (higher priority
-// first). It returns false — without modifying handlers — when the priority
-// range is too wide to counting-sort efficiently, so the caller can fall
-// back to a comparison sort.
-//
-// Complexity is O(n+k) where k is the observed priority range
-// (max-min+1). The function allocates a counts slice of length k and an
-// output buffer of length n, then copies the output back in place. Both
-// allocations are local to the call; no state is retained between
-// invocations.
-//
-// Stability: the scatter pass walks handlers left-to-right and increments
-// the per-priority cursor as it writes, so entries that share a priority
-// retain their original relative order. The rest of the dispatch pipeline
-// relies on this to fire handlers in registration order within a priority
-// level.
-func (s *Signal) sortHandlersByPriorityCounting(handlers []handlerEntry) bool {
-	n := len(handlers)
-	if n <= 1 {
-		return true
-	}
-
-	// Single pass: determine the priority range.
-	minP, maxP := handlers[0].priority, handlers[0].priority
-	for _, h := range handlers[1:] {
-		if h.priority < minP {
-			minP = h.priority
-		}
-		if h.priority > maxP {
-			maxP = h.priority
-		}
-	}
-
-	// Guard against pathologically sparse or wide ranges. A range wider
-	// than [countingSortMaxRange] would waste memory outright; a range
-	// wider than 8*n means fewer than one in eight buckets is used,
-	// which is the empirical point past which insertion sort is faster
-	// than counting sort's buffer allocation + scatter + copy-back cost.
-	rng := int(maxP-minP) + 1
-	if rng <= 0 || rng > countingSortMaxRange || rng > 8*n {
-		return false
-	}
-
-	// Count occurrences per priority level.
-	counts := make([]int, rng)
-	for _, h := range handlers {
-		counts[int(h.priority-minP)]++
-	}
-
-	// Convert counts to descending starting positions in the output.
-	// After this loop, counts[i] holds the index in `out` where the
-	// first handler with priority (minP+i) should be written; walking
-	// the priority axis from high to low places the highest priorities
-	// at the front.
-	var total int
-	for i := rng - 1; i >= 0; i-- {
-		c := counts[i]
-		counts[i] = total
-		total += c
-	}
-
-	// Scatter into a fresh output buffer, preserving input order for
-	// equal priorities (stability).
-	out := make([]handlerEntry, n)
-	for _, h := range handlers {
-		idx := int(h.priority - minP)
-		out[counts[idx]] = h
-		counts[idx]++
-	}
-
-	copy(handlers, out)
-	return true
-}
-
 // runHandlersSequentialOptimized executes handlers sequentially with optimizations
 func (s *Signal) runHandlersSequentialOptimized(handlers []handlerEntry, sig os.Signal) {
 	for _, entry := range handlers {
@@ -803,14 +562,21 @@ func (s *Signal) runHandlersParallelOptimized(handlers []handlerEntry, sig os.Si
 	case <-done:
 		// All handlers completed
 	case <-s.globalCtx.Done():
-		// Shutdown requested - give handlers a moment to finish gracefully
-		timer := time.NewTimer(ResponsiveTimeoutDuration)
-		defer timer.Stop()
+		// Shutdown requested - give handlers a moment to finish gracefully.
+		// globalCtx is already done, so the grace sleep runs on a context
+		// detached from it and is canceled once either branch below fires.
+		graceCtx, cancel := context.WithCancel(context.WithoutCancel(s.globalCtx))
+		defer cancel()
+		graceOver := make(chan struct{})
+		go func() {
+			defer close(graceOver)
+			_ = s.clock.Sleep(graceCtx, ResponsiveTimeoutDuration)
+		}()
 
 		select {
 		case <-done:
 			// Completed during grace period
-		case <-timer.C: // Reduced from 100ms for better responsiveness
+		case <-graceOver:
 		}
 	}
 }
