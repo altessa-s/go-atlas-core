@@ -5,8 +5,11 @@
 package panics
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -61,6 +64,89 @@ func TestMustNonZero(t *testing.T) {
 		}
 	}()
 	MustNonZero(0, "zero value")
+}
+
+// TestMustNonZero_NilAny exercises the v == nil branch, distinct from the
+// reflect.IsZero branch exercised by TestMustNonZero's zero-int case: a
+// literal nil passed as the `any` parameter short-circuits before
+// reflect.ValueOf is ever called.
+func TestMustNonZero_NilAny(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for nil")
+		}
+	}()
+	MustNonZero(nil, "nil value")
+}
+
+// namedString is a defined type whose underlying type is string, used to
+// exercise panicMsg's default case: the type switch on msg matches the
+// literal dynamic types "string" and "*string", not types with a
+// different underlying-but-compatible type.
+type namedString string
+
+// TestMust_NamedStringType_HitsDefaultCase exercises panicMsg's default
+// branch, unreachable via the plain string/*string cases already covered
+// by other tests.
+func TestMust_NamedStringType_HitsDefaultCase(t *testing.T) {
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "expected panic")
+		s, ok := r.(string)
+		require.True(t, ok, "expected string, got %T", r)
+		require.Contains(t, s, "boom")
+	}()
+	Must(false, namedString("boom"))
+}
+
+// TestPanicLoggerHandler_StringPanicUsesContextLogger exercises the default
+// panic handler's string-panic branch and the context-logger priority path.
+func TestPanicLoggerHandler_StringPanicUsesContextLogger(t *testing.T) {
+	savedLogger := panicLogger.Load()
+	savedCtxFn := loggerFromContext.Load()
+	t.Cleanup(func() {
+		if savedLogger != nil {
+			panicLogger.Store(savedLogger)
+		}
+		if savedCtxFn != nil {
+			loggerFromContext.Store(savedCtxFn)
+		}
+	})
+
+	var ctxBuf, globalBuf bytes.Buffer
+	ctxLogger := slog.New(slog.NewTextHandler(&ctxBuf, nil))
+	panicLogger.Store(slog.New(slog.NewTextHandler(&globalBuf, nil)))
+	loggerFromContext.Store(LoggerFromContextFunc(func(context.Context) *slog.Logger { return ctxLogger }))
+
+	panicLoggerHandler(t.Context(), "boom from ctx")
+
+	require.Contains(t, ctxBuf.String(), "boom from ctx")
+	require.Contains(t, ctxBuf.String(), "observed a panic")
+	require.Empty(t, globalBuf.String(), "global logger must not be used when a context logger is available")
+}
+
+// TestPanicLoggerHandler_NonStringPanicUsesGlobalLogger exercises the
+// non-string panic-value branch and the global-logger fallback path (no
+// context logger registered).
+func TestPanicLoggerHandler_NonStringPanicUsesGlobalLogger(t *testing.T) {
+	savedLogger := panicLogger.Load()
+	savedCtxFn := loggerFromContext.Load()
+	t.Cleanup(func() {
+		if savedLogger != nil {
+			panicLogger.Store(savedLogger)
+		}
+		if savedCtxFn != nil {
+			loggerFromContext.Store(savedCtxFn)
+		}
+	})
+
+	var globalBuf bytes.Buffer
+	panicLogger.Store(slog.New(slog.NewTextHandler(&globalBuf, nil)))
+	loggerFromContext.Store(LoggerFromContextFunc(func(context.Context) *slog.Logger { return nil }))
+
+	panicLoggerHandler(t.Context(), errors.New("boom error"))
+
+	require.Contains(t, globalBuf.String(), "boom error")
 }
 
 func TestMustError(t *testing.T) {
