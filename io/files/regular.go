@@ -24,6 +24,8 @@ var ErrNotRegular = errors.New("not a regular file")
 // the open cannot slip a FIFO or a device through. A file whose metadata
 // cannot be read is refused too. Reads of a regular file are unaffected by
 // the non-blocking flag.
+//
+// #nosec G304 -- opening a caller-chosen path is the purpose of this function; use OpenRegularIn to confine it
 func OpenRegular(path string) (*os.File, error) {
 	f, err := os.OpenFile(path, openRegularFlags, 0)
 	if err != nil {
