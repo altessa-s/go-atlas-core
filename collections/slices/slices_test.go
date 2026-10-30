@@ -7,6 +7,7 @@ package slices_test
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -150,6 +151,16 @@ func TestFilter(t *testing.T) {
 		got := coreslices.FilterParallel(input, even)
 		expected := []int{2, 4, 6}
 		require.True(t, slices.Equal(got, expected), "FilterParallel() = %v, want %v", got, expected)
+	})
+
+	t.Run("FilterParallel large input preserves order", func(t *testing.T) {
+		// Large enough to take the parallel path; an odd length leaves a short tail chunk.
+		large := make([]int, 64*runtime.NumCPU()*4+7)
+		for i := range large {
+			large[i] = i
+		}
+		got := coreslices.FilterParallel(large, even)
+		require.Equal(t, slices.Collect(coreslices.Filter(large, even)), got)
 	})
 
 	t.Run("FilterFirst", func(t *testing.T) {

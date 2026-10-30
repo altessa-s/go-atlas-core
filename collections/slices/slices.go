@@ -7,13 +7,10 @@ package slices
 import (
 	"cmp"
 	"container/list"
-	"context"
-	"fmt"
 	"runtime"
 	"slices"
 	"sync"
 
-	"github.com/altessa-s/go-atlas-core/runtime/concurrency"
 	"github.com/altessa-s/go-atlas-core/types/nilcheck"
 )
 
@@ -191,31 +188,26 @@ func FilterParallel[T any](collection []T, predicate func(T) bool) []T {
 	}
 
 	// Chunked parallelism: each worker filters one contiguous sub-slice with a
-	// plain sequential loop, so the per-element cost is a single predicate call
-	// rather than a per-element task dispatch through the concurrency machinery.
-	// ProcessCollect returns chunk results in input order, preserving element
-	// order in the concatenated result.
+	// plain sequential loop into its own slot of parts, so the per-element cost
+	// is a single predicate call. Concatenating parts in slot order preserves
+	// element order in the result.
 	chunkLen := (len(collection) + cores - 1) / cores
-	chunks := make([][]T, 0, cores)
-	for start := 0; start < len(collection); start += chunkLen {
-		chunks = append(chunks, collection[start:min(start+chunkLen, len(collection))])
-	}
+	parts := make([][]T, (len(collection)+chunkLen-1)/chunkLen)
 
-	parts, err := concurrency.ProcessCollect(context.Background(), chunks, func(_ context.Context, chunk []T) ([]T, error) {
-		var kept []T
-		for _, v := range chunk {
-			if predicate(v) {
-				kept = append(kept, v)
+	var wg sync.WaitGroup
+	for i := range parts {
+		chunk := collection[i*chunkLen : min((i+1)*chunkLen, len(collection))]
+		wg.Go(func() {
+			var kept []T
+			for _, v := range chunk {
+				if predicate(v) {
+					kept = append(kept, v)
+				}
 			}
-		}
-		return kept, nil
-	})
-	if err != nil {
-		// Unreachable by design: the worker never returns an error, so any error
-		// means a bug in ProcessCollect or this function. Panicking surfaces it
-		// immediately instead of silently returning a partially filtered result.
-		panic(fmt.Sprintf("slices.FilterParallel: unexpected error from ProcessCollect: %v", err))
+			parts[i] = kept
+		})
 	}
+	wg.Wait()
 
 	return slices.Concat(parts...)
 }
@@ -311,11 +303,11 @@ func MapParallel[T ~[]E, E any, O []OE, OE any](collection T, fn func(val E) OE)
 		return out
 	}
 
-	// Parallel processing for large slices. This deliberately does not go
-	// through concurrency.Process: with one fixed chunk per core there is
-	// nothing to schedule, and routing the chunks through Process's dispatch
-	// channel measured 13-95% slower (sizes 1e5 down to 1e3) with 8 more
-	// allocations per call.
+	// Parallel processing for large slices: one fixed contiguous chunk per
+	// core, each written in place by its own goroutine. With a fixed chunk
+	// per core there is nothing to schedule, so no worker pool or dispatch
+	// channel is used — routing the chunks through one measured 13-95% slower
+	// (sizes 1e5 down to 1e3) with 8 more allocations per call.
 	var wg sync.WaitGroup
 	chunkSize := len(collection) / cores
 

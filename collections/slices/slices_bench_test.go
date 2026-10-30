@@ -27,6 +27,40 @@ func BenchmarkDeduplicate(b *testing.B) {
 	}
 }
 
+// BenchmarkDeduplicate_Unique measures the no-duplicate path, where the seen
+// map has to hold every element and the original slice is returned.
+func BenchmarkDeduplicate_Unique(b *testing.B) {
+	for _, size := range []int{100, 1000, 10000, 100000} {
+		input := make([]int, size)
+		for i := range size {
+			input[i] = i
+		}
+
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			for b.Loop() {
+				coreslices.Deduplicate(input)
+			}
+		})
+	}
+}
+
+// BenchmarkDeduplicate_FewUnique measures a large input made of 16 distinct
+// values, where the seen map stays tiny however long the input is.
+func BenchmarkDeduplicate_FewUnique(b *testing.B) {
+	for _, size := range []int{1000, 100000} {
+		input := make([]int, size)
+		for i := range size {
+			input[i] = i % 16
+		}
+
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			for b.Loop() {
+				coreslices.Deduplicate(input)
+			}
+		})
+	}
+}
+
 func BenchmarkFilterParallel(b *testing.B) {
 	sizes := []int{100, 1000, 10000, 100000}
 	for _, size := range sizes {
