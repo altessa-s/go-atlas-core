@@ -21,7 +21,7 @@ type NewHashFunc func() hash.Hash
 // makes generated tags effectively unique per distinct content. Swap in a
 // faster non-cryptographic hash via [WithNewHash] when that uniqueness margin
 // is not required.
-var DefaultNewHash NewHashFunc = sha256.New
+func DefaultNewHash() hash.Hash { return sha256.New() }
 
 // options holds the [Generator] configuration. Configure it through the
 // generated [Option] values (the With* constructors).
