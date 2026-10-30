@@ -10,7 +10,10 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"reflect"
 	"time"
+
+	"github.com/altessa-s/go-atlas-core/time/clock"
 
 	corecontext "github.com/altessa-s/go-atlas-core/context"
 )
@@ -28,17 +31,19 @@ import (
 //     immediately.
 //   - With [WithStopBeforeDeadline], the next delay would reach the context
 //     deadline — Do returns the last error from fn rather than ctx.Err().
-//   - A [WithSleep] function returns an error — Do returns that error (joined
-//     with the last attempt's error under [WithJoinLastError]).
+//   - The [WithClock] clock's Sleep returns an error — Do returns that error
+//     (joined with the last attempt's error under [WithJoinLastError]).
 //
 // The delay before a retry comes from the [WithNextDelay] callback, which
 // receives the failed attempt's error: a policy that must wait at least as
 // long as the error asks (an HTTP Retry-After, a quota reset) raises the
 // backoff there, e.g. max(backoff(attempt, err), retryAfterOf(err)).
 //
-// A nil ctx is silently replaced with [context.Background]. Without any
-// options the call behaves as a single attempt (no retries): pass
-// [WithMaxAttempts] and [WithNextDelay] to enable retrying.
+// Every time read and wait goes through the [WithClock] clock (the system
+// clock by default). A nil ctx is silently replaced with
+// [context.Background]. Without any options the call behaves as a single
+// attempt (no retries): pass [WithMaxAttempts] and [WithNextDelay] to enable
+// retrying.
 func Do(ctx context.Context, fn func(context.Context) error, opts ...Option) error {
 	return doWithOptions(ctx, fn, newOptions(opts...))
 }
@@ -67,7 +72,7 @@ func (p *Policy) Do(ctx context.Context, fn func(context.Context) error) error {
 func doWithOptions(ctx context.Context, fn func(context.Context) error, cfg *options) error {
 	ctx = corecontext.OrBackground(ctx)
 
-	start := time.Now()
+	start := cfg.clock.Now()
 
 	var (
 		timer   *time.Timer
@@ -111,13 +116,14 @@ func doWithOptions(ctx context.Context, fn func(context.Context) error, cfg *opt
 	return lastErr
 }
 
-// waitRetry waits delay before the next attempt, with the configured sleep or
-// the reusable *timer (allocated on first use, to avoid time.After
-// allocations in a loop). It returns nil once the wait is over, or the error
-// that ends the retry loop when the context or the sleep cut it short.
+// waitRetry waits delay before the next attempt, with the reusable *timer
+// (allocated on first use, to avoid time.After allocations in a loop) on the
+// system clock, or with the configured clock's Sleep otherwise. It returns nil
+// once the wait is over, or the error that ends the retry loop when the
+// context or the sleep cut it short.
 func (cfg *options) waitRetry(ctx context.Context, timer **time.Timer, delay time.Duration, lastErr error) error {
-	if cfg.sleep != nil {
-		serr := cfg.sleep(ctx, delay)
+	if !isRealClock(cfg.clock) {
+		serr := cfg.clock.Sleep(ctx, delay)
 		if serr == nil {
 			return nil
 		}
@@ -143,6 +149,19 @@ func (cfg *options) waitRetry(ctx context.Context, timer **time.Timer, delay tim
 	}
 }
 
+// realClockType is the dynamic type of the system clock returned by clock.Real.
+var realClockType = reflect.TypeOf(clock.Real())
+
+// isRealClock reports whether c is the system clock, whose Sleep waiting can
+// be replaced with the reusable timer of waitRetry. It compares dynamic types
+// rather than interface values, so it does not depend on clock.Real returning
+// one comparable value: an interface comparison would panic if the system
+// clock type ever became non-comparable, and would miss distinct instances
+// if it became a pointer. It does not allocate.
+func isRealClock(c clock.Clock) bool {
+	return reflect.TypeOf(c) == realClockType
+}
+
 // retryDelay returns the wait before the retry that follows the failed
 // attempt, and false when there is no retry: the last permitted attempt
 // failed, no delay is configured or it is not positive, the delay would
@@ -164,7 +183,7 @@ func (cfg *options) retryDelay(ctx context.Context, start time.Time, attempt int
 	}
 
 	if cfg.maxElapsedTime > 0 {
-		elapsed := time.Since(start)
+		elapsed := cfg.clock.Now().Sub(start)
 		if elapsed >= cfg.maxElapsedTime {
 			return 0, false
 		}
@@ -174,7 +193,7 @@ func (cfg *options) retryDelay(ctx context.Context, start time.Time, attempt int
 	}
 
 	if cfg.stopBeforeDeadline {
-		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= delay {
+		if deadline, ok := ctx.Deadline(); ok && deadline.Sub(cfg.clock.Now()) <= delay {
 			return 0, false
 		}
 	}

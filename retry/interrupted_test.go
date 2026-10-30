@@ -81,7 +81,7 @@ func TestDo_JoinLastError(t *testing.T) {
 		// reports it as the timer does, cause included.
 		err := retry.Do(ctx, func(context.Context) error { return errAttempt },
 			cancelDuringWait(func() { cancel(cause) }, retry.WithJoinLastError(),
-				retry.WithSleep(clock.Real().Sleep))...)
+				withSleep(clock.Real().Sleep))...)
 
 		require.ErrorIs(t, err, errAttempt)
 		require.ErrorIs(t, err, context.Canceled)
@@ -117,7 +117,7 @@ func TestDo_JoinLastError(t *testing.T) {
 		},
 			retry.WithMaxAttempts(3),
 			retry.WithNextDelay(func(int, error) time.Duration { return time.Millisecond }),
-			retry.WithSleep(func(context.Context, time.Duration) error { cancel(); return nil }),
+			withSleep(func(context.Context, time.Duration) error { cancel(); return nil }),
 			retry.WithJoinLastError(),
 		)
 
@@ -133,7 +133,7 @@ func TestDo_JoinLastError(t *testing.T) {
 		err := retry.Do(t.Context(), func(context.Context) error { return errAttempt },
 			retry.WithMaxAttempts(3),
 			retry.WithNextDelay(func(int, error) time.Duration { return time.Second }),
-			retry.WithSleep(func(context.Context, time.Duration) error { return errSleep }),
+			withSleep(func(context.Context, time.Duration) error { return errSleep }),
 			retry.WithJoinLastError(),
 		)
 

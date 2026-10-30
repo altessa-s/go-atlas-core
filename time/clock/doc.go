@@ -6,8 +6,8 @@
 //
 // [Clock] has two methods, Now and Sleep(ctx, d). [Real] is the system clock; [Fake] returns a set time, moves it with Advance
 // and Set, and makes Sleep advance the time at once instead of waiting, so code with timeouts, TTLs or backoff runs
-// deterministically and fast in tests. The method values fit the existing seams: Now as a func() time.Time, Sleep as a
-// retry.SleepFunc.
+// deterministically and fast in tests. A Clock fits retry.WithClock as is, and Now as a method value fits a func() time.Time
+// seam.
 //
 //	type Service struct{ clock clock.Clock }
 //
@@ -18,5 +18,5 @@
 //	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 //	svc := Service{clock: fake}
 //	fake.Advance(time.Hour)
-//	err := retry.Do(ctx, op, retry.WithSleep(fake.Sleep))
+//	err := retry.Do(ctx, op, retry.WithClock(fake))
 package clock

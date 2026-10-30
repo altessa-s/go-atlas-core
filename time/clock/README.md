@@ -13,8 +13,8 @@ No external dependencies.
 | `Real()` | `time.Now` and a timer-backed `Sleep` |
 | `NewFake(t)` / `Fake` | Reads the set time; `Advance(d)`, `Set(t)`; `Sleep` advances the time by `d` at once and returns `ctx.Err()`; safe for concurrent use |
 
-The method values fit the usual seams: `fake.Now` as a `func() time.Time` (for example `keyset.WithClock`), `fake.Sleep` as a `retry.SleepFunc`
-(`retry.WithSleep`). A `Fake` also satisfies the `Now`-only clock interfaces of `auth/jwt` and `auth/selfjwt`.
+A `Clock` fits `retry.WithClock` as is, and `fake.Now` fits a `func() time.Time` seam (for example `keyset.WithClock`). A `Fake` also satisfies the
+`Now`-only clock interfaces of `auth/jwt` and `auth/selfjwt`.
 
 ```go
 fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))

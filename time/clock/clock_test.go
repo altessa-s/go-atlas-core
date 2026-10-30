@@ -75,7 +75,7 @@ func TestFake(t *testing.T) {
 	require.True(t, zero.Now().IsZero())
 }
 
-// TestFakeDrivesRetry shows the method values fitting retry.WithSleep: the backoff runs on the fake clock instantly.
+// TestFakeDrivesRetry shows a Fake fitting retry.WithClock: the backoff runs on the fake clock instantly.
 func TestFakeDrivesRetry(t *testing.T) {
 	t.Parallel()
 
@@ -90,7 +90,7 @@ func TestFakeDrivesRetry(t *testing.T) {
 	},
 		retry.WithMaxAttempts(5),
 		retry.WithNextDelay(func(int, error) time.Duration { return time.Minute }),
-		retry.WithSleep(f.Sleep),
+		retry.WithClock(f),
 	)
 	require.NoError(t, err)
 	require.Equal(t, 3, calls)

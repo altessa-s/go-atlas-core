@@ -11,8 +11,8 @@ import (
 )
 
 // Clock is a source of the current time that can also wait. Inject it where code reads the time or sleeps, so tests can drive both
-// with a [Fake]. Its method values fit the usual seams: Now as a func() time.Time (keyset.WithClock and the like), Sleep as a
-// retry.SleepFunc.
+// with a [Fake]. A Clock fits retry.WithClock as is, and its Now method value fits a func() time.Time seam (keyset.WithClock and
+// the like).
 type Clock interface {
 	// Now returns the current time.
 	Now() time.Time

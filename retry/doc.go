@@ -25,19 +25,20 @@
 //
 // [WithStopBeforeDeadline] does not start a retry whose delay would reach the
 // context deadline and returns the last attempt's error instead of ctx.Err().
-// [WithSleep] replaces the timer between attempts, e.g. with a fake clock in
-// tests. A minimum delay taken from the error (Retry-After) belongs in the
+// [WithClock] sets the one time source of the loop — the elapsed-time budget,
+// the time left before the deadline and the wait between attempts — e.g. a
+// clock.Fake in tests (the system clock by default). A minimum delay taken from the error (Retry-After) belongs in the
 // [WithNextDelay] callback, which receives the failed attempt's error.
 //
 // # Interrupted waits
 //
 // By default a context that ends while Do waits before a retry makes Do
 // return ctx.Err() alone. [WithJoinLastError] returns the last attempt's
-// error joined with it (and with a [WithSleep] failure), so errors.Is matches
+// error joined with it (and with a failed clock Sleep), so errors.Is matches
 // both. [WithAttemptOnDoneContext] makes the first attempt even when ctx has
 // already ended, so fn reports how a done context fails.
 //
 // # Performance
 //
-// The retry loop reuses a single time.Timer across attempts to avoid per-attempt allocations.
+// On the default system clock the retry loop reuses a single time.Timer across attempts to avoid per-attempt allocations.
 package retry

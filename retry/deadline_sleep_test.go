@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/altessa-s/go-atlas-core/retry"
+	"github.com/altessa-s/go-atlas-core/time/clock"
 )
 
 // fixedDelay retries after d whatever the attempt.
@@ -20,7 +21,20 @@ func fixedDelay(d time.Duration) retry.Option {
 	return retry.WithNextDelay(func(int, error) time.Duration { return d })
 }
 
-func TestWithSleep(t *testing.T) {
+// sleepClock is a clock.Clock that reads a fake time and waits with sleep.
+type sleepClock struct {
+	*clock.Fake
+	sleep func(context.Context, time.Duration) error
+}
+
+func (c sleepClock) Sleep(ctx context.Context, d time.Duration) error { return c.sleep(ctx, d) }
+
+// withSleep injects a clock whose Sleep runs sleep instead of waiting.
+func withSleep(sleep func(context.Context, time.Duration) error) retry.Option {
+	return retry.WithClock(sleepClock{Fake: clock.NewFake(time.Time{}), sleep: sleep})
+}
+
+func TestWithClock(t *testing.T) {
 	t.Parallel()
 
 	t.Run("drives the backoff", func(t *testing.T) {
@@ -37,7 +51,7 @@ func TestWithSleep(t *testing.T) {
 		},
 			retry.WithMaxAttempts(5),
 			retry.WithNextDelay(func(attempt int, _ error) time.Duration { return time.Duration(attempt+1) * time.Hour }),
-			retry.WithSleep(func(_ context.Context, d time.Duration) error {
+			withSleep(func(_ context.Context, d time.Duration) error {
 				slept = append(slept, d)
 				return nil
 			}),
@@ -45,6 +59,39 @@ func TestWithSleep(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 3, calls)
 		require.Equal(t, []time.Duration{time.Hour, 2 * time.Hour}, slept, "no real sleep, delays as computed")
+	})
+
+	t.Run("fake clock sleeps without waiting", func(t *testing.T) {
+		t.Parallel()
+
+		start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		fake := clock.NewFake(start)
+		calls := 0
+		err := retry.Do(t.Context(), func(context.Context) error {
+			calls++
+			if calls < 3 {
+				return errors.New("transient")
+			}
+			return nil
+		}, retry.WithMaxAttempts(5), fixedDelay(time.Hour), retry.WithClock(fake))
+		require.NoError(t, err)
+		require.Equal(t, 3, calls)
+		require.Equal(t, start.Add(2*time.Hour), fake.Now(), "both waits ran on the fake clock")
+	})
+
+	t.Run("nil keeps the system clock", func(t *testing.T) {
+		t.Parallel()
+
+		calls := 0
+		err := retry.Do(t.Context(), func(context.Context) error {
+			calls++
+			if calls < 2 {
+				return errors.New("transient")
+			}
+			return nil
+		}, retry.WithMaxAttempts(1), fixedDelay(time.Nanosecond), retry.WithClock(nil))
+		require.NoError(t, err)
+		require.Equal(t, 2, calls)
 	})
 
 	t.Run("its error ends Do", func(t *testing.T) {
@@ -57,7 +104,7 @@ func TestWithSleep(t *testing.T) {
 			return errors.New("transient")
 		},
 			retry.WithMaxAttempts(5), fixedDelay(time.Hour),
-			retry.WithSleep(func(context.Context, time.Duration) error { return errSleep }),
+			withSleep(func(context.Context, time.Duration) error { return errSleep }),
 		)
 		require.ErrorIs(t, err, errSleep)
 		require.Equal(t, 1, calls)
@@ -116,10 +163,44 @@ func TestWithStopBeforeDeadline(t *testing.T) {
 			return errAttempt
 		},
 			retry.WithMaxAttempts(2), fixedDelay(time.Hour), retry.WithStopBeforeDeadline(),
-			retry.WithSleep(func(context.Context, time.Duration) error { return nil }),
+			withSleep(func(context.Context, time.Duration) error { return nil }),
 		)
 		require.ErrorIs(t, err, errAttempt)
 		require.Equal(t, 3, calls)
+	})
+
+	t.Run("fake clock measures the time left", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name      string
+			remaining time.Duration
+			wantCalls int
+		}{
+			{name: "stops once the delay would outlast the deadline", remaining: 10 * time.Second, wantCalls: 4},
+			{name: "a delay equal to the time left stops", remaining: 9 * time.Second, wantCalls: 3},
+			{name: "deadline sooner than the first delay", remaining: 2 * time.Second, wantCalls: 1},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				fake := clock.NewFake(time.Now())
+				ctx, cancel := context.WithDeadline(t.Context(), fake.Now().Add(tc.remaining))
+				defer cancel()
+				calls := 0
+				err := retry.Do(ctx, func(context.Context) error {
+					calls++
+					return errAttempt
+				},
+					retry.WithMaxAttempts(-1), fixedDelay(3*time.Second), retry.WithStopBeforeDeadline(),
+					retry.WithClock(fake),
+				)
+				require.ErrorIs(t, err, errAttempt)
+				require.NotErrorIs(t, err, context.DeadlineExceeded)
+				require.Equal(t, tc.wantCalls, calls)
+			})
+		}
 	})
 
 	t.Run("without the option the deadline ends the sleep", func(t *testing.T) {
@@ -131,6 +212,43 @@ func TestWithStopBeforeDeadline(t *testing.T) {
 			retry.WithMaxAttempts(5), fixedDelay(time.Hour))
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
+}
+
+func TestWithMaxElapsedTime(t *testing.T) {
+	t.Parallel()
+
+	errAttempt := errors.New("provider busy")
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		attempt   time.Duration // fake time each attempt takes
+		wantCalls int
+		wantNow   time.Time
+	}{
+		{name: "stops before a delay that exceeds the budget", wantCalls: 4, wantNow: start.Add(9 * time.Second)},
+		{name: "time spent in attempts counts", attempt: 2 * time.Second, wantCalls: 3, wantNow: start.Add(12 * time.Second)},
+		{name: "an attempt that uses up the budget stops", attempt: 10 * time.Second, wantCalls: 1, wantNow: start.Add(10 * time.Second)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := clock.NewFake(start)
+			calls := 0
+			err := retry.Do(t.Context(), func(context.Context) error {
+				calls++
+				fake.Advance(tc.attempt)
+				return errAttempt
+			},
+				retry.WithMaxAttempts(-1), fixedDelay(3*time.Second),
+				retry.WithMaxElapsedTime(10*time.Second), retry.WithClock(fake),
+			)
+			require.ErrorIs(t, err, errAttempt)
+			require.Equal(t, tc.wantCalls, calls)
+			require.Equal(t, tc.wantNow, fake.Now())
+		})
+	}
 }
 
 // retryAfterError is a failure that asks for a minimum pause.
@@ -162,7 +280,7 @@ func TestNextDelayRaisedFromError(t *testing.T) {
 			}
 			return d
 		}),
-		retry.WithSleep(func(_ context.Context, d time.Duration) error {
+		withSleep(func(_ context.Context, d time.Duration) error {
 			slept = append(slept, d)
 			return nil
 		}),

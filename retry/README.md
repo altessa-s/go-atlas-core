@@ -12,11 +12,11 @@ allocations per attempt, so it fits high-throughput retry loops in hot paths.
 | Option               | Description                                              |
 |----------------------|----------------------------------------------------------|
 | `WithMaxAttempts`    | Max attempt index (0 = try once, -1 = unlimited)         |
-| `WithMaxElapsedTime` | Wall-clock cap across all attempts                       |
+| `WithMaxElapsedTime` | Cap on the clock time spent across all attempts          |
 | `WithShouldRetry`    | Predicate; `false` stops retrying immediately            |
 | `WithNextDelay`      | Delay function `(attempt, err) -> Duration`; `<=0` stops |
 | `WithOnRetry`        | Optional callback before each retry's sleep              |
-| `WithSleep`          | Replaces the timer between attempts (fake clock in tests); its error ends `Do`, a context end is reported as by the timer |
+| `WithClock`          | Time source for the elapsed budget, the deadline check and the wait between attempts (default `clock.Real()`, a `clock.Fake` in tests); a `Sleep` error ends `Do`, a context end is reported as by the timer; `nil` is ignored |
 | `WithStopBeforeDeadline` | Skip a retry whose delay would reach the context deadline; `Do` returns the last attempt's error, not `ctx.Err()` |
 | `WithJoinLastError`  | A context end or sleep failure before a retry returns `errors.Join(lastErr, cause)`, not the cause alone |
 | `WithAttemptOnDoneContext` | Make the first attempt even when the context has already ended, so `fn` reports how a done context fails |
@@ -30,7 +30,7 @@ remaining time first: when the next delay would reach the deadline no retry is s
 the last attempt, so callers keep the real failure class instead of a generic deadline error.
 
 When the context ends during the wait before a retry, `Do` returns `ctx.Err()` by default and the failure that caused the retry is lost.
-`WithJoinLastError()` returns `errors.Join(lastErr, ctx.Err())` instead (plus `context.Cause(ctx)` when it differs), and joins a `WithSleep` error the
+`WithJoinLastError()` returns `errors.Join(lastErr, ctx.Err())` instead (plus `context.Cause(ctx)` when it differs), and joins a clock `Sleep` error the
 same way, so `errors.Is` matches both. A context that has already ended returns `ctx.Err()` before the first attempt; `WithAttemptOnDoneContext()` makes
 that attempt anyway, so the caller's `fn` classifies and reports the failure like any other (later attempts still stop on a done context):
 
@@ -55,7 +55,8 @@ retry.WithNextDelay(func(attempt int, err error) time.Duration {
 ## Prebuilt policies
 
 `Do(ctx, fn, opts...)` materializes its options on every call. Hot call paths (e.g. a per-request HTTP attempt) should build a `Policy` once and reuse
-it — the options are processed a single time and each `Policy.Do` call skips option processing (a call that retries still allocates one reusable timer):
+it — the options are processed a single time and each `Policy.Do` call skips option processing (a call that retries on the default clock still
+allocates one reusable timer):
 
 ```go
 var policy = retry.NewPolicy(retry.WithMaxAttempts(3), retry.WithNextDelay(retry.Exponential(base)))

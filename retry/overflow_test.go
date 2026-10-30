@@ -39,7 +39,7 @@ func TestDo_ElapsedBudgetOverflow(t *testing.T) {
 		retry.WithMaxAttempts(1),
 		retry.WithMaxElapsedTime(time.Second),
 		retry.WithNextDelay(func(int, error) time.Duration { return math.MaxInt64 }),
-		retry.WithSleep(func(context.Context, time.Duration) error { slept = true; return nil }),
+		withSleep(func(context.Context, time.Duration) error { slept = true; return nil }),
 	)
 	require.ErrorIs(t, err, failure)
 	require.False(t, slept, "a delay beyond the elapsed budget must not be slept")

@@ -7,8 +7,9 @@ package retry
 //go:generate optgen generate
 
 import (
-	"context"
 	"time"
+
+	"github.com/altessa-s/go-atlas-core/time/clock"
 )
 
 // ShouldRetryFunc decides whether [Do] should retry after err. Returning
@@ -26,13 +27,6 @@ type NextDelayFunc func(attempt int, err error) time.Duration
 // the computed delay that will be applied.
 type OnRetryFunc func(attempt int, err error, nextDelay time.Duration)
 
-// SleepFunc waits d before the next attempt, returning early with an error
-// when ctx ends. [Do] returns that error as is, except an error matching
-// ctx.Err() while ctx has ended, which [Do] reports as the default timer does
-// (context.Cause included). Supply one with [WithSleep] to drive the backoff
-// from a fake clock in tests, such as clock.Clock.Sleep.
-type SleepFunc func(ctx context.Context, d time.Duration) error
-
 // options holds the retry policy used by [Do]. Configure it through the
 // generated [Option] values (see the With* constructors below).
 //
@@ -46,8 +40,8 @@ type options struct {
 	// legal configuration (single-shot with no retries).
 	maxAttempts int `opt:"-"`
 
-	// maxElapsedTime caps the total wall-clock time spent across all
-	// attempts. A zero or negative value disables the limit.
+	// maxElapsedTime caps the total time, as read from clock, spent across
+	// all attempts. A zero or negative value disables the limit.
 	maxElapsedTime time.Duration `optval:"nonpositive"`
 
 	// shouldRetry, when non-nil, filters retryable errors. A nil value
@@ -61,9 +55,14 @@ type options struct {
 	// onRetry is an optional callback invoked after each failed attempt.
 	onRetry OnRetryFunc //
 
-	// sleep waits between attempts. A nil value uses a timer that returns
-	// ctx.Err() when ctx ends first.
-	sleep SleepFunc
+	// clock is the single time source of the retry loop: it starts and
+	// checks the maxElapsedTime budget, measures the time left before the
+	// context deadline for stopBeforeDeadline, and waits between attempts.
+	// Its Sleep error ends Do as is, except an error matching ctx.Err() while
+	// ctx has ended, which Do reports as a context end (context.Cause
+	// included). Pass a clock.Fake to drive the loop in tests; a nil value
+	// is ignored.
+	clock clock.Clock `optgen:"default=clock.Real(),notnil"`
 
 	// stopBeforeDeadline, set by the generated WithStopBeforeDeadline, skips
 	// a retry whose backoff would reach the context deadline: Do returns the
@@ -73,7 +72,7 @@ type options struct {
 
 	// joinLastError, set by the generated WithJoinLastError, keeps the
 	// failure that caused a retry when the context ends before that retry
-	// starts (during the wait, or right after it) or the [SleepFunc] fails:
+	// starts (during the wait, or right after it) or the clock's Sleep fails:
 	// Do returns errors.Join(lastErr, ctx.Err()[, context.Cause(ctx)]) or
 	// errors.Join(lastErr, sleepErr) instead of the context or sleep error
 	// alone, so errors.Is matches both the attempt's failure and the
