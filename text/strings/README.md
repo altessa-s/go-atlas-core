@@ -4,8 +4,9 @@
 import "github.com/altessa-s/go-atlas-core/text/strings"
 ```
 
-Package `strings` provides string manipulation, conversion, case transformation, interning, secure storage, and pooling utilities. All utility functions
-are pure, allocation-aware, and safe for concurrent use from multiple goroutines.
+Package `strings` provides string manipulation, conversion, case transformation, truncation, and pooling utilities. All utility functions are pure,
+allocation-aware, and safe for concurrent use from multiple goroutines. Secret handling lives in [secure](secure) and string interning in
+[intern](intern).
 
 ## Validation and conversion
 
@@ -61,64 +62,11 @@ Configurable via `JoinOptions`, `SplitOptions`, and `ContainsOptions` structs. A
 | `Concat`       | Pooled `strings.Builder`, single allocation  |
 | `ConcatUnsafe` | Single `[]byte` allocation, zero-copy result |
 
-## Security
+## Comparison
 
-| Function                   | Description                                      |
-|----------------------------|--------------------------------------------------|
-| `SecureCompare`            | Constant-time string equality                    |
-| `TimingSafePrefixMatch`    | Constant-time, case-insensitive prefix check     |
-| `TimingSafeSubstringMatch` | Constant-time, case-insensitive substring search |
-| `SubstringMatch`           | Case-insensitive substring (NOT constant-time)   |
-| `ZeroBytes` / `ZeroString` | Best-effort zeroing of sensitive bytes in place  |
-
-## SecureString
-
-Tamper-resistant storage for sensitive data (passwords, tokens, keys). Zeroes memory on `Clear()`, uses inline storage for strings up to 64 bytes
-(`DefaultSmallStringOptimizationThreshold`), and returns instances to a pool to reduce allocations in high-throughput code paths.
-
-| Method                  | Description                       |
-|-------------------------|-----------------------------------|
-| `NewSecureString`       | Construct from a string (pooled)  |
-| `String`                | Safe copy of stored data          |
-| `StringUnsafe`          | Zero-copy (invalid after `Clear`) |
-| `Bytes` / `BytesUnsafe` | Byte slice accessors              |
-| `Equal`                 | Constant-time comparison          |
-| `Len` / `IsEmpty`       | Length and emptiness checks       |
-| `Clear`                 | Zero memory and return to pool    |
-
-## Interner
-
-Lock-free string deduplication with LFU eviction (LRU tie-break). Two-tier cache: hot (atomic slots) + cold (`sync.Map`). Reduces memory for repeated
-string values.
-
-| Function / Method             | Description                 |
-|-------------------------------|-----------------------------|
-| `InternString`                | Intern via global singleton |
-| `Intern*` (`InternLowerString`, `InternJoinString`, …) | Global-singleton variants of the methods below |
-| `GlobalInterner` / `ResetGlobalInterner` | Access or reset the global singleton |
-| `NewInterner`                 | Create a sized interner (`DefaultMaxSize`, 8192, when non-positive) |
-| `String`                      | Deduplicate a string        |
-| `LowerString` / `UpperString` | Case-convert and intern     |
-| `TrimString`                  | Trim whitespace and intern  |
-| `StringSlice` / `StringMap`   | Bulk intern                 |
-| `PrefixString` / `SuffixString` / `WrapString` / `JoinString` / `FormatString` / `CleanPathString` / `JoinWith` | Build a string and intern the result |
-| `Size` / `MaxSize` / `IsFull` / `LoadFactor` / `Reset` | Capacity inspection and full reset |
-| `Stats`                       | Performance counters snapshot (hit/miss/eviction) |
-| `ResetStats`                  | Zero counters without clearing cache |
-
-### Performance monitoring
-
-`Stats()` returns an `InternerStats` snapshot with atomic counters for hot hits, cold hits, misses, and evictions. Convenience methods compute hit
-rates:
-
-```go
-stats := interner.Stats()
-fmt.Printf("hit rate: %.1f%%, hot: %.1f%%, size: %d/%d\n",
-    stats.HitRate()*100, stats.HotHitRate()*100,
-    stats.CurrentSize, stats.MaxSize)
-```
-
-For Prometheus integration, use `observability/metrics.NewInternerMetrics` — see the [metrics README](https://github.com/altessa-s/go-atlas/tree/develop/observability/metrics/README.md).
+| Function         | Description                                                                   |
+|------------------|-------------------------------------------------------------------------------|
+| `SubstringMatch` | Case-insensitive substring (NOT constant-time; see [secure](secure) for that) |
 
 ## Pooling
 

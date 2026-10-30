@@ -24,37 +24,6 @@ func TestSubstringMatch_Empty(t *testing.T) {
 	require.True(t, corestrings.SubstringMatch("anything", ""), "empty substr should always match")
 }
 
-func TestTimingSafeSubstringMatch(t *testing.T) {
-	tests := []struct {
-		name      string
-		s, substr string
-		want      bool
-	}{
-		{"found", "Hello World", "world", true},
-		{"not found", "Hello", "xyz", false},
-		{"empty substr", "anything", "", true},
-		{"shorter string", "Hi", "Hello", false},
-		{"exact match", "hello", "hello", true},
-		{"case insensitive", "ABC", "abc", true},
-		{"at start", "foobar", "foo", true},
-		{"at end", "foobar", "bar", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, corestrings.TimingSafeSubstringMatch(tt.s, tt.substr))
-		})
-	}
-}
-
-func TestTimingSafePrefixMatch_ShorterString(t *testing.T) {
-	require.False(t, corestrings.TimingSafePrefixMatch("Hi", "Hello"), "shorter string should not match longer prefix")
-}
-
-func TestTimingSafePrefixMatch_ExactMatch(t *testing.T) {
-	require.True(t, corestrings.TimingSafePrefixMatch("bearer", "bearer"), "exact match should succeed")
-}
-
 func TestToPtr_EmptyString(t *testing.T) {
 	require.Nil(t, corestrings.ToPtr(""))
 }
@@ -133,11 +102,6 @@ func TestGetStringBuilder(t *testing.T) {
 	require.NotNil(t, sb)
 	sb.WriteString("test")
 	corestrings.PutStringBuilder(sb)
-}
-
-func TestSecureString_Len(t *testing.T) {
-	ss := corestrings.NewSecureString("hello")
-	require.Equal(t, 5, ss.Len())
 }
 
 func TestToScreamingSnakeCase_Complex(t *testing.T) {

@@ -72,6 +72,69 @@ func TestTo(t *testing.T) {
 	})
 }
 
+// Named numeric types: To classifies them by their underlying kind.
+type (
+	namedInt   int16
+	namedUint  uint32
+	namedFloat float32
+)
+
+func TestToKinds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{name: "int", got: corestrings.To[int]("-42"), want: -42},
+		{name: "int plus sign", got: corestrings.To[int]("+7"), want: 7},
+		{name: "int leading space", got: corestrings.To[int](" 7"), want: 0},
+		{name: "int hex rejected", got: corestrings.To[int]("0x10"), want: 0},
+		{name: "int exponent rejected", got: corestrings.To[int]("1e3"), want: 0},
+		{name: "int empty", got: corestrings.To[int](""), want: 0},
+		{name: "int8 max", got: corestrings.To[int8]("127"), want: int8(127)},
+		{name: "int8 min", got: corestrings.To[int8]("-128"), want: int8(-128)},
+		{name: "int8 overflow", got: corestrings.To[int8]("128"), want: int8(0)},
+		{name: "int16 overflow", got: corestrings.To[int16]("32768"), want: int16(0)},
+		{name: "int32 max", got: corestrings.To[int32]("2147483647"), want: int32(2147483647)},
+		{name: "int32 overflow", got: corestrings.To[int32]("2147483648"), want: int32(0)},
+		{name: "int64 min", got: corestrings.To[int64]("-9223372036854775808"), want: int64(-9223372036854775808)},
+		{name: "int64 overflow", got: corestrings.To[int64]("9223372036854775808"), want: int64(0)},
+		{name: "uint", got: corestrings.To[uint]("42"), want: uint(42)},
+		{name: "uint negative", got: corestrings.To[uint]("-1"), want: uint(0)},
+		{name: "uint plus sign rejected", got: corestrings.To[uint]("+1"), want: uint(0)},
+		{name: "uint8 max", got: corestrings.To[uint8]("255"), want: uint8(255)},
+		{name: "uint8 overflow", got: corestrings.To[uint8]("256"), want: uint8(0)},
+		{name: "uint16 overflow", got: corestrings.To[uint16]("65536"), want: uint16(0)},
+		{name: "uint32 overflow", got: corestrings.To[uint32]("4294967296"), want: uint32(0)},
+		{name: "uint64 max", got: corestrings.To[uint64]("18446744073709551615"), want: uint64(18446744073709551615)},
+		{name: "uint64 overflow", got: corestrings.To[uint64]("18446744073709551616"), want: uint64(0)},
+		{name: "uintptr", got: corestrings.To[uintptr]("4096"), want: uintptr(4096)},
+		{name: "uintptr negative", got: corestrings.To[uintptr]("-1"), want: uintptr(0)},
+		{name: "float32", got: corestrings.To[float32]("3.14"), want: float32(3.14)},
+		{name: "float32 overflow", got: corestrings.To[float32]("1e39"), want: float32(0)},
+		{name: "float64 exponent", got: corestrings.To[float64]("1e3"), want: 1000.0},
+		{name: "float64 hex", got: corestrings.To[float64]("0x1p-2"), want: 0.25},
+		{name: "float64 overflow", got: corestrings.To[float64]("1e309"), want: 0.0},
+		{name: "float64 invalid", got: corestrings.To[float64]("abc"), want: 0.0},
+		{name: "named signed", got: corestrings.To[namedInt]("-300"), want: namedInt(-300)},
+		{name: "named signed overflow", got: corestrings.To[namedInt]("40000"), want: namedInt(0)},
+		{name: "named unsigned", got: corestrings.To[namedUint]("40000"), want: namedUint(40000)},
+		{name: "named unsigned negative", got: corestrings.To[namedUint]("-1"), want: namedUint(0)},
+		{name: "named float", got: corestrings.To[namedFloat]("2.5"), want: namedFloat(2.5)},
+		{name: "ToUint16", got: corestrings.ToUint16("65535"), want: uint16(65535)},
+		{name: "ToInt32", got: corestrings.ToInt32("-5"), want: int32(-5)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, tc.got)
+		})
+	}
+}
+
 func TestJoin(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -223,9 +286,6 @@ func TestContains(t *testing.T) {
 }
 
 func TestSafeComparisons(t *testing.T) {
-	require.True(t, corestrings.SecureCompare("secret", "secret"), "SecureCompare failed for equal strings")
-	require.False(t, corestrings.SecureCompare("secret", "wrong"), "SecureCompare passed for different strings")
-	require.True(t, corestrings.TimingSafePrefixMatch("Bearer token", "bearer"), "TimingSafePrefixMatch failed")
 	require.True(t, corestrings.SubstringMatch("Hello World", "world"), "SubstringMatch failed")
 }
 

@@ -40,21 +40,21 @@ func PutStringSlice(slice *[]string) {
 	defaultStringSlicePool.Put(slice)
 }
 
-// StringBuilderPool is a package-level [sync.Pool] that recycles
-// [strings.Builder] instances to reduce allocation pressure. Prefer using
-// [GetStringBuilder] and [PutStringBuilder] for correct reset semantics.
-var StringBuilderPool = sync.Pool{
+// stringBuilderPool is a package-level [sync.Pool] that recycles
+// [strings.Builder] instances to reduce allocation pressure. Access it only
+// through [GetStringBuilder] and [PutStringBuilder], which reset builders.
+var stringBuilderPool = sync.Pool{
 	New: func() any {
 		return &strings.Builder{}
 	},
 }
 
-// GetStringBuilder retrieves a [strings.Builder] from [StringBuilderPool],
+// GetStringBuilder retrieves a [strings.Builder] from the shared pool,
 // resets it, and returns it ready for use. The caller must return it with
 // [PutStringBuilder] when finished. If the pool is empty, a new Builder is
 // allocated.
 func GetStringBuilder() *strings.Builder {
-	builder, ok := StringBuilderPool.Get().(*strings.Builder)
+	builder, ok := stringBuilderPool.Get().(*strings.Builder)
 	if !ok {
 		builder = &strings.Builder{}
 	}
@@ -62,7 +62,7 @@ func GetStringBuilder() *strings.Builder {
 	return builder
 }
 
-// PutStringBuilder resets builder and returns it to [StringBuilderPool] for
+// PutStringBuilder resets builder and returns it to the shared pool for
 // reuse. Passing nil is a no-op. After calling PutStringBuilder the caller
 // must not use the builder again.
 func PutStringBuilder(builder *strings.Builder) {
@@ -71,10 +71,10 @@ func PutStringBuilder(builder *strings.Builder) {
 	}
 
 	builder.Reset()
-	StringBuilderPool.Put(builder)
+	stringBuilderPool.Put(builder)
 }
 
-// BuildString borrows a [strings.Builder] from [StringBuilderPool], passes it
+// BuildString borrows a [strings.Builder] from the shared pool, passes it
 // to buildFunc, and returns the resulting string. The builder is automatically
 // returned to the pool when buildFunc completes. This is a convenience wrapper
 // that eliminates manual [GetStringBuilder]/[PutStringBuilder] pairing.

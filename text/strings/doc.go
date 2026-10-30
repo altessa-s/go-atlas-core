@@ -2,11 +2,13 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-// Package strings provides utilities for string manipulation, conversion, and secure operations.
-// Includes validation, case transformation, string interning, and SecureString for sensitive data.
+// Package strings provides utilities for string manipulation and conversion:
+// validation, case transformation, truncation, join/split, pooling, and
+// zero-copy conversions.
 //
-// All utility functions are pure and thread-safe. SecureString is safe
-// for concurrent reads. Interner is fully thread-safe with lock-free design.
+// All utility functions are pure and thread-safe. Secret handling lives in
+// [github.com/altessa-s/go-atlas-core/text/strings/secure] and string interning
+// in [github.com/altessa-s/go-atlas-core/text/strings/intern].
 //
 // # Options Pattern
 //
@@ -29,21 +31,8 @@
 //	strings.TruncateRunes("привет мир", 5, "…") // "прив…"
 //	strings.TruncateBytes("привет", 5, "")      // "пр"
 //
-//	// Secure string storage
-//	secure := strings.NewSecureString("password")
-//	defer secure.Clear() // Explicitly zero memory
-//
-//	// String interning (memory optimization)
-//	canonical := strings.InternString("/api/users")
-//
-//	// Interner performance monitoring
-//	stats := strings.GlobalInterner().Stats()
-//	fmt.Printf("hit rate: %.1f%%\n", stats.HitRate()*100)
-//
 // # Performance
 //
-//   - Small string optimization: SecureString stores ≤64 bytes inline (no heap allocation).
-//   - String interning: 20-30% memory reduction with lock-free hot cache.
 //   - Zero-copy operations: ToBytesUnsafe/FromBytesUnsafe avoid allocations.
-//   - Object pooling: SecureString automatically reuses instances to reduce GC pressure.
+//   - Object pooling: pooled string slices and builders reduce GC pressure.
 package strings

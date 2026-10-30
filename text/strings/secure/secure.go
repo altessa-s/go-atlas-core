@@ -2,7 +2,7 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-package strings
+package secure
 
 import (
 	"crypto/subtle"
@@ -14,28 +14,28 @@ import (
 
 const (
 	// DefaultSmallStringOptimizationThreshold is the maximum byte length of a
-	// string that [SecureString] stores in its fixed-size inline buffer instead
+	// string that [String] stores in its fixed-size inline buffer instead
 	// of a heap-allocated slice. Strings at or below this threshold benefit from
 	// better cache locality and avoid a separate heap allocation.
 	DefaultSmallStringOptimizationThreshold = 64
 
 	// OptimizedMemoryZeroingThreshold is the byte-length cutoff below which a
 	// manual zeroing loop is faster than the built-in clear() function. Used
-	// internally by [SecureString.Clear] and [ZeroBytes].
+	// internally by [String.Clear] and [ZeroBytes].
 	OptimizedMemoryZeroingThreshold = 32
 
-	// EmptyStringValue is the canonical empty string returned by [SecureString]
+	// EmptyStringValue is the canonical empty string returned by [String]
 	// methods when no data is stored.
 	EmptyStringValue = ""
 
-	// SecureStringGoStringEmpty is the value returned by
-	// [SecureString.GoString] when the instance contains no data.
-	SecureStringGoStringEmpty = "SecureString{<empty>}"
+	// GoStringEmpty is the value returned by
+	// [String.GoString] when the instance contains no data.
+	GoStringEmpty = "secure.String{<empty>}"
 
-	// SecureStringGoStringRedacted is the value returned by
-	// [SecureString.GoString] for non-empty instances, preventing accidental
+	// GoStringRedacted is the value returned by
+	// [String.GoString] for non-empty instances, preventing accidental
 	// exposure of sensitive data in debug output or logs.
-	SecureStringGoStringRedacted = "SecureString{<redacted>}"
+	GoStringRedacted = "secure.String{<redacted>}"
 
 	// ZeroByte is the byte value written during memory clearing operations.
 	ZeroByte = byte(0)
@@ -47,41 +47,41 @@ const (
 
 var secureStringPool = sync.Pool{
 	New: func() any {
-		return &SecureString{}
+		return &String{}
 	},
 }
 
-// SecureString provides tamper-resistant, zeroing-on-clear storage for
+// String provides tamper-resistant, zeroing-on-clear storage for
 // sensitive string data such as passwords, tokens, and cryptographic keys.
 //
 // Key properties:
-//   - Explicit memory zeroing via [SecureString.Clear] prevents sensitive data
+//   - Explicit memory zeroing via [String.Clear] prevents sensitive data
 //     from lingering in process memory after use.
 //   - Small-string optimization: strings up to
 //     [DefaultSmallStringOptimizationThreshold] bytes are stored inline,
 //     avoiding a separate heap allocation and improving cache locality.
 //   - The [fmt.GoStringer] interface is implemented to print a redacted
 //     placeholder, preventing accidental exposure in logs or debug output.
-//   - Object pooling: instances created with [NewSecureString] are drawn from
-//     and returned to an internal [sync.Pool] when [SecureString.Clear] is
+//   - Object pooling: instances created with [NewString] are drawn from
+//     and returned to an internal [sync.Pool] when [String.Clear] is
 //     called, reducing GC pressure.
 //   - A runtime cleanup is registered to zero heap-allocated data if the
-//     instance becomes unreachable without an explicit [SecureString.Clear].
+//     instance becomes unreachable without an explicit [String.Clear].
 //
-// Callers must invoke [SecureString.Clear] (typically via defer) when the
+// Callers must invoke [String.Clear] (typically via defer) when the
 // sensitive data is no longer needed. After Clear the instance must not be
 // reused.
 //
-// SecureString is safe for concurrent reads but must not be written to
+// String is safe for concurrent reads but must not be written to
 // concurrently; create separate instances for each goroutine or protect
 // with external synchronization.
 //
 // Example:
 //
-//	ss := NewSecureString("password")
+//	ss := NewString("password")
 //	defer ss.Clear()
 //	value := ss.String()
-type SecureString struct {
+type String struct {
 	// For small strings, store inline to avoid heap allocation and improve cache locality
 	inline             [DefaultSmallStringOptimizationThreshold]byte
 	data               []byte // Used for strings larger than SmallStringThreshold
@@ -91,8 +91,8 @@ type SecureString struct {
 	cleanup            runtime.Cleanup
 }
 
-// initializeSecureStringStorage initializes a SecureString with provided data.
-func initializeSecureStringStorage(ss *SecureString, s string, fromPool bool) {
+// initializeSecureStringStorage initializes a String with provided data.
+func initializeSecureStringStorage(ss *String, s string, fromPool bool) {
 	ss.length = len(s)
 	ss.originatesFromPool = fromPool
 
@@ -112,25 +112,25 @@ func initializeSecureStringStorage(ss *SecureString, s string, fromPool bool) {
 	}
 }
 
-// NewSecureString creates a [SecureString] initialized with the given
+// NewString creates a [String] initialized with the given
 // sensitive data. The instance is drawn from an internal [sync.Pool] to
 // reduce allocation pressure. For heap-backed storage (strings longer than
 // [DefaultSmallStringOptimizationThreshold] bytes) a runtime cleanup is
 // registered so that, if the instance is garbage collected without an
-// explicit [SecureString.Clear], the underlying bytes are still zeroed.
+// explicit [String.Clear], the underlying bytes are still zeroed.
 // Inline-stored (small) data cannot be zeroed by a GC cleanup and relies
 // on an explicit Clear.
 //
-// Callers must call [SecureString.Clear] when the data is no longer needed.
+// Callers must call [String.Clear] when the data is no longer needed.
 // For an empty string, no cleanup is registered and the instance is returned
 // immediately.
 //
 // Example:
 //
-//	ss := NewSecureString("password")
+//	ss := NewString("password")
 //	defer ss.Clear()
-func NewSecureString(s string) *SecureString {
-	ss := secureStringPool.Get().(*SecureString) //nolint:errcheck
+func NewString(s string) *String {
+	ss := secureStringPool.Get().(*String) //nolint:errcheck
 
 	if s == EmptyStringValue {
 		ss.length = 0
@@ -161,8 +161,8 @@ func cleanupSecureString(data []byte) {
 
 // String returns a copy of the stored sensitive data as a Go string. A new
 // allocation is made each call so the returned string is independent of the
-// [SecureString] and survives [SecureString.Clear]. For hot paths where an
-// allocation is undesirable, see [SecureString.StringUnsafe].
+// [String] and survives [String.Clear]. For hot paths where an
+// allocation is undesirable, see [String.StringUnsafe].
 //
 // The returned string should not be stored in long-lived data structures or
 // logged, as it contains plaintext sensitive material.
@@ -170,7 +170,7 @@ func cleanupSecureString(data []byte) {
 // Example:
 //
 //	value := ss.String()
-func (ss *SecureString) String() string {
+func (ss *String) String() string {
 	if ss.length == 0 {
 		return EmptyStringValue
 	}
@@ -182,11 +182,11 @@ func (ss *SecureString) String() string {
 }
 
 // StringUnsafe returns the stored data as a string without copying the
-// underlying bytes. The returned string shares memory with the [SecureString];
-// it becomes invalid (contents zeroed) after [SecureString.Clear] is called.
+// underlying bytes. The returned string shares memory with the [String];
+// it becomes invalid (contents zeroed) after [String.Clear] is called.
 //
 // WARNING: The caller must not retain the returned string beyond the lifetime
-// of the SecureString. This method exists for performance-critical paths where
+// of the String. This method exists for performance-critical paths where
 // the zero-copy guarantee is worth the lifetime constraint.
 //
 // Example:
@@ -194,7 +194,7 @@ func (ss *SecureString) String() string {
 //	value := ss.StringUnsafe()  // no allocation
 //
 // #nosec G103 -- intentional zero-copy for performance
-func (ss *SecureString) StringUnsafe() string {
+func (ss *String) StringUnsafe() string {
 	if ss.length == 0 {
 		return EmptyStringValue
 	}
@@ -206,17 +206,17 @@ func (ss *SecureString) StringUnsafe() string {
 }
 
 // Bytes returns a newly allocated copy of the stored sensitive data as a byte
-// slice. The copy is independent of the [SecureString] and survives
-// [SecureString.Clear]. The caller is responsible for zeroing the returned
+// slice. The copy is independent of the [String] and survives
+// [String.Clear]. The caller is responsible for zeroing the returned
 // slice (e.g. with [ZeroBytes]) when it is no longer needed.
 //
-// Returns nil when the SecureString is empty.
+// Returns nil when the String is empty.
 //
 // Example:
 //
 //	data := ss.Bytes()
 //	defer ZeroBytes(data)
-func (ss *SecureString) Bytes() []byte {
+func (ss *String) Bytes() []byte {
 	if ss.length == 0 {
 		return nil
 	}
@@ -231,18 +231,18 @@ func (ss *SecureString) Bytes() []byte {
 }
 
 // BytesUnsafe returns the internal byte storage without copying. Modifying the
-// returned slice directly mutates the [SecureString]. The slice becomes invalid
-// (zeroed) after [SecureString.Clear] is called.
+// returned slice directly mutates the [String]. The slice becomes invalid
+// (zeroed) after [String.Clear] is called.
 //
-// Returns nil when the SecureString is empty.
+// Returns nil when the String is empty.
 //
 // WARNING: The caller must not retain or modify the slice beyond the lifetime
-// of the SecureString.
+// of the String.
 //
 // Example:
 //
 //	data := ss.BytesUnsafe()  // no allocation
-func (ss *SecureString) BytesUnsafe() []byte {
+func (ss *String) BytesUnsafe() []byte {
 	if ss.length == 0 {
 		return nil
 	}
@@ -253,30 +253,30 @@ func (ss *SecureString) BytesUnsafe() []byte {
 	return ss.data
 }
 
-// IsEmpty reports whether the [SecureString] contains zero bytes of data.
-// Returns true after [SecureString.Clear] has been called.
-func (ss *SecureString) IsEmpty() bool {
+// IsEmpty reports whether the [String] contains zero bytes of data.
+// Returns true after [String.Clear] has been called.
+func (ss *String) IsEmpty() bool {
 	return ss.length == 0
 }
 
 // Len returns the length of the stored sensitive data in bytes. Returns 0
-// after [SecureString.Clear] has been called.
-func (ss *SecureString) Len() int {
+// after [String.Clear] has been called.
+func (ss *String) Len() int {
 	return ss.length
 }
 
-// Equal performs a constant-time comparison of this [SecureString] with other
+// Equal performs a constant-time comparison of this [String] with other
 // using [crypto/subtle.ConstantTimeCompare]. Returns true only when both
 // instances hold byte-identical data. Two empty SecureStrings are considered
 // equal. If the lengths differ, the comparison short-circuits to false.
 //
-// Use this method instead of comparing the results of [SecureString.String]
+// Use this method instead of comparing the results of [String.String]
 // to avoid timing side-channels when verifying passwords or tokens.
 //
 // Example:
 //
 //	if stored.Equal(provided) { ... }
-func (ss *SecureString) Equal(other *SecureString) bool {
+func (ss *String) Equal(other *String) bool {
 	if ss.length == 0 && other.length == 0 {
 		return true
 	}
@@ -303,23 +303,23 @@ func (ss *SecureString) Equal(other *SecureString) bool {
 
 // Clear overwrites the stored sensitive data with zeros, cancels any runtime
 // cleanup, and returns the instance to the internal pool if it was created by
-// [NewSecureString]. After Clear returns, the [SecureString] must not be used
+// [NewString]. After Clear returns, the [String] must not be used
 // -- all accessor methods will return zero-length results.
 //
 // Calling Clear on an already-cleared instance is safe and has no effect.
 //
 // Example:
 //
-//	ss := NewSecureString("password")
+//	ss := NewString("password")
 //	defer ss.Clear()
-func (ss *SecureString) Clear() {
+func (ss *String) Clear() {
 	// Store pool status before clearing (needed for pool return decision)
 	originatedFromPool := ss.originatesFromPool
 
 	if ss.length > 0 {
 		if ss.useInlineStorage {
 			// Zero the entire inline array, not just [:length]: a pooled
-			// SecureString reused for a shorter secret would otherwise leave
+			// String reused for a shorter secret would otherwise leave
 			// the previous (longer) plaintext's tail bytes intact in the
 			// pooled backing array.
 			ZeroBytes(ss.inline[:])
@@ -344,13 +344,13 @@ func (ss *SecureString) Clear() {
 
 // GoString implements [fmt.GoStringer] to prevent accidental exposure of
 // sensitive data in debug output, fmt.Printf("%#v"), or structured logging.
-// Returns [SecureStringGoStringEmpty] for empty instances and
-// [SecureStringGoStringRedacted] otherwise.
-func (ss *SecureString) GoString() string {
+// Returns [GoStringEmpty] for empty instances and
+// [GoStringRedacted] otherwise.
+func (ss *String) GoString() string {
 	if ss.IsEmpty() {
-		return SecureStringGoStringEmpty
+		return GoStringEmpty
 	}
-	return SecureStringGoStringRedacted
+	return GoStringRedacted
 }
 
 // ZeroBytes overwrites every element of data with zero to prevent sensitive
@@ -380,25 +380,20 @@ func ZeroBytes(data []byte) {
 	clear(data)
 }
 
-// zeroStringMu serializes the debug.SetPanicOnFault set/restore window in
-// [ZeroString]; the flag is process-global and concurrent toggling would let
-// one goroutine's restore disarm another's in-flight fault recovery.
-var zeroStringMu sync.Mutex
-
 // ZeroString attempts to overwrite the bytes backing s with zeros using unsafe
 // pointer arithmetic. This is a best-effort operation: if s resides in
 // read-only memory (e.g. a string literal or a constant folded by the
 // compiler), the write will cause a panic that is silently recovered.
 //
-// Interned strings are the same case: an interned value (see [Interner] /
-// [InternString], and note that string literals returned by many libraries are
+// Interned strings are the same case: an interned value (see
+// [github.com/altessa-s/go-atlas-core/text/strings/intern], and note that string literals returned by many libraries are
 // interned) may live in read-only storage or share its backing with other
 // holders, so ZeroString is a silent no-op on it — and a successful write would
 // corrupt every other holder of that backing. Never rely on ZeroString to erase
-// a secret that may be interned; keep secrets in [SecureString], which always
+// a secret that may be interned; keep secrets in [String], which always
 // owns private, writable storage.
 //
-// For reliable zeroing, prefer [SecureString] which always owns its backing
+// For reliable zeroing, prefer [String] which always owns its backing
 // storage. ZeroString is most useful as a defense-in-depth measure for
 // heap-allocated strings obtained from I/O (user input, network reads, etc.).
 //
@@ -422,13 +417,7 @@ func ZeroString(s string) {
 	// segment) causes a SIGSEGV. By default Go treats a SIGSEGV on a non-nil
 	// address as fatal (runtime.throw) which recover() cannot catch.
 	// debug.SetPanicOnFault converts such faults into recoverable panics.
-	//
-	// SetPanicOnFault is a process-global flag, so the set/restore window is
-	// serialized: without the lock, goroutine A restoring the previous value
-	// while goroutine B is mid-zeroing would turn B's fault back into a
-	// fatal runtime throw.
-	zeroStringMu.Lock()
-	defer zeroStringMu.Unlock()
+	// The setting applies only to the current goroutine, so no locking is needed.
 	prev := debug.SetPanicOnFault(true)
 	defer debug.SetPanicOnFault(prev)
 

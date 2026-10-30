@@ -2,7 +2,7 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-package strings
+package intern
 
 import (
 	"cmp"
@@ -11,14 +11,17 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unique"
+
+	"github.com/altessa-s/go-atlas-core/time/clock"
+
+	corestrings "github.com/altessa-s/go-atlas-core/text/strings"
 )
 
 const (
 	// DefaultMaxSize is the default maximum number of interned strings that an
-	// [Interner] holds before eviction is triggered. Used by [NewInterner]
-	// when the caller supplies a non-positive maxSize and by [GlobalInterner]
+	// [Interner] holds before eviction is triggered. Used by [New]
+	// when the caller supplies a non-positive maxSize and by [Default]
 	// for the singleton instance.
 	DefaultMaxSize = 8192
 
@@ -33,20 +36,6 @@ const (
 	// under the maximum size, reducing the frequency of eviction runs.
 	EvictionRatio = 4
 )
-
-// coarseTimestamp caches time.Now().Unix() to avoid repeated time calls on every intern hit.
-// It is refreshed on cache misses and whenever a string reaches [HotCacheThreshold] or
-// multiples of [PromotionCheckInterval] accesses.
-var coarseTimestamp atomic.Int64
-
-func init() {
-	coarseTimestamp.Store(time.Now().Unix())
-}
-
-// coarseNowUnix returns the cached Unix timestamp. Callers accept its staleness.
-func coarseNowUnix() int64 {
-	return coarseTimestamp.Load()
-}
 
 // evictionCandidate holds data for a single eviction candidate during an eviction sweep.
 type evictionCandidate struct {
@@ -94,10 +83,10 @@ const (
 	PromotionCheckInterval = 50
 )
 
-// InternerStats holds a point-in-time snapshot of [Interner] performance
+// Stats holds a point-in-time snapshot of [Interner] performance
 // counters. All values are cumulative since the last [Interner.ResetStats] (or
 // since creation). Use [Interner.Stats] to obtain a snapshot.
-type InternerStats struct {
+type Stats struct {
 	// HotHits is the number of lookups served from the hot cache (atomic slots).
 	HotHits uint64
 
@@ -119,7 +108,7 @@ type InternerStats struct {
 
 // HitRate returns the overall cache hit rate as a float64 in [0.0, 1.0].
 // Returns 0 when there have been no lookups.
-func (s InternerStats) HitRate() float64 {
+func (s Stats) HitRate() float64 {
 	total := s.HotHits + s.ColdHits + s.Misses
 	if total == 0 {
 		return 0
@@ -129,7 +118,7 @@ func (s InternerStats) HitRate() float64 {
 
 // HotHitRate returns the hot cache hit rate as a float64 in [0.0, 1.0].
 // Returns 0 when there have been no lookups.
-func (s InternerStats) HotHitRate() float64 {
+func (s Stats) HotHitRate() float64 {
 	total := s.HotHits + s.ColdHits + s.Misses
 	if total == 0 {
 		return 0
@@ -138,7 +127,7 @@ func (s InternerStats) HotHitRate() float64 {
 }
 
 // TotalLookups returns the total number of String() calls tracked.
-func (s InternerStats) TotalLookups() uint64 {
+func (s Stats) TotalLookups() uint64 {
 	return s.HotHits + s.ColdHits + s.Misses
 }
 
@@ -165,8 +154,8 @@ func (s InternerStats) TotalLookups() uint64 {
 // can be read via [Interner.Stats] without affecting throughput.
 //
 // All methods on Interner are safe for concurrent use by multiple goroutines.
-// Create instances with [NewInterner] or use the process-wide singleton
-// returned by [GlobalInterner].
+// Create instances with [New] or use the process-wide singleton
+// returned by [Default].
 type Interner struct {
 	// Hot cache: Pre-allocated atomic slots for most frequent strings
 	hotCache [HotCacheSlots]atomic.Pointer[string]
@@ -177,6 +166,13 @@ type Interner struct {
 	maxSize     int64        // Maximum number of entries
 	evicting    atomic.Int32 // Atomic flag for eviction coordination
 
+	// clock is the injected time source for access timestamps. coarseNow caches
+	// clock.Now().Unix() so cold-cache hits avoid a clock read; it is refreshed on
+	// cache misses and whenever a string reaches [HotCacheThreshold] or multiples
+	// of [PromotionCheckInterval] accesses. Readers accept its staleness.
+	clock     clock.Clock
+	coarseNow atomic.Int64
+
 	// Performance counters
 	hotHits   atomic.Uint64
 	coldHits  atomic.Uint64
@@ -184,49 +180,54 @@ type Interner struct {
 	evictions atomic.Uint64
 }
 
-var globalInternerPtr atomic.Pointer[Interner]
+var defaultInternerPtr atomic.Pointer[Interner]
 
-// GlobalInterner returns the process-wide singleton [Interner] initialized with
+// Default returns the process-wide singleton [Interner] initialized with
 // [DefaultMaxSize]. The instance is created lazily on the first call using an
 // atomic compare-and-swap, so concurrent callers are safe and will always
 // receive the same instance.
-func GlobalInterner() *Interner {
-	if interner := globalInternerPtr.Load(); interner != nil {
+func Default() *Interner {
+	if interner := defaultInternerPtr.Load(); interner != nil {
 		return interner
 	}
 
-	newInterner := NewInterner(DefaultMaxSize)
-	if !globalInternerPtr.CompareAndSwap(nil, newInterner) {
-		return globalInternerPtr.Load()
+	newInterner := New(DefaultMaxSize)
+	if !defaultInternerPtr.CompareAndSwap(nil, newInterner) {
+		return defaultInternerPtr.Load()
 	}
 	return newInterner
 }
 
-// ResetGlobalInterner clears all state from the global [Interner] singleton
+// ResetDefault clears all state from the global [Interner] singleton
 // (interned strings, hot cache, counters). This is primarily useful in tests
 // to prevent state leaking between test cases:
 //
 //	func TestFoo(t *testing.T) {
-//	    t.Cleanup(strings.ResetGlobalInterner)
+//	    t.Cleanup(intern.ResetDefault)
 //	    // ...
 //	}
-func ResetGlobalInterner() {
-	if interner := globalInternerPtr.Load(); interner != nil {
+func ResetDefault() {
+	if interner := defaultInternerPtr.Load(); interner != nil {
 		interner.Reset()
 	}
 }
 
-// NewInterner creates a new [Interner] that holds up to maxSize interned
+// New creates a new [Interner] that holds up to maxSize interned
 // strings before triggering background eviction. If maxSize is less than
-// or equal to zero, [DefaultMaxSize] is used instead.
-func NewInterner(maxSize int) *Interner {
+// or equal to zero, [DefaultMaxSize] is used instead. Options such as
+// [WithClock] customize the instance.
+func New(maxSize int, opts ...Option) *Interner {
 	if maxSize <= 0 {
 		maxSize = DefaultMaxSize
 	}
 
-	return &Interner{
+	o := newOptions(opts...)
+	si := &Interner{
 		maxSize: int64(maxSize),
+		clock:   o.clock,
 	}
+	si.coarseNow.Store(o.clock.Now().Unix())
+	return si
 }
 
 // String returns the canonical (deduplicated) instance of s. If an equal string
@@ -260,11 +261,11 @@ func (si *Interner) String(s string) string {
 
 		// Update access information atomically using coarse timestamp
 		newAccessCount := entry.accessCount.Add(1)
-		entry.lastAccess.Store(coarseNowUnix())
+		entry.lastAccess.Store(si.coarseNow.Load())
 
 		// Periodically check for hot cache promotion and refresh coarse timestamp
 		if newAccessCount >= HotCacheThreshold && (newAccessCount == HotCacheThreshold || newAccessCount%PromotionCheckInterval == 0) {
-			coarseTimestamp.Store(time.Now().Unix())
+			si.coarseNow.Store(si.clock.Now().Unix())
 			si.promoteToHotCache(entry.value(), hotSlot, newAccessCount)
 		}
 
@@ -275,8 +276,8 @@ func (si *Interner) String(s string) string {
 	si.misses.Add(1)
 	handle := unique.Make(s)
 	canonicalString := handle.Value()
-	now := time.Now().Unix()
-	coarseTimestamp.Store(now)
+	now := si.clock.Now().Unix()
+	si.coarseNow.Store(now)
 	newEntry := &internEntry{handle: handle}
 	newEntry.accessCount.Store(1)
 	newEntry.lastAccess.Store(now)
@@ -464,13 +465,13 @@ func (si *Interner) LoadFactor() float64 {
 }
 
 // Stats returns a point-in-time snapshot of the interner's performance
-// counters. The returned [InternerStats] includes hit/miss counts, eviction
+// counters. The returned [Stats] includes hit/miss counts, eviction
 // totals, and current/max size. All counters are cumulative since the last
 // [Interner.ResetStats] call (or since creation).
 //
 // Stats is safe to call concurrently and does not block interning operations.
-func (si *Interner) Stats() InternerStats {
-	return InternerStats{
+func (si *Interner) Stats() Stats {
+	return Stats{
 		HotHits:     si.hotHits.Load(),
 		ColdHits:    si.coldHits.Load(),
 		Misses:      si.misses.Load(),
@@ -519,8 +520,8 @@ func (si *Interner) CleanPathString(path string) string {
 	}
 
 	// Single-pass: collapse consecutive slashes and strip trailing slash.
-	b := GetStringBuilder()
-	defer PutStringBuilder(b)
+	b := corestrings.GetStringBuilder()
+	defer corestrings.PutStringBuilder(b)
 	b.Grow(len(path))
 
 	prev := byte(0)
@@ -649,138 +650,138 @@ func (si *Interner) JoinWith(parts []string, joiner func([]string) string) strin
 	return si.String(joined)
 }
 
-// InternString returns the canonical (deduplicated) instance of s using the
-// process-wide [GlobalInterner]. It is a convenience wrapper around
-// GlobalInterner().String(s).
+// String returns the canonical (deduplicated) instance of s using the
+// process-wide [Default] interner. It is a convenience wrapper around
+// Default().String(s).
 //
 // Example:
 //
-//	s := InternString("hello")
-func InternString(s string) string {
-	return GlobalInterner().String(s)
+//	s := intern.String("hello")
+func String(s string) string {
+	return Default().String(s)
 }
 
-// InternLowerString converts key to lowercase and returns the canonical
-// interned instance via the [GlobalInterner].
+// LowerString converts key to lowercase and returns the canonical
+// interned instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternLowerString("HELLO")  // "hello"
-func InternLowerString(key string) string {
-	return GlobalInterner().LowerString(key)
+//	s := intern.LowerString("HELLO")  // "hello"
+func LowerString(key string) string {
+	return Default().LowerString(key)
 }
 
-// InternUpperString converts key to uppercase and returns the canonical
-// interned instance via the [GlobalInterner].
+// UpperString converts key to uppercase and returns the canonical
+// interned instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternUpperString("hello")  // "HELLO"
-func InternUpperString(key string) string {
-	return GlobalInterner().UpperString(key)
+//	s := intern.UpperString("hello")  // "HELLO"
+func UpperString(key string) string {
+	return Default().UpperString(key)
 }
 
-// InternTrimString strips whitespace from s and returns the canonical interned
-// instance via the [GlobalInterner].
+// TrimString strips whitespace from s and returns the canonical interned
+// instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternTrimString("  hello  ")  // "hello"
-func InternTrimString(s string) string {
-	return GlobalInterner().TrimString(s)
+//	s := intern.TrimString("  hello  ")  // "hello"
+func TrimString(s string) string {
+	return Default().TrimString(s)
 }
 
-// InternCleanPathString normalizes path by collapsing duplicate slashes and
+// CleanPathString normalizes path by collapsing duplicate slashes and
 // removing trailing slashes, then returns the canonical interned instance via
-// the [GlobalInterner]. See [Interner.CleanPathString] for details.
+// the [Default] interner. See [Interner.CleanPathString] for details.
 //
 // Example:
 //
-//	s := InternCleanPathString("//foo//bar/")  // "/foo/bar"
-func InternCleanPathString(path string) string {
-	return GlobalInterner().CleanPathString(path)
+//	s := intern.CleanPathString("//foo//bar/")  // "/foo/bar"
+func CleanPathString(path string) string {
+	return Default().CleanPathString(path)
 }
 
-// InternPrefixString prepends prefix to s and returns the canonical interned
-// instance via the [GlobalInterner].
+// PrefixString prepends prefix to s and returns the canonical interned
+// instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternPrefixString("world", "hello ")  // "hello world"
-func InternPrefixString(s, prefix string) string {
-	return GlobalInterner().PrefixString(s, prefix)
+//	s := intern.PrefixString("world", "hello ")  // "hello world"
+func PrefixString(s, prefix string) string {
+	return Default().PrefixString(s, prefix)
 }
 
-// InternSuffixString appends suffix to s and returns the canonical interned
-// instance via the [GlobalInterner].
+// SuffixString appends suffix to s and returns the canonical interned
+// instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternSuffixString("hello", " world")  // "hello world"
-func InternSuffixString(s, suffix string) string {
-	return GlobalInterner().SuffixString(s, suffix)
+//	s := intern.SuffixString("hello", " world")  // "hello world"
+func SuffixString(s, suffix string) string {
+	return Default().SuffixString(s, suffix)
 }
 
-// InternWrapString surrounds s with prefix and suffix and returns the
-// canonical interned instance via the [GlobalInterner].
+// WrapString surrounds s with prefix and suffix and returns the
+// canonical interned instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternWrapString("hello", "[", "]")  // "[hello]"
-func InternWrapString(s, prefix, suffix string) string {
-	return GlobalInterner().WrapString(s, prefix, suffix)
+//	s := intern.WrapString("hello", "[", "]")  // "[hello]"
+func WrapString(s, prefix, suffix string) string {
+	return Default().WrapString(s, prefix, suffix)
 }
 
-// InternStringSlice interns every element of slice and returns a new slice
-// containing the canonical instances via the [GlobalInterner]. Returns nil
+// StringSlice interns every element of slice and returns a new slice
+// containing the canonical instances via the [Default] interner. Returns nil
 // when slice is nil or empty.
 //
 // Example:
 //
-//	s := InternStringSlice([]string{"a", "b"})
-func InternStringSlice(slice []string) []string {
-	return GlobalInterner().StringSlice(slice)
+//	s := intern.StringSlice([]string{"a", "b"})
+func StringSlice(slice []string) []string {
+	return Default().StringSlice(slice)
 }
 
-// InternStringMap interns every key and value of m and returns a new map
-// containing the canonical instances via the [GlobalInterner]. Returns nil
+// StringMap interns every key and value of m and returns a new map
+// containing the canonical instances via the [Default] interner. Returns nil
 // when m is nil or empty.
 //
 // Example:
 //
-//	m := InternStringMap(map[string]string{"a": "b"})
-func InternStringMap(m map[string]string) map[string]string {
-	return GlobalInterner().StringMap(m)
+//	m := intern.StringMap(map[string]string{"a": "b"})
+func StringMap(m map[string]string) map[string]string {
+	return Default().StringMap(m)
 }
 
-// InternFormatString formats a string with [fmt.Sprintf] and returns the
-// canonical interned instance via the [GlobalInterner].
+// FormatString formats a string with [fmt.Sprintf] and returns the
+// canonical interned instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternFormatString("hello %s", "world")  // "hello world"
-func InternFormatString(format string, args ...any) string {
-	return GlobalInterner().FormatString(format, args...)
+//	s := intern.FormatString("hello %s", "world")  // "hello world"
+func FormatString(format string, args ...any) string {
+	return Default().FormatString(format, args...)
 }
 
-// InternJoinString concatenates parts with separator and returns the canonical
-// interned instance via the [GlobalInterner].
+// JoinString concatenates parts with separator and returns the canonical
+// interned instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternJoinString([]string{"a", "b"}, ",")  // "a,b"
-func InternJoinString(parts []string, separator string) string {
-	return GlobalInterner().JoinString(parts, separator)
+//	s := intern.JoinString([]string{"a", "b"}, ",")  // "a,b"
+func JoinString(parts []string, separator string) string {
+	return Default().JoinString(parts, separator)
 }
 
-// InternJoinWith applies joiner to parts and returns the canonical interned
-// instance via the [GlobalInterner].
+// JoinWith applies joiner to parts and returns the canonical interned
+// instance via the [Default] interner.
 //
 // Example:
 //
-//	s := InternJoinWith(parts, customJoiner)
-func InternJoinWith(parts []string, joiner func([]string) string) string {
-	return GlobalInterner().JoinWith(parts, joiner)
+//	s := intern.JoinWith(parts, customJoiner)
+func JoinWith(parts []string, joiner func([]string) string) string {
+	return Default().JoinWith(parts, joiner)
 }
 
 // fastHash computes a fast FNV-1a hash for hot cache slot distribution.

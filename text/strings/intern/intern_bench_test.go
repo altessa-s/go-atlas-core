@@ -2,19 +2,19 @@
 // Use of this source code is governed by license that can be found in
 // the LICENSE file.
 
-package strings_test
+package intern_test
 
 import (
 	"fmt"
 	"testing"
 
-	corestrings "github.com/altessa-s/go-atlas-core/text/strings"
+	"github.com/altessa-s/go-atlas-core/text/strings/intern"
 )
 
 // benchColdKeys returns n distinct pre-interned keys. With only
-// [corestrings.HotCacheSlots] hot slots, rotating over thousands of keys
+// [intern.HotCacheSlots] hot slots, rotating over thousands of keys
 // keeps lookups on the cold-cache path.
-func benchColdKeys(si *corestrings.Interner, n int) []string {
+func benchColdKeys(si *intern.Interner, n int) []string {
 	keys := make([]string, n)
 	for i := range keys {
 		keys[i] = fmt.Sprintf("interner-bench-key-%05d", i)
@@ -25,7 +25,7 @@ func benchColdKeys(si *corestrings.Interner, n int) []string {
 
 // BenchmarkInterner_ColdHit pins the sequential cold-cache hit cost.
 func BenchmarkInterner_ColdHit(b *testing.B) {
-	si := corestrings.NewInterner(corestrings.DefaultMaxSize)
+	si := intern.New(intern.DefaultMaxSize)
 	keys := benchColdKeys(si, 4096)
 
 	b.ReportAllocs()
@@ -39,7 +39,7 @@ func BenchmarkInterner_ColdHit(b *testing.B) {
 // BenchmarkInterner_ColdHitParallel exercises the same cold-cache path from
 // concurrent goroutines.
 func BenchmarkInterner_ColdHitParallel(b *testing.B) {
-	si := corestrings.NewInterner(corestrings.DefaultMaxSize)
+	si := intern.New(intern.DefaultMaxSize)
 	keys := benchColdKeys(si, 4096)
 
 	b.ReportAllocs()

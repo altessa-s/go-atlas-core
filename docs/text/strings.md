@@ -1,12 +1,14 @@
 # Strings
 
-Concepts for working with `core/text/strings`: string manipulation, case transformation, interning, secure storage, and zero-copy operations.
+Concepts for working with `core/text/strings` (string manipulation, case transformation, zero-copy operations) and its subpackages
+`core/text/strings/intern` (interning) and `core/text/strings/secure` (secure storage and timing-safe comparison).
 
 ```
 import "github.com/altessa-s/go-atlas-core/text/strings"
 ```
 
-All utility functions are pure and thread-safe. `SecureString` is safe for concurrent reads. `Interner` is fully thread-safe with lock-free design.
+All utility functions are pure and thread-safe. `secure.String` is safe for concurrent reads. `intern.Interner` is fully thread-safe with lock-free
+design.
 
 ---
 
@@ -195,7 +197,8 @@ standard `==`. The comparison is always case-sensitive — there is no `strings.
 
 ## String interning
 
-The `Interner` deduplicates identical strings so only one copy is retained in memory. Uses a two-tier cache:
+The `intern.Interner` (`import "github.com/altessa-s/go-atlas-core/text/strings/intern"`) deduplicates identical strings so only one copy is retained in
+memory. Uses a two-tier cache:
 
 1. Hot cache: 32 `atomic.Pointer` slots for the most frequently accessed strings
    (wait-free reads).
@@ -205,32 +208,33 @@ Promotion is evaluated when a string reaches 5 accesses and re-evaluated every 5
 is promoted to the hot cache (an occupied slot is taken over only by a string with more than twice the occupant's access count). Background eviction
 runs when the interner exceeds capacity; it removes the least frequently accessed entries first (LFU), breaking ties by least recent access (LRU).
 
-### Global interner
+### Default interner
 
 ```go
-s := strings.InternString("/api/users")  // deduplicated via GlobalInterner()
+s := intern.String("/api/users")  // deduplicated via intern.Default()
 ```
 
 | Convenience function | Description |
 |---------------------|-------------|
-| `InternString(s)` | Intern as-is |
-| `InternLowerString(s)` | Lowercase + intern |
-| `InternUpperString(s)` | Uppercase + intern |
-| `InternTrimString(s)` | Trim whitespace + intern |
-| `InternCleanPathString(s)` | Normalize path (collapse `//`, strip trailing `/`) + intern |
-| `InternPrefixString(s, prefix)` | Prepend + intern |
-| `InternSuffixString(s, suffix)` | Append + intern |
-| `InternWrapString(s, prefix, suffix)` | Wrap + intern |
-| `InternStringSlice(slice)` | Intern every element |
-| `InternStringMap(m)` | Intern every key and value |
-| `InternFormatString(fmt, args...)` | `Sprintf` + intern |
-| `InternJoinString(parts, sep)` | Join + intern |
-| `InternJoinWith(parts, joiner)` | Custom join + intern |
+| `String(s)` | Intern as-is |
+| `LowerString(s)` | Lowercase + intern |
+| `UpperString(s)` | Uppercase + intern |
+| `TrimString(s)` | Trim whitespace + intern |
+| `CleanPathString(s)` | Normalize path (collapse `//`, strip trailing `/`) + intern |
+| `PrefixString(s, prefix)` | Prepend + intern |
+| `SuffixString(s, suffix)` | Append + intern |
+| `WrapString(s, prefix, suffix)` | Wrap + intern |
+| `StringSlice(slice)` | Intern every element |
+| `StringMap(m)` | Intern every key and value |
+| `FormatString(fmt, args...)` | `Sprintf` + intern |
+| `JoinString(parts, sep)` | Join + intern |
+| `JoinWith(parts, joiner)` | Custom join + intern |
 
 ### Custom interner
 
 ```go
-interner := strings.NewInterner(4096) // custom capacity
+interner := intern.New(4096) // custom capacity
+// intern.New(4096, intern.WithClock(fake)) injects the access-time source (default clock.Real())
 
 s := interner.String("key")
 s = interner.LowerString("KEY")
@@ -240,14 +244,14 @@ s = interner.CleanPathString("//foo//bar/")  // "/foo/bar"
 ### Performance monitoring
 
 ```go
-stats := strings.GlobalInterner().Stats()
+stats := intern.Default().Stats()
 fmt.Printf("hit rate: %.1f%% (hot: %.1f%%)\n",
     stats.HitRate()*100, stats.HotHitRate()*100)
 fmt.Printf("size: %d/%d, evictions: %d\n",
     stats.CurrentSize, stats.MaxSize, stats.Evictions)
 ```
 
-| `InternerStats` field | Description |
+| `Stats` field | Description |
 |----------------------|-------------|
 | `HotHits` | Lookups served from hot cache |
 | `ColdHits` | Lookups served from cold cache |
@@ -261,7 +265,7 @@ fmt.Printf("size: %d/%d, evictions: %d\n",
 
 | Constant | Default | Description |
 |----------|---------|-------------|
-| `DefaultMaxSize` | 8192 | Global interner capacity |
+| `DefaultMaxSize` | 8192 | Default interner capacity |
 | `HotCacheSlots` | 32 | Atomic pointer slots in hot cache |
 | `HotCacheThreshold` | 5 | Minimum access count for hot promotion |
 | `PromotionCheckInterval` | 50 | Accesses per string between promotion re-evaluations |
@@ -272,26 +276,27 @@ fmt.Printf("size: %d/%d, evictions: %d\n",
 
 ## Secure strings
 
-`SecureString` stores sensitive data (passwords, tokens, keys) with explicit memory zeroing.
+`secure.String` (`import "github.com/altessa-s/go-atlas-core/text/strings/secure"`) stores sensitive data (passwords, tokens, keys) with explicit
+memory zeroing.
 
 ```go
-ss := strings.NewSecureString("password")
+ss := secure.NewString("password")
 defer ss.Clear() // zeros memory, returns to pool
 
 value := ss.String()         // allocating copy
 value = ss.StringUnsafe()    // zero-copy (invalid after Clear)
 data := ss.Bytes()           // allocating copy
-defer strings.ZeroBytes(data)
+defer secure.ZeroBytes(data)
 ```
 
 ### Properties
 
 - Memory zeroing: `Clear()` overwrites stored data with zeros.
 - Small-string optimization: strings ≤64 bytes stored inline (no heap allocation).
-- Object pooling: instances from `NewSecureString` are recycled via `sync.Pool`.
+- Object pooling: instances from `NewString` are recycled via `sync.Pool`.
 - GC safety: a runtime cleanup zeros heap data if the instance is collected
   without `Clear`.
-- Redacted debug output: `GoString()` returns `SecureString{<redacted>}`.
+- Redacted debug output: `GoString()` returns `secure.String{<redacted>}`.
 
 ### Constant-time comparison
 
@@ -305,10 +310,10 @@ if stored.Equal(provided) {
 
 | Function | Description |
 |----------|-------------|
-| `SecureCompare(a, b)` | Constant-time string equality |
-| `TimingSafePrefixMatch(s, prefix)` | Constant-time case-insensitive prefix check |
-| `TimingSafeSubstringMatch(s, substr)` | Constant-time case-insensitive substring search |
-| `SubstringMatch(s, substr)` | Case-insensitive substring (NOT constant-time) |
+| `Equal(a, b)` | Constant-time string equality |
+| `PrefixMatch(s, prefix)` | Constant-time case-insensitive prefix check |
+| `SubstringMatch(s, substr)` | Constant-time case-insensitive substring search |
+| `strings.SubstringMatch(s, substr)` | Case-insensitive substring (NOT constant-time; parent package) |
 | `ZeroBytes(data)` | Overwrite byte slice with zeros |
 | `ZeroString(s)` | Best-effort zeroing of string backing memory (silent no-op for literals / read-only memory; never panics) |
 

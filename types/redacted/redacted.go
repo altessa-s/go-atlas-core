@@ -7,12 +7,12 @@ package redacted
 import (
 	"log/slog"
 
-	corestrings "github.com/altessa-s/go-atlas-core/text/strings"
+	"github.com/altessa-s/go-atlas-core/text/strings/secure"
 )
 
 // placeholder is the fixed token RedactedString emits in every redacting
 // output path. It is intentionally a package-level constant so the value
-// is identical across String, GoString, LogValue, MarshalJSON, MarshalYAML,
+// is identical across String, GoString, LogValue, MarshalJSONTo, MarshalYAML,
 // MarshalText and MarshalBSONValue.
 const placeholder = "<redacted>"
 
@@ -56,9 +56,9 @@ func (s RedactedString) IsEmpty() bool { return s == "" }
 // stripped entirely from the on-the-wire document.
 func (s RedactedString) IsZero() bool { return s == "" }
 
-// SecureString converts the redacted value into a pooled SecureString
+// SecureString converts the redacted value into a pooled [secure.String]
 // with memory zeroing. The caller must call Clear() on the returned
 // value when done.
-func (s RedactedString) SecureString() *corestrings.SecureString {
-	return corestrings.NewSecureString(string(s))
+func (s RedactedString) SecureString() *secure.String {
+	return secure.NewString(string(s))
 }
