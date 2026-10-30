@@ -9,14 +9,14 @@ thread-safe — handlers can be registered and modified concurrently without ext
 
 ## Recovery
 
-| Function           | Description                                              |
-|--------------------|----------------------------------------------------------|
-| `Handle`           | Recover and run global + per-call handlers               |
-| `HandleWithOpts`   | Same with per-call options (e.g., override re-panic)     |
-| `NewHandleOpts`    | Build `*HandleOpts`; chain `SetReallyPanic` per call     |
+| Function         | Description                                                          |
+|------------------|----------------------------------------------------------------------|
+| `Handle`         | Recover and run global + per-call handlers                           |
+| `HandleWithOpts` | Same with per-call options (e.g., override re-panic)                 |
+| `NewHandleOpts`  | Build `*HandleOpts`; chain `SetReallyPanic` / `SetShutdown` per call |
 
-Both must be deferred directly. Handlers are `PanicHandler` funcs (`func(ctx context.Context, r any)`); a re-thrown panic first runs
-`runtime.RunShutdownHooks`.
+Both must be deferred directly. Handlers are `PanicHandler` funcs (`func(ctx context.Context, r any)`); a re-thrown panic first runs the shutdown
+function — `runtime.RunShutdownHooks` by default, or the one set with `HandleOpts.SetShutdown` (e.g. a `runtime.HookGroup`'s `Shutdown`).
 
 ## Guarded channel sends
 

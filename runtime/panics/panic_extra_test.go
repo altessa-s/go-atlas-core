@@ -209,3 +209,46 @@ func TestInvalidArgument_NoTrigger(t *testing.T) {
 func TestMustResult_Success(t *testing.T) {
 	require.Equal(t, 42, panics.MustResult(42, nil))
 }
+
+func TestHandleWithOpts_RePanicRunsInjectedShutdown(t *testing.T) {
+	t.Parallel()
+
+	var group coreruntime.HookGroup
+	var hookRan atomic.Bool
+	group.OnShutdown(func(ctx context.Context) error {
+		_, hasDeadline := ctx.Deadline()
+		hookRan.Store(hasDeadline)
+		return nil
+	})
+
+	opts := panics.NewHandleOpts().SetReallyPanic(true).SetShutdown(group.Shutdown)
+	require.PanicsWithValue(t, "boom", func() {
+		defer panics.HandleWithOpts(t.Context(), opts)
+		panic("boom")
+	})
+	require.True(t, hookRan.Load(), "injected shutdown must run, with a deadline, before the re-panic")
+}
+
+func TestHandleWithOpts_SwallowedPanicSkipsInjectedShutdown(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+	opts := panics.NewHandleOpts().SetReallyPanic(false).SetShutdown(func(context.Context) error {
+		calls.Add(1)
+		return nil
+	})
+	func() {
+		defer panics.HandleWithOpts(t.Context(), opts)
+		panic("routine panic")
+	}()
+	require.Zero(t, calls.Load())
+}
+
+func TestHandleOpts_SetShutdown(t *testing.T) {
+	t.Parallel()
+
+	require.Nil(t, panics.NewHandleOpts().Shutdown, "Shutdown should be nil by default")
+	opts := panics.NewHandleOpts().SetShutdown(func(context.Context) error { return nil })
+	require.NotNil(t, opts.Shutdown)
+	require.Nil(t, opts.SetShutdown(nil).Shutdown, "SetShutdown(nil) restores the default")
+}

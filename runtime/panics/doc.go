@@ -37,6 +37,8 @@
 // # Configuration
 //
 //   - SetReallyPanic(bool): Configure whether panics re-propagate after handling (default: false).
+//   - HandleOpts.SetShutdown(fn): Per-call shutdown function run before a re-panic
+//     (default: runtime.RunShutdownHooks).
 //   - SetLogger(*slog.Logger): Set custom logger for default panic handler.
 //   - AddGlobalPanicHandler(PanicHandler): Add to global handlers.
 package panics

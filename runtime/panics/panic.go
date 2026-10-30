@@ -132,6 +132,12 @@ type HandleOpts struct {
 	// When non-nil, its boolean value determines whether the panic is re-thrown
 	// after all handlers have executed.
 	ReallyPanic *bool
+
+	// Shutdown replaces the shutdown function run before a re-panic for a
+	// single HandleWithOpts call. When nil, [runtime.RunShutdownHooks] runs.
+	// Pass a [runtime.HookGroup.Shutdown] method value to flush only a
+	// component's hooks instead of the process-wide ones.
+	Shutdown coreruntime.ShutdownHook
 }
 
 // NewHandleOpts creates a [HandleOpts] with all fields at their zero values
@@ -150,11 +156,20 @@ func (ho *HandleOpts) SetReallyPanic(rp bool) *HandleOpts {
 	return ho
 }
 
+// SetShutdown sets the per-call shutdown function run before a re-panic and
+// returns ho for method chaining. A nil fn restores the default,
+// [runtime.RunShutdownHooks].
+func (ho *HandleOpts) SetShutdown(fn coreruntime.ShutdownHook) *HandleOpts {
+	ho.Shutdown = fn
+	return ho
+}
+
 // HandleWithOpts recovers from a panic and executes global handlers (registered
 // via [AddGlobalPanicHandler] or [SetGlobalPanicHandlers]) followed by any
 // handlers passed directly. When the panic is re-thrown (re-panic enabled),
-// it first runs [runtime.RunShutdownHooks] to flush buffered logs and
-// telemetry; swallowed panics leave the process-wide shutdown hooks untouched.
+// it first runs the shutdown function ([HandleOpts.Shutdown], by default
+// [runtime.RunShutdownHooks]) to flush buffered logs and telemetry;
+// swallowed panics leave the shutdown hooks untouched.
 //
 // The opts parameter overrides global behavior (see [HandleOpts]). Pass nil
 // to use the global defaults.
@@ -223,8 +238,12 @@ func processRecovery(ctx context.Context, r any, opts *HandleOpts, handler ...Pa
 		// buffered logs and telemetry first (best effort, short timeout).
 		// A background context is used because the original context might
 		// be canceled or invalid.
+		shutdown := coreruntime.RunShutdownHooks
+		if opts != nil && opts.Shutdown != nil {
+			shutdown = opts.Shutdown
+		}
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), panicShutdownTimeout)
-		coreruntime.RunShutdownHooks(shutdownCtx) //nolint:errcheck,contextcheck // best-effort during panic, original ctx may be invalid
+		shutdown(shutdownCtx) //nolint:errcheck,contextcheck // best-effort during panic, original ctx may be invalid
 		cancel()
 		panic(r)
 	}
