@@ -7,6 +7,33 @@ import "github.com/altessa-s/go-atlas-core/runtime/panics"
 Package `panics` provides panic recovery with pluggable handlers and runtime assertion helpers. All configuration uses atomic operations and is
 thread-safe — handlers can be registered and modified concurrently without external locks.
 
+## Quick start
+
+```go
+go func() {
+    defer panics.Handle(ctx)
+    riskyWork()
+}()
+```
+
+Assertion helpers convert contract violations into panics with clear messages:
+
+```go
+panics.MustNonNil(cfg, "config is required")
+panics.MustNonZero(timeout, "timeout must be set")
+panics.Must(port > 0, "port must be positive")
+
+val := panics.MustResult(parseConfig(path)) // panics on error, returns value
+```
+
+Register a handler that runs on every recovered panic across the application:
+
+```go
+panics.AddGlobalPanicHandler(func(ctx context.Context, r any) {
+    metrics.IncrCounter("panics_total", 1)
+})
+```
+
 ## Recovery
 
 | Function         | Description                                                          |

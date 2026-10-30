@@ -49,9 +49,12 @@ For codecs and serializers that detect `Optional` fields by reflection; ordinary
 | `SomeReflect(optType, v)`   | Build `Some(v)` as a `reflect.Value` of `optType`                    |
 | `NoneReflect(optType)`      | Build `None` as a `reflect.Value` of `optType`                       |
 
+Internally these helpers alias the unexported `value` / `present` fields with `reflect.NewAt` and `unsafe.Pointer` — the same technique
+`encoding/json` and `encoding/gob` use to populate user structs. They live in this package so the unsafe surface stays in one well-defined place.
+
 ## Serialization
 
-JSON support is built in: `Some(v)` encodes as `v`, `None` as `null`. Use `json:",omitzero"` to omit None fields with Go 1.25+. Present zero values
+JSON support is built in: `Some(v)` encodes as `v`, `None` as `null`. Use `json:",omitzero"` (Go 1.24+) to omit None fields. Present zero values
 remain present.
 
 JSON support is implemented with the `encoding/json/v2` interfaces `MarshalJSONTo` / `UnmarshalJSONFrom`; the type has no `MarshalJSON` /
@@ -103,3 +106,30 @@ var ptr *string
 opt = optional.FromPtr(ptr) // None
 ptr = optional.ToPtr(optional.Some("hello")) // &"hello"
 ```
+
+## Performance notes
+
+- **Zero-allocation construction.** `Some`, `None`, `Of`, `Get`, `Value`, `IsSome`, `IsNone`, `OrDefault`, and `OrElse` never allocate —
+  `Optional[T]` is `(value T, present bool)`, not `*T`. `ToPtr` and the JSON marshal/unmarshal methods can allocate.
+- **Comparable when `T` is comparable.** `optional.Some(1) == optional.Some(1)` and `optional.None[int]() == optional.None[int]()`, while
+  `optional.Some(0) != optional.None[int]()` — a distinction `*T` cannot make without an extra heap object.
+
+### Optional vs *T
+
+| Property                               | `*T`                                      | `Optional[T]`                              |
+|-----------------------------------------|--------------------------------------------|---------------------------------------------|
+| Construction allocates                  | Yes — heap escape on `&v`                  | No — `(value, present)` lives by value      |
+| Distinguishes `Some(zero)` from `None`  | No — `&zeroT` and `nil` overlap in intent  | Yes — `present` is independent of `value`   |
+| Comparable                              | By pointer identity, not value             | By value, when `T` is comparable            |
+| Type signature signals optionality      | Only "may be nil"                          | "Optional" is right there in the type       |
+
+Pointer-based optionality is the right tool when callers already think of the field as a borrow ("here is a thing or nothing") and the value
+lives elsewhere; `Optional[T]` is the right tool when the value is owned by the field itself and zero is a meaningful state. See
+[`types/ptr`](../ptr/README.md) for the pointer-based primitives.
+
+## See also
+
+- [`types/result`](../result/README.md) — sibling type for "value or error".
+- [`types/redacted`](../redacted/README.md) — sibling type for credential and sensitive-string fields that redact themselves in `fmt`,
+  `log/slog`, `encoding/json`, and BSON.
+- [`types/ptr`](../ptr/README.md) — pointer constructors and safe dereference for cases where `*T` is the right encoding.

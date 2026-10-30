@@ -7,6 +7,42 @@ import "github.com/altessa-s/go-atlas-core/retry"
 Package `retry` provides a small, stdlib-only retry loop with context cancellation, configurable delay policies, and timer reuse — zero `time.After`
 allocations per attempt, so it fits high-throughput retry loops in hot paths.
 
+## Quick start
+
+```go
+err := retry.Do(ctx, func(ctx context.Context) error {
+    return callExternalAPI(ctx)
+},
+    retry.WithMaxAttempts(3), // attempts 0..3 (4 total calls)
+    retry.WithNextDelay(retry.Exponential(
+        500*time.Millisecond,
+        retry.WithExponentialMaxDelay(10*time.Second),
+        retry.WithExponentialFactor(1.5),
+        retry.WithExponentialJitter(0.2),
+    )),
+    retry.WithShouldRetry(func(err error) bool {
+        return !errors.Is(err, ErrNotFound) // don't retry on not-found
+    }),
+    retry.WithOnRetry(func(attempt int, err error, delay time.Duration) {
+        logger.Warn("retrying", slog.Int("attempt", attempt), slog.Any("error", err))
+    }),
+)
+```
+
+## Stop conditions
+
+`Do` returns when any of the following occurs:
+
+- `fn` returns nil — success.
+- `ctx` is canceled — `ctx.Err()` (joined with the last attempt's error under `WithJoinLastError`); a context that has already ended returns before
+  the first attempt unless `WithAttemptOnDoneContext` is set.
+- `WithMaxAttempts` is exhausted — the last error from `fn`.
+- `WithMaxElapsedTime` is exceeded — the last error from `fn`.
+- the `WithShouldRetry` filter returns `false` — the error, immediately.
+- the `WithNextDelay` callback is nil or returns `<= 0` — the error, immediately.
+- with `WithStopBeforeDeadline`, the next delay would reach the context deadline — the last error from `fn`, not `ctx.Err()`.
+- the `WithClock` clock's `Sleep` returns an error — that error (joined with the last attempt's error under `WithJoinLastError`).
+
 ## Options
 
 | Option               | Description                                              |

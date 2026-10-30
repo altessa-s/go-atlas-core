@@ -5,8 +5,8 @@ import "github.com/altessa-s/go-atlas-core/text/strings"
 ```
 
 Package `strings` provides string manipulation, conversion, case transformation, truncation, and pooling utilities. All utility functions are pure,
-allocation-aware, and safe for concurrent use from multiple goroutines. Secret handling lives in [secure](secure) and string interning in
-[intern](intern).
+allocation-aware, and safe for concurrent use from multiple goroutines. Secret handling lives in [secure](secure/README.md) and string interning in
+[intern](intern/README.md).
 
 ## Validation and conversion
 
@@ -14,10 +14,13 @@ allocation-aware, and safe for concurrent use from multiple goroutines. Secret h
 |-----------------------------|-----------------------------------------------------------|
 | `IsEmpty`                   | True if string/`*string` is empty or whitespace (generic) |
 | `IsEmptyOrWhitespace`       | Same for plain strings (allocation-free)                  |
-| `ToPtr`                     | String to `*string`, nil when empty                       |
+| `ToPtr`                     | String to `*string`, nil when empty or whitespace-only     |
 | `FromPtr`                   | `*string` to string, `""` when nil                        |
-| `To[T]`                     | Parse string to any numeric type                          |
+| `To[T]`                     | Parse string to any numeric type, zero value on parse error |
 | `ToInt64`, `ToFloat64`, ... | Pre-instantiated numeric converters                       |
+
+`IsEmpty` checks emptiness via `strings.TrimSpace`, recognizing every Unicode whitespace code point; `IsEmptyOrWhitespace` is the allocation-free
+alternative for plain strings — it iterates runes directly and returns on the first non-space rune instead of trimming both ends.
 
 ## Case and trimming
 
@@ -32,6 +35,11 @@ allocation-aware, and safe for concurrent use from multiple goroutines. Secret h
 | `TrimPrefixFast` / `TrimSuffixFast` | Zero-allocation prefix/suffix removal  |
 | `IsLowercaseUnsafe` / `IsUppercaseUnsafe` / `IsTrimmedUnsafe` | ASCII fast-path variants (Unicode fallback) |
 | `IsASCIISpace`                      | ASCII whitespace byte check            |
+
+All four case-conversion functions use an ASCII fast path with a Unicode (rune-based) fallback for non-ASCII input; the camelCase functions copy
+invalid UTF-8 bytes through unchanged instead of substituting U+FFFD. `ToCamelCase` lowercases only the first letter and leaves every other letter
+that does not start a word untouched, so `"SCREAMING_SNAKE"` becomes `"sCREAMINGSNAKE"`; `ScreamingSnakeToCamelCase` additionally lowercases the rest
+of each word (`"REAL_IP"` becomes `"realIp"`). Both treat underscores and Unicode whitespace as word delimiters.
 
 ## Truncation
 
@@ -55,6 +63,18 @@ Configurable via `JoinOptions`, `SplitOptions`, and `ContainsOptions` structs. A
 | `SplitSeq` | Lazy `iter.Seq` variant of `Split` (same parts, no slice)    |
 | `Contains` | Search with case, whole-word, and count options              |
 
+Case-insensitive splitting matches the separator under Unicode simple case folding (the rule used by `strings.EqualFold`), so `"ſ"` matches `"s"`,
+the Kelvin sign matches `"k"`, and `"Σ"`, `"σ"`, `"ς"` match each other. Pure ASCII input and separator use a fast lowercase scan; anything else uses
+a cached case-insensitive regex bounded at 256 entries. A separator that is not valid UTF-8 is matched exactly. `Contains` returns as soon as the
+first match is confirmed when `ContainsOptions.Count` is false; counting all occurrences and their positions costs an extra pass.
+
+```go
+parts := strings.Split("a,,b", strings.SplitOptions{Separator: ",", SkipEmpty: true}) // ["a", "b"]
+joined := strings.Join([]string{"a", "", "b"}, strings.JoinOptions{Separator: ",", SkipEmpty: true}) // "a,b"
+
+r := strings.Contains("Hello World", "hello", strings.ContainsOptions{CaseSensitive: false}) // r.Found == true
+```
+
 ## Concatenation
 
 | Function       | Description                                  |
@@ -62,11 +82,13 @@ Configurable via `JoinOptions`, `SplitOptions`, and `ContainsOptions` structs. A
 | `Concat`       | Pooled `strings.Builder`, single allocation  |
 | `ConcatUnsafe` | Single `[]byte` allocation, zero-copy result |
 
+Both return the original string unchanged for single-element input (no allocation) and the empty string for zero elements.
+
 ## Comparison
 
 | Function         | Description                                                                   |
 |------------------|-------------------------------------------------------------------------------|
-| `SubstringMatch` | Case-insensitive substring (NOT constant-time; see [secure](secure) for that) |
+| `SubstringMatch` | Case-insensitive substring (NOT constant-time; see [secure](secure/README.md) for that) |
 
 ## Pooling
 
@@ -79,6 +101,17 @@ Configurable via `JoinOptions`, `SplitOptions`, and `ContainsOptions` structs. A
 | `PutStringBuilder`    | Return a `strings.Builder` to the pool           |
 | `BuildString`         | Borrow, build, return in one call                |
 
+`GetStringSlice` guarantees a capacity of at least 64; `GetStringSliceWithCapacity` takes a capacity hint and allocates fresh only when the pooled
+slice is too small. `PutStringSlice` clears element references before returning the backing array to the pool, so strings referenced only by a
+pooled slice remain eligible for GC instead of being pinned until the slot is reused.
+
+```go
+result := strings.BuildString(func(b *strings.Builder) {
+    b.WriteString("hello")
+    b.WriteString(" world")
+})
+```
+
 ## Zero-copy (unsafe)
 
 | Function             | Description                                        |
@@ -86,3 +119,7 @@ Configurable via `JoinOptions`, `SplitOptions`, and `ContainsOptions` structs. A
 | `ToBytesUnsafe`      | String to `[]byte` without copy (**read-only**)    |
 | `FromBytesUnsafe`    | `[]byte` to string without copy (**don't modify**) |
 | `StringEqualsUnsafe` | Pointer-compare interned strings, then fallback    |
+
+Both unsafe conversions use `unsafe.StringData`/`unsafe.SliceData` (Go 1.20+) and return the zero value (`nil` / `""`) for empty input rather than a
+slice or string header pointing at invalid memory. `StringEqualsUnsafe` rejects differing lengths immediately, then compares data pointers in O(1)
+(common for interned strings) before falling back to `==`; unlike `strings.EqualFold`, it is always case-sensitive.

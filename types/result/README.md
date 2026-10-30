@@ -8,6 +8,7 @@ Package `result` provides a generic `Result[T]` value that holds either a value 
 `(T, error)` tuple is awkward to express — channel elements, slice values, map values — not as a general replacement for `(T, error)` returns.
 
 The zero value of `Result[T]` is a valid `Ok` of the zero value of `T`. All constructors and methods are pure and safe for concurrent use.
+Construction never allocates, and `Result[T]` is comparable with `==` when both `T` and the underlying error value are comparable.
 
 ## Functions
 
@@ -71,3 +72,15 @@ for r := range results {
     process(page)
 }
 ```
+
+## Performance notes
+
+- **Zero-allocation construction.** `Ok`, `Err`, and `Of` build the value entirely on the stack; benchmarks show `0 B/op` and `0 allocs/op` on
+  every method.
+- **Comparable when underlying types are comparable.** Two `Result[T]` values compare equal under `==` iff both their value and error fields
+  compare equal. Reach for the explicit accessors when one side is not comparable (e.g. `Result[func()]`).
+
+## See also
+
+- [optional](../optional/README.md) — sibling type for "value or absent" without an error channel.
+- [redacted](../redacted/README.md) — sibling type for credential and sensitive-string fields that redact themselves in `fmt`, `slog`, and JSON.
