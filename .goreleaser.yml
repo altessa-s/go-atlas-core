@@ -7,8 +7,7 @@ builds:
 changelog:
   sort: asc
   use: github
-  # Default github format minus the leading "{{ .SHA }}: ".
-  format: "{{ .Message }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }} <{{ .AuthorEmail }}>{{ end }})"
+  format: "{{ .Message }}"
   groups:
     - title: Features
       regexp: '^.*?feat(\([[:word:]/]+\))??!?:.+$'
