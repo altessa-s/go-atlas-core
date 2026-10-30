@@ -86,6 +86,69 @@ func TestFile_PersistenceError_ReturnsIDButTracksError(t *testing.T) {
 	require.Equal(t, strings.ToUpper(id), id, "id not uppercased: %q", id)
 }
 
+func TestMustNewFile_Success(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "service.id")
+
+	p := MustNewFile(path)
+	require.NotNil(t, p)
+	require.NotEmpty(t, p.ID())
+}
+
+func TestMustNewFile_EmptyPathPanics(t *testing.T) {
+	defer func() {
+		require.NotNil(t, recover(), "expected panic for empty file path")
+	}()
+	MustNewFile("")
+}
+
+// TestFile_Error_TriggersInitialization calls Error() first, on a fresh
+// File that has never had ID() called, to exercise the sync.Once body from
+// Error()'s own call site rather than ID()'s.
+func TestFile_Error_TriggersInitialization(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "service.id")
+
+	p, err := NewFile(path)
+	require.NoError(t, err)
+
+	require.Nil(t, p.Error())
+	require.NotEmpty(t, p.ID(), "ID should be populated once initialization ran")
+}
+
+// TestFile_PersistenceError_TriggersInitialization calls PersistenceError()
+// first, on a fresh File that has never had ID() or Error() called, to
+// exercise the sync.Once body from PersistenceError()'s own call site.
+func TestFile_PersistenceError_TriggersInitialization(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "service.id")
+
+	p, err := NewFile(path)
+	require.NoError(t, err)
+
+	require.Nil(t, p.PersistenceError())
+	require.NotEmpty(t, p.ID(), "ID should be populated once initialization ran")
+}
+
+// TestFile_ReadLine_LineTooLong exercises the bufio.Scanner error branch in
+// readLine: a single line exceeding bufio.MaxScanTokenSize (64KB) with no
+// newline overflows the scanner's token buffer and Scan() stops with
+// bufio.ErrTooLong, distinct from the os.Open failure already covered by
+// TestFile_FileExistsButUnreadable_FailsFast.
+func TestFile_ReadLine_LineTooLong(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "service.id")
+
+	huge := strings.Repeat("a", 70*1024) // no trailing newline
+	require.NoError(t, os.WriteFile(path, []byte(huge), 0o600))
+
+	p, err := NewFile(path)
+	require.NoError(t, err)
+
+	require.Empty(t, p.ID(), "ID should be empty when the existing file cannot be scanned")
+	require.Error(t, p.Error())
+}
+
 func TestFile_NoPersistenceError_WhenFileWritten(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "service.id")

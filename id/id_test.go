@@ -133,9 +133,56 @@ func TestMustNew_Panics(t *testing.T) {
 	MustNew("") // empty file path with no env should fail
 }
 
+func TestMustNew_Success(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "service.id")
+
+	s := MustNew(path)
+	require.NotNil(t, s)
+	require.NotEmpty(t, s.ID())
+}
+
 func TestMustNewWithProvider_Panics(t *testing.T) {
 	defer func() {
 		require.NotNil(t, recover(), "expected panic for nil provider")
 	}()
 	MustNewWithProvider(nil)
+}
+
+func TestMustNewWithProvider_Success(t *testing.T) {
+	s := MustNewWithProvider(NewStatic("test-id"))
+	require.NotNil(t, s)
+	require.Equal(t, "test-id", s.ID())
+}
+
+func TestNewWithEnvProvider_InvalidEnv(t *testing.T) {
+	_, err := NewWithEnvProvider("NONEXISTENT_ENV_VAR_FOR_TEST_WITH_PROVIDER_12345")
+	require.ErrorIs(t, err, ErrInvalidEnv)
+}
+
+func TestNewWithFileProvider_EmptyPath(t *testing.T) {
+	_, err := NewWithFileProvider("")
+	require.Error(t, err)
+}
+
+func TestMustNewWithFileProvider_Success(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "service.id")
+
+	s := MustNewWithFileProvider(path)
+	require.NotNil(t, s)
+	require.NotEmpty(t, s.ID())
+}
+
+func TestMustNewWithFileProvider_Panics(t *testing.T) {
+	defer func() {
+		require.NotNil(t, recover(), "expected panic for empty file path")
+	}()
+	MustNewWithFileProvider("")
+}
+
+func TestMustNewStaticProvider_Success(t *testing.T) {
+	s := MustNewStaticProvider("abc")
+	require.NotNil(t, s)
+	require.Equal(t, "abc", s.ID())
 }
