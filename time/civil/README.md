@@ -34,8 +34,8 @@ date. An anchor day below 1 gives the 1st. `Weekday` of the zero `Date` is meani
   calls them too and produces and accepts exactly what it did before, and both codecs write identical bytes for every date. The legacy object form is
   always decoded with the `encoding/json` (v1) rules — case-insensitive member names — whichever codec reads it. Under v2 a string holding invalid
   UTF-8 is a syntax error rather than `ErrInvalidDate`.
-- **MongoDB**: `data/mongo/bsoncodec.NewRegistry` registers the codec — the `"YYYY-MM-DD"` string, the zero date as `""`. The codec applies `Valid`, so
-  year 0 is refused when writing and reading.
+- **MongoDB**: `Date` does not implement BSON hooks itself. A BSON codec registered by the caller's Mongo registry can encode it as the
+  `"YYYY-MM-DD"` string, the zero date as `""`, applying `Valid` so year 0 is refused when writing and reading.
 
 ```go
 due := civil.MustNew(2026, time.January, 31)

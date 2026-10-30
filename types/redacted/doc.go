@@ -41,7 +41,7 @@
 // # When NOT to use
 //
 // For credentials that must be zeroed from memory after use, reach
-// for core/text/strings/secure.String instead. RedactedString is a
+// for text/strings/secure.String instead. RedactedString is a
 // cheap log/marshal guard, not a secure-memory primitive; the
 // SecureString method on RedactedString is provided as a one-shot
 // bridge for callers that need both behaviors.

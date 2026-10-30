@@ -22,7 +22,7 @@ the process.
 | `ErrFailed` | The setrlimit syscall failed (sentinel wrapping the kernel errno via `%w`) |
 | `ErrInvalidOption` | Operator supplied a negative rlimit value |
 
-`Apply` follows the functional-options convention used elsewhere in go-atlas (e.g. `core/io/files.Walk`, `plugins.NewManager`, `core/runtime/landlock`).
+`Apply` follows the functional-options convention used across this module (e.g. `io/files.Walk`, `runtime/landlock`).
 Negative values are rejected before any syscall runs.
 
 ## Quick start
@@ -54,7 +54,7 @@ func main() {
 
 - **Long-running services** that want hard caps on runaway allocations or descriptor leaks.
 - **CLI tools processing untrusted input** (archive extractors, template renderers) where malformed input could trigger pathological resource use.
-- **Plugin hosts** (see `plugins/sandbox.go`) that compose rlimits with `core/runtime/nonewprivs` and `core/runtime/landlock`.
+- **Plugin hosts** that compose rlimits with `runtime/nonewprivs` and `runtime/landlock`.
 - **Services handling sensitive data** that must not leak memory contents via core dumps — `WithDisableCoreDumps()` is cheap and effective.
 
 ## Caveats
@@ -87,7 +87,7 @@ any additional syscall tests isolated the same way, in a subprocess or container
 
 ## Hardening sequence
 
-This package is **step 2** in the standard go-atlas hardening sequence:
+This package is **step 2** in the hardening sequence:
 
 `nonewprivs` → `rlimits` → `capabilities` → `seccomp` → `landlock`
 
@@ -97,8 +97,7 @@ side-effect-light, so a misconfigured rlimit (rejected by validation) does not l
 ## See also
 
 - [`setrlimit(2)` man page](https://man7.org/linux/man-pages/man2/setrlimit.2.html)
-- `core/runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive (step 1)
-- `core/runtime/capabilities` — Linux capability dropping (step 3)
-- `core/runtime/seccomp` — syscall denylist via seccomp-BPF (step 4)
-- `core/runtime/landlock` — filesystem allowlist (step 5)
-- `plugins/sandbox.go` — real-world consumer composing the sequence
+- `runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive (step 1)
+- `runtime/capabilities` — Linux capability dropping (step 3)
+- `runtime/seccomp` — syscall denylist via seccomp-BPF (step 4)
+- `runtime/landlock` — filesystem allowlist (step 5)

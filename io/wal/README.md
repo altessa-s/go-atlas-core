@@ -114,9 +114,6 @@ For a runnable example see `wal_test.go → TestWAL_Recovery_ReplaysUnackedRecor
 Use `wal` directly when you need a **local, per-process durable spool** for opaque byte payloads — e.g. an outbox, a crash-safe audit buffer, a
 replayable command log. The package does not handle encoding, batching, or consumer back-pressure.
 
-For the common "batching async dispatcher with optional WAL durability" pattern, use [`service/dispatch`](https://github.com/altessa-s/go-atlas/tree/develop/service/dispatch) — it wraps this
-package behind a `Sink[T]` + `Codec[T]` interface and handles replay, retries, metrics, and graceful shutdown.
-
 **Do not** use `wal` as a distributed log: it is a single-process append log on a local filesystem. Cross-node durability belongs to the broker layer.
 
 ## Permissions and migration

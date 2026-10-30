@@ -42,7 +42,7 @@
 // itself a valid Some and you need to distinguish it from None, or
 // when you want the type signature to advertise optionality.
 //
-// For "value or error" use core/types/result.Result instead.
+// For "value or error" use types/result.Result instead.
 //
 // # Serialization
 //
@@ -57,10 +57,10 @@
 // like a bare v (v2 rejects invalid UTF-8 and encodes a nil slice as []).
 // Optional does not implement json.Marshaler or json.Unmarshaler.
 //
-// BSON support is provided by data/mongo/bsoncodec.NewRegistry. Configure the
-// Mongo client or standalone encoder/decoder with that registry. Unconfigured
-// BSON calls fail with ErrBSONCodecRequired instead of losing private fields.
-// None encodes as BSON null (or is omitted with omitempty); Some(zero) preserves
-// its presence. Some(nil) is indistinguishable from None on the BSON wire.
+// Optional does not implement BSON hooks itself; the caller's Mongo registry
+// must register a BSON codec for it. Unconfigured BSON calls fail with
+// ErrBSONCodecRequired instead of losing private fields. None encodes as
+// BSON null (or is omitted with omitempty); Some(zero) preserves its
+// presence. Some(nil) is indistinguishable from None on the BSON wire.
 // This package has no external production dependencies.
 package optional

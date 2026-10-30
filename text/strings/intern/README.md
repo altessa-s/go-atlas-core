@@ -44,5 +44,4 @@ fmt.Printf("hit rate: %.1f%%, hot: %.1f%%, size: %d/%d\n",
     stats.CurrentSize, stats.MaxSize)
 ```
 
-For Prometheus integration, use `observability/metrics.NewInternerMetrics` — see the
-[metrics README](https://github.com/altessa-s/go-atlas/tree/develop/observability/metrics/README.md).
+`Stats()` exposes hot/cold hits, misses, evictions, current size, and max size as plain counters, so callers can export them to any metrics system.

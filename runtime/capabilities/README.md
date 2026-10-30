@@ -104,9 +104,9 @@ cleared (safe default for a long-running service).
 
 - **Long-running services** launched with effective capabilities they no longer need after startup (typical: a service started by systemd with
   `AmbientCapabilities=CAP_NET_BIND_SERVICE`, which binds :443 and then drops the cap).
-- **Plugin hosts** (see `plugins/sandbox.go`) where plugins loaded via `dlopen` would otherwise inherit the host's caps.
+- **Plugin hosts** where plugins loaded via `dlopen` would otherwise inherit the host's caps.
 - **CLI tools** running with file capabilities that want to drop them before invoking untrusted subcommands.
-- **As one layer in the standard go-atlas hardening sequence:** `nonewprivs` → `rlimits` → `capabilities` → `seccomp` → `landlock`.
+- **As one layer in the hardening sequence:** `nonewprivs` → `rlimits` → `capabilities` → `seccomp` → `landlock`.
 
 ## Caveats
 
@@ -176,7 +176,6 @@ Run with `go run smoke.go` (the binary must have `cap_net_bind_service=p` set, e
 ## See also
 
 - [`capabilities(7)` man page](https://man7.org/linux/man-pages/man7/capabilities.7.html)
-- `core/runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive, first step in the hardening sequence
-- `core/runtime/rlimits` — resource caps, second step
-- `core/runtime/landlock` — filesystem allowlist, final step
-- `plugins/sandbox.go` — real-world consumer composing all four
+- `runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive, first step in the hardening sequence
+- `runtime/rlimits` — resource caps, second step
+- `runtime/landlock` — filesystem allowlist, final step

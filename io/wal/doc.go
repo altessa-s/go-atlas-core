@@ -86,7 +86,6 @@
 // segments; the expected N is 1-2 in typical dispatcher configurations.
 //
 // For producers that need delivery workers, retries and back-pressure on
-// top of the log, front the WAL with the batching engine in
-// [github.com/altessa-s/go-atlas/service/dispatch],
-// which accumulates items in memory and hands batches to this package.
+// top of the log, front the WAL with a batching engine that accumulates
+// items in memory and hands batches to this package.
 package wal

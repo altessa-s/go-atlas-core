@@ -1,6 +1,6 @@
 # Runtime
 
-Key concepts for the `core/runtime` package tree — shutdown hooks, resource cleanup, and application metadata.
+Key concepts for the `runtime` package tree — shutdown hooks, resource cleanup, and application metadata.
 
 ```
 import "github.com/altessa-s/go-atlas-core/runtime"
@@ -102,4 +102,3 @@ See [appinfo.md](appinfo.md) for the full reference.
 - [concurrency.md](concurrency.md) — batch processing, concurrency limits, retry, panic recovery
 - [security.md](security.md) — Linux process-hardening primitives: capabilities, seccomp, landlock, rlimits, no-new-privs
 - [signals.md](signals.md) — OS signal handling, priority execution, worker pools, graceful shutdown
-- [../../service/scheduler.md](https://github.com/altessa-s/go-atlas/tree/develop/docs/service/scheduler.md) — periodic task scheduling

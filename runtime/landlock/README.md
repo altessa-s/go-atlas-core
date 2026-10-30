@@ -9,7 +9,7 @@ A minimal, cgo-free Go wrapper (built on `golang.org/x/sys/unix`) around the Lin
 later clones inherits the restrictions. Peer threads are not restricted — see [Caveats](#caveats).
 
 Landlock requires **no root, no capabilities, no setuid**. Any unprivileged task can restrict itself; `Apply` automatically sets the
-`PR_SET_NO_NEW_PRIVS` prerequisite once Landlock support is confirmed (internally delegated to [`core/runtime/nonewprivs`](../nonewprivs/README.md)), so
+`PR_SET_NO_NEW_PRIVS` prerequisite once Landlock support is confirmed (internally delegated to [`runtime/nonewprivs`](../nonewprivs/README.md)), so
 callers do not need to invoke `prctl` themselves.
 
 ## API
@@ -25,8 +25,8 @@ callers do not need to invoke `prctl` themselves.
 | `ErrFailed` | Ruleset setup failed (sentinel wrapping the kernel errno via `%w` — `errors.As` recovers the raw `syscall.Errno`) |
 | `ErrInvalidOption` | Operator supplied an empty or non-absolute path (sentinel) |
 
-`Apply` follows the functional-options convention used elsewhere in go-atlas (e.g. `core/io/files.Walk`, `plugins.NewManager`,
-`data/probfilter.NewManager`). Every path must be a non-empty absolute filesystem path; `Apply` validates the allowlist before invoking any syscall, so
+`Apply` follows the functional-options convention used across this module (e.g. `io/files.Walk`, `runtime/rlimits`). Every path must be a
+non-empty absolute filesystem path; `Apply` validates the allowlist before invoking any syscall, so
 misconfiguration surfaces as a plain error (not wrapped in `ErrFailed` or `ErrUnsupported`).
 
 ## Quick start
@@ -106,7 +106,7 @@ err := landlock.Apply(append(baseOpts, extra...)...)
 | Audit log writer | Write access limited to the audit directory even if the code is compromised |
 | Secret loader | Read access limited to the credentials path + cache |
 | Template renderer processing untrusted templates | Template can only touch its working directory |
-| Plugin manager (see `plugins/sandbox.go`) | Plugins can't escape their allowlisted filesystem view |
+| Plugin manager | Plugins can't escape their allowlisted filesystem view |
 | Test harness verifying the code-under-test doesn't touch unexpected paths | Fail-fast assertion via `EACCES` on forbidden access |
 
 ## Kernel ABI versions
@@ -158,7 +158,7 @@ when the host kernel does not match its branch. Keep any additional syscall test
 
 ## Hardening sequence
 
-This package is the **final step** in the standard go-atlas hardening sequence:
+This package is the **final step** in the hardening sequence:
 
 `nonewprivs` → `rlimits` → `capabilities` → `seccomp` → `landlock`
 
@@ -170,9 +170,7 @@ hardening pipeline drops capabilities (which removes `CAP_SYS_ADMIN`, the only a
 
 - [Kernel documentation](https://docs.kernel.org/userspace-api/landlock.html)
 - [LWN article](https://lwn.net/Articles/859908/) (announcement, Landlock v1)
-- `core/runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive (step 1)
-- `core/runtime/rlimits` — process resource limits (step 2)
-- `core/runtime/capabilities` — Linux capability dropping (step 3)
-- `core/runtime/seccomp` — syscall denylist via seccomp-BPF (step 4)
-- `plugins/sandbox.go` in this repository — a real-world consumer that adds plugin-specific conveniences (auto-include plugin dir, system libs) on top
-  of the raw `landlock.Apply` call.
+- `runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive (step 1)
+- `runtime/rlimits` — process resource limits (step 2)
+- `runtime/capabilities` — Linux capability dropping (step 3)
+- `runtime/seccomp` — syscall denylist via seccomp-BPF (step 4)

@@ -41,6 +41,6 @@
 //	v := panics.MustResult(r.Get())
 //
 // For asynchronous fan-out with aggregated errors prefer
-// core/runtime/concurrency.ProcessCollect over a hand-rolled
+// runtime/concurrency.ProcessCollect over a hand-rolled
 // chan Result[T].
 package result

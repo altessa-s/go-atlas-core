@@ -84,10 +84,10 @@ A curated **allowlist** of syscalls for a Go-runtime process is an anti-pattern,
 
 ## When to use it
 
-- **Plugin hosts** (see `plugins/sandbox.go`) where plugins loaded via `dlopen` would otherwise inherit the host's full syscall surface.
+- **Plugin hosts** where plugins loaded via `dlopen` would otherwise inherit the host's full syscall surface.
 - **Long-running services** that have no reason to call `mount`, `ptrace`, `bpf`, or the kernel-module syscalls.
 - **CLI tools processing untrusted input** (archive extractors, template renderers) that want to narrow the blast radius of a hypothetical RCE.
-- **As one layer in the go-atlas hardening sequence:** `nonewprivs` → `rlimits` → `capabilities` → `seccomp` → `landlock`.
+- **As one layer in the hardening sequence:** `nonewprivs` → `rlimits` → `capabilities` → `seccomp` → `landlock`.
 
 ## Caveats
 
@@ -98,9 +98,9 @@ A curated **allowlist** of syscalls for a Go-runtime process is an anti-pattern,
   correctly regardless of which OS thread they run on. If TSYNC fails (a peer thread is in an uninterruptible syscall), the error includes the failing
   TID for debugging.
 - **Irreversible.** Seccomp filters form a stack and can only be made more restrictive; there is no "remove filter" syscall. Like every primitive in the
-  `core/runtime` hardening family.
+  `runtime` hardening family.
 - **`PR_SET_NO_NEW_PRIVS` is set automatically.** seccomp(2) requires either that prctl or `CAP_SYS_ADMIN`, and this package delegates to
-  `core/runtime/nonewprivs.Set()` internally so callers never need to invoke `prctl` themselves.
+  `runtime/nonewprivs.Set()` internally so callers never need to invoke `prctl` themselves.
 - **Defense in depth, not isolation.** A malicious dependency already loaded in-process can still read every byte of memory in the host's address space.
   Seccomp closes specific escalation vectors (container escape, kernel-module loading, ptrace, bpf, etc.), not the ambient code-execution vector.
 
@@ -165,9 +165,7 @@ ok
 - [Kernel seccomp documentation](https://docs.kernel.org/userspace-api/seccomp_filter.html)
 - Docker's [default seccomp profile](https://github.com/moby/moby/blob/master/profiles/seccomp/default.json) — a reference for container-level seccomp
   configuration.
-- `core/runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive, the prerequisite for this package (set automatically).
-- `core/runtime/rlimits` — resource caps, second step in the hardening sequence.
-- `core/runtime/capabilities` — Linux capability dropping, third step.
-- `core/runtime/landlock` — filesystem allowlist, final step.
-- `plugins/sandbox.go` — real-world consumer of the other four hardening primitives. Seccomp integration is an optional follow-up when a concrete
-  plugin-sandbox use case appears.
+- `runtime/nonewprivs` — `PR_SET_NO_NEW_PRIVS` primitive, the prerequisite for this package (set automatically).
+- `runtime/rlimits` — resource caps, second step in the hardening sequence.
+- `runtime/capabilities` — Linux capability dropping, third step.
+- `runtime/landlock` — filesystem allowlist, final step.

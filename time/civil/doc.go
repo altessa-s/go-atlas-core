@@ -38,6 +38,6 @@
 // [github.com/altessa-s/go-atlas-core/time/clock.Clock], so tests can pin
 // today's date with a fake clock; [Today] uses the real clock.
 //
-// The MongoDB codec for Date is registered by
-// [github.com/altessa-s/go-atlas/data/mongo/bsoncodec.NewRegistry].
+// Date does not implement BSON hooks itself; a BSON codec for it must be
+// registered by the caller's Mongo registry.
 package civil

@@ -45,8 +45,8 @@ The zero value of `Result[T]` is a valid `Ok` of the zero value of `T`. All cons
   v := panics.MustResult(r.Get())
   ```
 
-  See [`core/runtime/panics`](../../runtime/panics/README.md).
-- **Asynchronous fan-out with aggregated errors.** Prefer [`core/runtime/concurrency.ProcessCollect`](../../runtime/concurrency/README.md) over a
+  See [`runtime/panics`](../../runtime/panics/README.md).
+- **Asynchronous fan-out with aggregated errors.** Prefer [`runtime/concurrency.ProcessCollect`](../../runtime/concurrency/README.md) over a
   hand-rolled `chan Result[T]`.
 - **Functional pipelines (`Map`, `AndThen`, `Then`, …).** In Go they read as nested closures rather than terse pipelines, so plain `if err != nil` stays
   shorter and clearer. Convert back with `Get` and use ordinary control flow.

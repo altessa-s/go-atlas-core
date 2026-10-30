@@ -87,5 +87,5 @@ Why this order:
 5. **`landlock`** runs last. The filesystem allowlist is the most irreversible step (no relaxation for the lifetime of the calling task) and depends on
    the `NO_NEW_PRIVS` set in step 1.
 
-`plugins/sandbox.go` implements this sequence (minus seccomp, which is intentionally not wired into the plugin sandbox so the audited denylist stays
-stable across deployments — operators call `seccomp.BlockDangerousSyscalls()` directly during host startup if they want it).
+A sandboxing host composes these packages directly in this order; seccomp is often kept as a separate, explicit step (e.g. calling
+`seccomp.BlockDangerousSyscalls()` during host startup) so an audited denylist stays stable across deployments.

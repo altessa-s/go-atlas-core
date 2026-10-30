@@ -60,9 +60,10 @@ JSON support is implemented with the `encoding/json/v2` interfaces `MarshalJSONT
 does in v2 — a nil slice as `[]`, invalid UTF-8 rejected, pointer-receiver marshalers of `T` called. Code that type-asserts `json.Marshaler` /
 `json.Unmarshaler` no longer matches `Optional`; call `json.Marshal` / `json.Unmarshal` (either version) instead.
 
-BSON uses [`data/mongo/bsoncodec.NewRegistry`](https://github.com/altessa-s/go-atlas/tree/develop/data/mongo/bsoncodec/README.md). Set the registry on Mongo client options or standalone BSON
-encoders and decoders. Without it, present Optional fields return `ErrBSONCodecRequired`; this prevents silent serialization as empty documents. None
-with `bson:",omitempty"` is omitted, and `Some(nil)` decodes as None because both encode as BSON null. Core consumers do not import the Mongo driver.
+`Optional` does not implement BSON hooks itself. A BSON codec for it must be registered by the caller's Mongo registry and set on the Mongo client
+options or standalone BSON encoders and decoders. Without it, present Optional fields return `ErrBSONCodecRequired`; this prevents silent
+serialization as empty documents. None with `bson:",omitempty"` is omitted, and `Some(nil)` decodes as None because both encode as BSON null. This
+module does not import the Mongo driver.
 
 ## When to use
 
@@ -75,7 +76,7 @@ with `bson:",omitempty"` is omitted, and `Some(nil)` decodes as None because bot
 
 - **Ordinary lookups.** Keep the `value, ok := m[k]` and `value, ok := <-ch` idioms — wrapping each in `Optional` adds noise.
 - **Pointer fields where `nil` already means "absent".** `*T` is fine when callers cannot construct `Some(zero)` legitimately.
-- **"Value or error" cases.** Use [`core/types/result`](../result/README.md), not `Optional[T]` plus a side-channel error.
+- **"Value or error" cases.** Use [`types/result`](../result/README.md), not `Optional[T]` plus a side-channel error.
 - **Functional pipelines (`Map`, `AndThen`, `Then`, …).** In Go they read as nested closures rather than terse pipelines, so plain `if ok` stays shorter
   and clearer. Convert back with `Get` and use ordinary control flow.
 

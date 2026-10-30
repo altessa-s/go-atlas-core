@@ -45,8 +45,8 @@ func main() {
 
 - **Long-running services** that have no reason to exec setuid binaries.
 - **CLI tools that ingest untrusted input** and want to prevent injected commands from escalating via `sudo`, `mount`, etc.
-- **Plugin hosts** (see `plugins/sandbox.go`) where a compromised plugin must not be able to escalate.
-- **Any process preparing to call Landlock** — `landlock_restrict_self(2)` requires it. Note that [`core/runtime/landlock`](../landlock/README.md)
+- **Plugin hosts** where a compromised plugin must not be able to escalate.
+- **Any process preparing to call Landlock** — `landlock_restrict_self(2)` requires it. Note that [`runtime/landlock`](../landlock/README.md)
   already calls `nonewprivs.Set()` internally once it has confirmed Landlock support, so you do not need to call it manually before invoking
   `landlock.Apply`.
 
@@ -64,11 +64,11 @@ func main() {
 - **Breaks legitimate SUID tools.** Once set on a thread, `sudo`, `su`, `mount`, and any other setuid helper invoked from that thread will silently fail
   to gain the expected privileges. Only enable in processes that have no legitimate need to invoke setuid binaries.
 - **Not a sandbox on its own.** This primitive only blocks privilege escalation on exec. It does nothing about filesystem access (use
-  [`core/runtime/landlock`](../landlock/README.md)) or resource limits (use [`core/runtime/rlimits`](../rlimits/README.md)).
+  [`runtime/landlock`](../landlock/README.md)) or resource limits (use [`runtime/rlimits`](../rlimits/README.md)).
 
 ## Hardening sequence
 
-This package is the **first step** in the standard go-atlas hardening sequence:
+This package is the **first step** in the hardening sequence:
 
 `nonewprivs` → `rlimits` → `capabilities` → `seccomp` → `landlock`
 
@@ -77,8 +77,7 @@ This package is the **first step** in the standard go-atlas hardening sequence:
 ## See also
 
 - [Kernel documentation](https://www.kernel.org/doc/html/latest/userspace-api/no_new_privs.html)
-- `core/runtime/rlimits` — process resource limits (step 2)
-- `core/runtime/capabilities` — Linux capability dropping (step 3)
-- `core/runtime/seccomp` — syscall denylist via seccomp-BPF (step 4)
-- `core/runtime/landlock` — filesystem allowlist (step 5)
-- `plugins/sandbox.go` — real-world consumer composing the sequence
+- `runtime/rlimits` — process resource limits (step 2)
+- `runtime/capabilities` — Linux capability dropping (step 3)
+- `runtime/seccomp` — syscall denylist via seccomp-BPF (step 4)
+- `runtime/landlock` — filesystem allowlist (step 5)

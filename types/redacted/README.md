@@ -104,8 +104,8 @@ access-control boundary.
 
 ## When NOT to use
 
-- **Credentials that must be zeroed from memory after use** — use [`core/text/strings/secure.String`](../../text/strings/secure) directly, or call
+- **Credentials that must be zeroed from memory after use** — use [`text/strings/secure.String`](../../text/strings/secure) directly, or call
   `RedactedString.SecureString()` for a one-shot bridge.
 - **Already-public identifiers** that just happen to look like secrets (e.g. account IDs). `RedactedString` actively prevents inspection, which is the
   wrong default for non-secret data.
-- **Generic optionality.** Reach for [`core/types/optional`](../optional/README.md) when the question is "present or absent", not "redact in output".
+- **Generic optionality.** Reach for [`types/optional`](../optional/README.md) when the question is "present or absent", not "redact in output".

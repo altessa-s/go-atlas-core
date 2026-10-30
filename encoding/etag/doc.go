@@ -28,7 +28,7 @@
 // reads it back, accepting only the canonical form. [ParseVersion] and
 // [CheckVersion] validate the etag a client sends back with a mutation and
 // fail with [ErrMissing], [ErrMalformed] or [ErrMismatch] (a
-// core/errors.ErrConflict).
+// errors.ErrConflict).
 //
 // # Transports
 //
