@@ -11,6 +11,11 @@ library and each other — with narrow, package-scoped exceptions: `io/spoolbudg
 `rlimits`, `seccomp`) use `golang.org/x/sys/unix`. `text/charset` uses `golang.org/x/text` for charset lookup and decoding; Linux seccomp tests
 use `golang.org/x/net/bpf` to interpret filters. Each package can be imported independently without pulling in the rest of the module.
 
+## Requirements
+
+Go 1.27 or later (`go 1.27.0` in `go.mod`). The module uses Go 1.27 APIs — `encoding/json/v2`, `testing/synctest.Sleep`, the `goroutineleak`
+profile — so earlier toolchains cannot build it.
+
 ## Packages
 
 | Package                      | Description                                                                 |
