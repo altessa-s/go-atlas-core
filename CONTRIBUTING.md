@@ -109,8 +109,8 @@ Imports must follow this order (enforced by `gci` via `.golangci.yml`):
 All `.go` files must include the copyright header. Run `make copyright` to add it automatically.
 
 ```go
-// Copyright 2026 ALTESSA SOLUTIONS INC. All rights reserved.
-// Use of this source code is governed by license that can be found in
+// Copyright 2026 ALTESSA SOLUTIONS INC.
+// Use of this source code is governed by the MIT license that can be found in
 // the LICENSE file.
 ```
 
