@@ -1,0 +1,60 @@
+# Commit Scopes for go-atlas-core
+# Use these scopes in conventional commits: type(scope): description
+# Example: fix(runtime/concurrency): stop workers when the context is canceled
+
+# Root-level scopes
+root                        # Repository-wide changes (go.mod, Makefile, configs)
+deps                        # Dependency management
+README                      # Root README
+docs                        # Documentation
+
+# Packages
+collections                 # Generic collection helpers
+collections/maps            # Map helpers, ImmutableMap
+collections/slices          # Slice helpers
+context                     # Context timeout helpers
+encoding                    # Encoding helpers
+encoding/etag               # Entity tags
+encoding/hash               # Hash abstractions
+encoding/keys               # Composite keys and digests
+encoding/serializer         # Serializer interface
+errors                      # Error wrapping and classification
+id                          # Service identity
+io                          # I/O helpers
+io/files                    # File walk and listing
+io/spool                    # Spooling to disk
+io/spoolbudget              # Spool memory budget
+io/wal                      # Write-ahead log
+retry                       # Retry loop and delay policies
+runtime                     # Shutdown hooks
+runtime/appinfo             # Build and version info
+runtime/capabilities        # Linux capabilities
+runtime/concurrency         # Bounded fan-out and adaptive limits
+runtime/helpers             # Goroutine introspection
+runtime/landlock            # Linux Landlock sandboxing
+runtime/nonewprivs          # Linux no_new_privs
+runtime/panics              # Panic recovery
+runtime/rlimits             # Resource limits
+runtime/seccomp             # Linux seccomp filters
+runtime/signals             # OS signal dispatch
+runtime/singleflight        # Keyed singleflight
+text                        # Text helpers
+text/charset                # Charsets
+text/strings                # String helpers
+time                        # Time helpers
+time/civil                  # Calendar dates
+time/clock                  # Injectable clock
+time/timeformat             # Time formatting
+types                       # Type helpers
+types/bits                  # Bit operations
+types/constraints           # Generic constraints
+types/nilcheck              # Nil checks
+types/optional              # Optional values
+types/ptr                   # Pointer helpers
+types/redacted              # Redacted strings
+types/result                # Result values
+internal/testhelpers        # Shared test helpers
+
+# Tooling
+devtools                    # Development tool dependencies
+ci                          # GitHub Actions workflows and scripts

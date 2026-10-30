@@ -1,0 +1,60 @@
+// Copyright 2021-2026 ALTESSA SOLUTIONS INC.
+// Use of this source code is governed by the MIT license that can be found in
+// the LICENSE file.
+
+package redacted_test
+
+import (
+	"encoding/json/v2"
+	"testing"
+
+	"github.com/altessa-s/go-atlas-core/types/redacted"
+)
+
+func BenchmarkMarshalJSONTo(b *testing.B) {
+	s := redacted.RedactedString("super-secret")
+	var sink []byte
+	for b.Loop() {
+		out, _ := json.Marshal(s)
+		sink = out
+	}
+	_ = sink
+}
+
+func BenchmarkUnmarshalJSONFrom(b *testing.B) {
+	data := []byte(`"super-secret"`)
+	var s redacted.RedactedString
+	for b.Loop() {
+		_ = json.Unmarshal(data, &s)
+	}
+}
+
+func BenchmarkMarshalYAML(b *testing.B) {
+	s := redacted.RedactedString("super-secret")
+	var sink any
+	for b.Loop() {
+		out, _ := s.MarshalYAML()
+		sink = out
+	}
+	_ = sink
+}
+
+func BenchmarkMarshalText(b *testing.B) {
+	s := redacted.RedactedString("super-secret")
+	var sink []byte
+	for b.Loop() {
+		out, _ := s.MarshalText()
+		sink = out
+	}
+	_ = sink
+}
+
+func BenchmarkMarshalBSONValue(b *testing.B) {
+	s := redacted.RedactedString("super-secret")
+	var sink []byte
+	for b.Loop() {
+		_, out, _ := s.MarshalBSONValue()
+		sink = out
+	}
+	_ = sink
+}

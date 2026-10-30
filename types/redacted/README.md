@@ -1,0 +1,141 @@
+# redacted
+
+```go
+import "github.com/altessa-s/go-atlas-core/types/redacted"
+```
+
+Package `redacted` provides `RedactedString`, a named `string` type for credentials and other sensitive fields that substitutes its value with the fixed
+placeholder `<redacted>` in every standard output context — `fmt`, `log/slog`, `encoding/json`, `gopkg.in/yaml.v3`, `encoding.TextMarshaler`, and
+`go.mongodb.org/mongo-driver/v2/bson`. The plain text is reachable only through the explicit `Expose` accessor. Its companion `URL` masks only the
+user-info password of a URL (see [URL](#url)).
+
+`RedactedString` keeps `reflect.Kind == reflect.String`. Decoders that honor the unmarshal interfaces call its methods — `yaml.v3` invokes
+`UnmarshalYAML`, the Mongo v2 driver `UnmarshalBSONValue`, `encoding/json` and `encoding/json/v2` `UnmarshalJSONFrom` — while code that sets fields
+purely through reflection bypasses them, which is safe because the underlying kind is `string`.
+
+## Methods
+
+| Method                                       | Description                                                                       |
+|----------------------------------------------|-----------------------------------------------------------------------------------|
+| `String() string`                            | `"<redacted>"` (fmt.Stringer)                                                     |
+| `GoString() string`                          | `"RedactedString{<redacted>}"` (fmt.GoStringer; used by `%#v`)                    |
+| `LogValue() slog.Value`                      | `slog.StringValue("<redacted>")` (slog.LogValuer)                                 |
+| `Expose() string`                            | Underlying plain text — the **only** path to the secret                           |
+| `IsEmpty() bool`                             | `s == ""`                                                                         |
+| `IsZero() bool`                              | Same as `IsEmpty`; lets `bson:",omitempty"` strip empty fields                    |
+| `SecureString() *secure.String`              | Convert to a pooled, memory-zeroing `secure.String` — caller owns `Clear()`       |
+| `MarshalJSONTo(*jsontext.Encoder) error`     | `"<redacted>"` (JSON string; encoding/json/v2)                                    |
+| `MarshalJSON() ([]byte, error)`              | `"<redacted>"` for third-party encoders that only know `json.Marshaler`           |
+| `UnmarshalJSONFrom(*jsontext.Decoder) error` | Stores a JSON string verbatim; JSON `null` clears the value; other types rejected |
+| `MarshalYAML() (any, error)`                 | `"<redacted>"` scalar (yaml.v3)                                                   |
+| `UnmarshalYAML(func(any) error) error`       | Decodes a scalar string into the underlying value                                 |
+| `MarshalText() ([]byte, error)`              | `[]byte("<redacted>")`                                                            |
+| `UnmarshalText([]byte) error`                | Stores incoming bytes verbatim                                                    |
+| `MarshalBSONValue() (byte, []byte, error)`   | BSON string `<redacted>`                                                          |
+| `UnmarshalBSONValue(byte, []byte) error`     | Decodes a BSON string into the underlying value; BSON null clears it to `""`      |
+
+```go
+s := redacted.RedactedString("mongodb://user:pass@host/db")
+
+fmt.Sprintf("%v %s %#v", s, s, s)
+// "<redacted> <redacted> RedactedString{<redacted>}"
+
+slog.Info("connecting", "uri", s)
+// level=INFO msg=connecting uri=<redacted>
+```
+
+## URL
+
+`URL` is a named `string` for URLs that may embed credentials (proxy URLs, DSNs written as URLs). Unlike `RedactedString` it keeps the URL readable:
+`String`, `GoString`, `LogValue`, `MarshalJSONTo`, `MarshalYAML` and `MarshalText` render it with the user-info password replaced by `xxxxx`
+(`url.URL.Redacted`). A value that does not parse, holds an `@` outside a parsed user info (`user:pass@host:3128` without a scheme), or holds more than
+one `@` (an unencoded `/` in the password moves part of it into the host and path) renders as `<redacted>`; `HasAmbiguousUserInfo()` reports that case
+so validators can reject such URLs. `Unmarshal*` store the input verbatim, `Expose()` returns the plain text, and `IsEmpty` / `IsZero` report the empty
+string. `URL` has no BSON hooks: it is a configuration and display type, and the Mongo driver stores it as a plain string.
+
+```go
+type ProxyConfig struct {
+    URL redacted.URL `yaml:"url"`
+}
+
+cfg := ProxyConfig{URL: "http://svc:secret@proxy:3128"}
+fmt.Printf("%+v\n", cfg)       // {URL:http://svc:xxxxx@proxy:3128}
+u, _ := url.Parse(cfg.URL.Expose()) // intentional, plain text
+```
+
+## Serialization
+
+`RedactedString` implements `json.MarshalerTo` / `json.UnmarshalerFrom` (`encoding/json/v2`), the YAML marshaler / callback unmarshaler
+(`gopkg.in/yaml.v3`), `encoding.TextMarshaler` / `encoding.TextUnmarshaler`, and `bson.ValueMarshaler` / `bson.ValueUnmarshaler`
+(`go.mongodb.org/mongo-driver/v2`). `Marshal` always emits the placeholder `<redacted>`; `Unmarshal` stores the incoming string verbatim, so a
+value loaded from YAML/JSON/BSON is exposed by
+`Expose()` but re-serializing the same struct redacts it again. `IsZero` returning `true` for the empty string makes `bson:",omitempty"` strip empty
+fields entirely from the on-the-wire document.
+
+JSON goes through `MarshalJSONTo` / `UnmarshalJSONFrom`. Both `encoding/json` and `encoding/json/v2` call them, so the secret never reaches the wire:
+`"\u003credacted\u003e"` under `encoding/json` (HTML-escaped) and `"<redacted>"` under `encoding/json/v2`, the masked URL for `URL` (invalid UTF-8 in
+it written as U+FFFD under both). Decoding follows the calling codec: `encoding/json/v2` rejects a string holding invalid UTF-8 that `encoding/json`
+replaces with U+FFFD. Both types keep `MarshalJSON` (marshal side only) so third-party encoders that only know `json.Marshaler` (goccy/go-json,
+jsoniter, ...) still redact instead of reflecting on the underlying string.
+
+This package has no external production imports. Its fixed BSON redaction encoding uses stdlib and works without a custom registry. YAML decoding uses
+the callback interface supported by yaml.v3.
+
+## Performance notes
+
+- `RedactedString.String`, `GoString`, `LogValue`, `Expose`, `IsEmpty`, `IsZero`, and `MarshalYAML` are all `0 B/op` / `0 allocs/op` (measured at
+  ~1.6-1.8 ns/op on Apple M4 Pro) — each returns a precomputed placeholder or a direct field read, never touching the heap.
+- `MarshalText` allocates once (16 B) because `encoding.TextMarshaler`'s contract forbids returning a `[]byte` that aliases package state.
+- `MarshalJSONTo` writes the placeholder token straight into the caller's `jsontext.Encoder` and allocates nothing of its own; the allocations
+  visible in a full `json.Marshal` round trip come from the standard library's encoder setup and reflection, not from this method.
+- `MarshalBSONValue` allocates one small buffer for the encoded BSON string; `UnmarshalBSONValue` copies the payload into a fresh Go string.
+- `URL`'s output methods (`String`, `GoString`, `LogValue`, `MarshalJSONTo`, `MarshalYAML`, `MarshalText`) call `url.Parse` on every invocation and
+  are not allocation-free, even for a URL with no embedded credentials — treat `URL` as a formatting convenience, not a hot-path type.
+
+## Usage
+
+```go
+type DatabaseConfig struct {
+    URI redacted.RedactedString `yaml:"uri" json:"uri" bson:"uri"`
+}
+
+cfg := DatabaseConfig{URI: "mongodb://user:pass@host/db"}
+
+slog.Info("connecting", "cfg", cfg)
+// level=INFO msg=connecting cfg.uri=<redacted>
+
+raw, _ := json.Marshal(cfg) // encoding/json/v2
+// raw == {"uri":"<redacted>"} (encoding/json writes "\u003credacted\u003e")
+
+conn := cfg.URI.Expose() // intentional, plain text
+client, _ := mongo.Connect(options.Client().ApplyURI(conn))
+```
+
+## Limitations
+
+Redaction is enforced only on the `fmt` / `log/slog` / `encoding/json` / `yaml.v3` / `encoding.TextMarshaler` / `bson` code paths, all of which dispatch
+through the interfaces implemented above. Reflect-based access bypasses them entirely: `reflect.Value.String()` on a `RedactedString` field returns the
+plaintext, and any library that reads named-string fields via `reflect` without routing through `fmt`, `json`, or `bson` (custom serializers, deep-copy
+or diff utilities, template engines walking structs) sees the secret. Treat `RedactedString` as protection against accidental output, not as an
+access-control boundary.
+
+## When to use
+
+- Struct fields for credentials, tokens, URIs containing embedded passwords, API keys, signing seeds.
+- Any field that must never accidentally end up in a log line, a JSON dump, a stack trace, or an error message.
+
+## When NOT to use
+
+- **Credentials that must be zeroed from memory after use** — use [`text/strings/secure.String`](../../text/strings/secure/README.md) directly, or call
+  `RedactedString.SecureString()` for a one-shot bridge.
+- **Already-public identifiers** that just happen to look like secrets (e.g. account IDs). `RedactedString` actively prevents inspection, which is the
+  wrong default for non-secret data.
+- **Generic optionality.** Reach for [`types/optional`](../optional/README.md) when the question is "present or absent", not "redact in output".
+- **Programmatic comparisons against the underlying value.** Use `s.Expose() == "expected"` rather than relying on `==` against an untyped
+  constant — that comparison only works because the underlying kind is `string`, and is easy to break later.
+
+## See also
+
+- [`types/optional`](../optional/README.md) — sibling type for "value or absent".
+- [`types/result`](../result/README.md) — sibling type for "value or error".
+- [`text/strings/secure`](../../text/strings/secure/README.md) — pooled, memory-zeroing companion for credentials that must be wiped after use.
