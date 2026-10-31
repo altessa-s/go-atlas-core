@@ -32,7 +32,7 @@ type WeakMap[K comparable, V any] struct {
 // entry.
 type weakEntry[V any] struct {
 	wp      weak.Pointer[V]
-	cleanup runtime.Cleanup
+	cleanup interface{ Stop() } // permits observing stops in tests
 	gen     uint64
 }
 

@@ -39,32 +39,6 @@ func TestWeakMap_SetSameLiveValueAllocatesNothing(t *testing.T) {
 	runtime.KeepAlive(val)
 }
 
-// Every replaced value must have its cleanup stopped: cleanups of live values
-// otherwise pile up in the runtime, one per Set. The runtime keeps cleanup
-// records off the Go heap and accounts them in MemStats.OtherSys, reusing the
-// records Stop frees, so the growth of OtherSys bounds the number of live
-// records. Serial: it reads process-wide memory statistics.
-func TestWeakMap_ReplaceStopsPreviousCleanup(t *testing.T) {
-	m := coremaps.NewWeakMap[int, testhelpers.User]()
-	a, b := &testhelpers.User{ID: 1}, &testhelpers.User{ID: 2}
-
-	var before, after runtime.MemStats
-	runtime.ReadMemStats(&before)
-	const sets = 64_000
-	for i := range sets / 2 {
-		m.Set(i%16, a)
-		m.Set(i%16, b)
-	}
-	runtime.ReadMemStats(&after)
-
-	// A leaked record per Set would add several megabytes; allow 1 MiB of
-	// unrelated runtime growth.
-	grown := int64(after.OtherSys) - int64(before.OtherSys)
-	require.Less(t, grown, int64(1<<20), "OtherSys grew by %d bytes over %d Set calls", grown, sets)
-	runtime.KeepAlive(a)
-	runtime.KeepAlive(b)
-}
-
 // The cleanup of a replaced value must never delete the entry that replaced it.
 func TestWeakMap_CollectingReplacedValueKeepsNewEntry(t *testing.T) {
 	t.Parallel()
