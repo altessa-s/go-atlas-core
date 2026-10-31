@@ -81,3 +81,78 @@ func BenchmarkParseVersion(b *testing.B) {
 		_, _ = etag.ParseVersion(`W/"1234567"`)
 	}
 }
+
+// BenchmarkCheckVersion measures the optimistic-concurrency check an update
+// handler runs on its If-Match value.
+func BenchmarkCheckVersion(b *testing.B) {
+	header := etag.FromVersion(1234567).String()
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := etag.CheckVersion(header, 1234567); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkMatch measures the conditional-request comparisons against a
+// parsed If-None-Match list.
+func BenchmarkMatch(b *testing.B) {
+	current := etag.Strong("686d6f3e2c")
+	tags, _, err := etag.ParseList(`"aaaa", W/"bbbb", "cccc", W/"686d6f3e2c"`)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.Run("Weak", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			matched := false
+			for _, t := range tags {
+				matched = matched || t.WeakMatch(current)
+			}
+			if !matched {
+				b.Fatal("weak match not found")
+			}
+		}
+	})
+	b.Run("Strong", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			for _, t := range tags {
+				if t.StrongMatch(current) {
+					b.Fatal("weak tag matched strongly")
+				}
+			}
+		}
+	})
+}
+
+// BenchmarkTagString measures rendering a tag for the ETag response header.
+func BenchmarkTagString(b *testing.B) {
+	for _, tc := range []struct {
+		name string
+		tag  etag.Tag
+	}{
+		{name: "Strong", tag: etag.Strong("686d6f3e2c")},
+		{name: "Weak", tag: etag.Weak("686d6f3e2c")},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if tc.tag.String() == "" {
+					b.Fatal("empty header value")
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkRandom measures minting a random strong tag.
+func BenchmarkRandom(b *testing.B) {
+	b.ReportAllocs()
+	for b.Loop() {
+		if etag.Random().IsZero() {
+			b.Fatal("zero tag")
+		}
+	}
+}

@@ -7,6 +7,7 @@ package hash_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -28,6 +29,35 @@ func BenchmarkSHA256HexString(b *testing.B) {
 			_ = hex.EncodeToString(sum[:])
 		}
 	})
+}
+
+// BenchmarkSHA256HexBytes measures digesting byte payloads from a short key
+// up to a request body.
+func BenchmarkSHA256HexBytes(b *testing.B) {
+	for _, size := range []int{32, 1 << 10, 64 << 10} {
+		data := []byte(strings.Repeat("a", size))
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			b.SetBytes(int64(size))
+			b.ReportAllocs()
+			for b.Loop() {
+				if len(hash.SHA256HexBytes(data)) != 64 {
+					b.Fatal("unexpected digest length")
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkHexSum measures hex-encoding the digest of a caller-owned hash.
+func BenchmarkHexSum(b *testing.B) {
+	h := sha256.New()
+	_, _ = h.Write([]byte(strings.Repeat("a", 1024)))
+	b.ReportAllocs()
+	for b.Loop() {
+		if len(hash.HexSum(h)) != 64 {
+			b.Fatal("unexpected digest length")
+		}
+	}
 }
 
 func BenchmarkSHA256HexWithPrefix(b *testing.B) {
