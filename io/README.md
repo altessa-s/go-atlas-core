@@ -13,10 +13,12 @@ in long-running services. Typical usage: borrow via `GetBuffer`, write, then `Pu
 
 ## LimitedReadCloser
 
-`NewLimitedReadCloser(rc, limit)` wraps an `io.ReadCloser` with a byte-count limit. Returns `ErrReadLimitExceeded` when the limit is exceeded instead of
-silently truncating the data. Safe for concurrent reads — a mutex serializes each `Read` with the running byte total, so the limit holds across
-goroutines; `Close` delegates to the underlying closer. An underlying read error remains available through `errors.Is` when the same read exceeds the
-limit.
+`NewLimitedReadCloser(rc, limit)` wraps an `io.ReadCloser` with a byte-count limit. It never delivers more than `limit` bytes: when the source holds
+more, `Read` returns the bytes up to the limit with `ErrReadLimitExceeded` instead of silently truncating, and every later `Read` returns the error
+again without data. A source of exactly `limit` bytes reads to `io.EOF` without error. To detect the overflow it reads one byte past the limit from the
+source; that byte is never handed to the caller. Safe for concurrent reads — a mutex serializes each `Read` with the running byte total, so the limit
+holds across goroutines; `Close` delegates to the underlying closer. An underlying read error remains available through `errors.Is` when the same read
+exceeds the limit.
 
 ## ReadAllLimited
 
