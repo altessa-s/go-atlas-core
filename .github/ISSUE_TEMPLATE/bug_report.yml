@@ -52,8 +52,10 @@ body:
         - runtime/appinfo
         - runtime/capabilities
         - runtime/concurrency
+        - runtime/cycle
         - runtime/helpers
         - runtime/landlock
+        - runtime/leakcheck
         - runtime/nonewprivs
         - runtime/panics
         - runtime/rlimits

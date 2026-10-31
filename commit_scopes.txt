@@ -31,8 +31,10 @@ runtime                     # Shutdown hooks
 runtime/appinfo             # Build and version info
 runtime/capabilities        # Linux capabilities
 runtime/concurrency         # Bounded fan-out and adaptive limits
+runtime/cycle               # Guard for a cycle driven manually or by an owner
 runtime/helpers             # Goroutine introspection
 runtime/landlock            # Linux Landlock sandboxing
+runtime/leakcheck           # Goroutine leak detection
 runtime/nonewprivs          # Linux no_new_privs
 runtime/panics              # Panic recovery
 runtime/rlimits             # Resource limits
