@@ -22,7 +22,7 @@ the bounding set limits only what can be added — the standard Linux rules, not
 | `(Sets).Has(c Cap, kinds ...SetKind)` | Report whether `c` is in any of the named sets (Effective when none given) |
 | `(Sets).With(c Cap, kinds ...SetKind)` | Copy of the snapshot with `c` added to the named sets |
 | `Get()` | Read the current snapshot from the calling thread |
-| `DropAll()` | Drop every capability everywhere — the "nuclear option" |
+| `DropAll()` | Drop every capability of the calling thread — the "nuclear option" |
 | `DropAllExcept(keep ...Cap)` | Drop every capability except those listed; a listed capability the thread does not hold is skipped, not an error |
 | `Apply(s Sets)` | Install an exact `Sets` snapshot on the calling thread — a multi-step syscall sequence (not atomic); impossible requests are rejected before any change, and steps that succeeded stay in effect when a later one fails, so inspect the partial state on error |
 | `BoundingDrop(c Cap)` | Remove `c` from the bounding set (irreversible) |
@@ -37,43 +37,57 @@ the bounding set limits only what can be added — the standard Linux rules, not
 
 ## Quick start
 
-### Nuclear option — drop everything
+Every call changes the calling OS thread only. Keep the thread locked (`runtime.LockOSThread`) from the drop through the restricted work, and do that
+work on this goroutine: goroutines it starts run on other threads, which keep their capabilities. To restrict a whole service, drop capabilities when
+it is launched (systemd `CapabilityBoundingSet=`, container `--cap-drop`, a launcher before `execve(2)`); see [Caveats](#caveats).
+
+### Nuclear option — drop everything on this thread
 
 ```go
 package main
 
 import (
     "log"
+    "runtime"
 
     "github.com/altessa-s/go-atlas-core/runtime/capabilities"
 )
 
 func main() {
+    runtime.LockOSThread()
+    defer runtime.UnlockOSThread()
+
     if err := capabilities.DropAll(); err != nil {
         log.Fatalf("capabilities: %v", err)
     }
-    run()
+    runRestricted() // runs on this thread; must not hand the restricted work to other goroutines
 }
 ```
 
-### Bind a privileged port then drop everything else
+### Bind a privileged port then drop everything else on this thread
 
 ```go
+runtime.LockOSThread()
+defer runtime.UnlockOSThread()
+
 // Bind first, while CAP_NET_BIND_SERVICE is still effective.
 ln, err := net.Listen("tcp", ":443")
 if err != nil { log.Fatal(err) }
 
-// Drop everything except what we still need.
+// Drop everything except what this thread still needs.
 if err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE); err != nil {
     log.Fatalf("capabilities: %v", err)
 }
 
-serve(ln)
+// Only work done on this thread is restricted; the goroutines an HTTP
+// server starts are not. Restrict a whole service at launch time instead.
+acceptLoop(ln)
 ```
 
 ### Resolve operator config from YAML
 
 ```go
+// The caller holds runtime.LockOSThread across this and the restricted work.
 var keep []capabilities.Cap
 for _, name := range cfg.Sandbox.Capabilities.Keep {
     c, err := capabilities.ParseName(name)
@@ -149,11 +163,17 @@ import (
     "fmt"
     "log"
     "net"
+    "runtime"
 
     "github.com/altessa-s/go-atlas-core/runtime/capabilities"
 )
 
 func main() {
+    // Snapshots, drops and probes must run on one thread: capabilities are
+    // per thread.
+    runtime.LockOSThread()
+    defer runtime.UnlockOSThread()
+
     before, err := capabilities.Get()
     must(err)
     fmt.Printf("before: %+v\n", before)

@@ -9,15 +9,27 @@
 //
 // # Quick start
 //
-// Drop every capability before loading untrusted code:
+// Every call changes the calling OS thread only, so lock the thread
+// from the drop through the restricted work and keep that work on this
+// goroutine (goroutines it starts run on other threads, which keep
+// their capabilities). To restrict a whole service, drop capabilities
+// when it is launched; see Caveats.
 //
+// Drop every capability of this thread before running untrusted code
+// on it:
+//
+//	runtime.LockOSThread()
+//	defer runtime.UnlockOSThread()
 //	if err := capabilities.DropAll(); err != nil {
 //	    log.Fatalf("capabilities: %v", err)
 //	}
+//	runRestricted()
 //
-// Preserve one capability (typical "bind a privileged port then drop
-// everything else" pattern):
+// Preserve one capability on this thread (the "bind a privileged port
+// then drop everything else" pattern):
 //
+//	runtime.LockOSThread()
+//	defer runtime.UnlockOSThread()
 //	if err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE); err != nil {
 //	    log.Fatalf("capabilities: %v", err)
 //	}
