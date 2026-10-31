@@ -82,6 +82,25 @@ func TestTimeoutAndAbnormalExit(t *testing.T) {
 	require.Equal(t, 42, v)
 }
 
+// A non-positive WithTimeout is ignored: the shared computation keeps the
+// DefaultTimeout deadline. The bubble's fake clock makes the deadline exact.
+func TestNonPositiveTimeoutKeepsDefault(t *testing.T) {
+	t.Parallel()
+	for _, timeout := range []time.Duration{0, -time.Second} {
+		synctest.Test(t, func(t *testing.T) {
+			g := singleflight.New[string, time.Duration](singleflight.WithTimeout(timeout))
+			start := time.Now()
+			got, err := g.Do(t.Context(), "key", func(work context.Context) (time.Duration, error) {
+				deadline, ok := work.Deadline()
+				require.True(t, ok, "the computation context must carry a deadline")
+				return deadline.Sub(start), nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, singleflight.DefaultTimeout, got)
+		})
+	}
+}
+
 func TestCanceledCallDoesNotStartWork(t *testing.T) {
 	t.Parallel()
 	testhelpers.VerifyNoLeaks(t)
