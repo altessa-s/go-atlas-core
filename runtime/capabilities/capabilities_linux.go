@@ -7,6 +7,7 @@
 package capabilities
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 
@@ -153,43 +154,55 @@ func getSnapshot() (Sets, error) {
 	}, nil
 }
 
-// applySnapshot is the Linux implementation of [Apply]. It:
+// applySnapshot is the Linux implementation of [Apply]: it installs s
+// exactly. See [applyTarget] for the sequence and its guarantees.
+func applySnapshot(s Sets) error {
+	return applyTarget(func(Sets) Sets { return s })
+}
+
+// applyTarget installs the snapshot target(cur) on the calling thread,
+// where cur is the thread's snapshot read under the same OS-thread pin.
+// It:
 //
 //  1. Pins the goroutine to its OS thread for the duration.
-//  2. Validates that no requested effective/permitted/inheritable bit
-//     exceeds the current bounding set (kernel would reject with
-//     EPERM; failing early gives a clearer error).
-//  3. Clears ambient caps that should no longer be present. Ambient
-//     can only be lowered relative to the desired state in one call;
-//     raising happens bit-by-bit after the capset succeeds so the
-//     kernel invariant (cap must be in permitted ∩ inheritable) is
-//     guaranteed.
-//  4. Calls capset(2) with the new effective/permitted/inheritable.
-//  5. Drops every bounding-set bit not present in s.Bounding.
-//  6. Raises any ambient bits present in s.Ambient that are not
-//     currently set.
+//  2. Validates the target before changing anything: no requested
+//     effective/permitted/inheritable bit may exceed the current
+//     bounding set, and dropping bounding bits requires CAP_SETPCAP in
+//     the current permitted set, since PR_CAPBSET_DROP needs it in the
+//     effective set. A rejection returns [ErrInvalidOption] and leaves
+//     the thread untouched.
+//  3. Lowers the ambient bits the target drops. Lowering needs no
+//     privilege.
+//  4. Calls capset(2) with the target effective/permitted/inheritable,
+//     keeping CAP_SETPCAP effective and permitted when bounding bits
+//     still have to be dropped, even if the target removes it. Every
+//     capset the kernel can refuse (raising a bit outside permitted,
+//     the inheritable rules) is refused here, before anything
+//     irreversible has happened.
+//  5. Drops every bounding bit not in the target. This is the only
+//     irreversible step.
+//  6. If step 4 kept CAP_SETPCAP beyond the target, calls capset(2)
+//     again with exactly the target masks. This only removes bits.
+//  7. Raises the target ambient bits that are not set yet.
 //
-// Steps are ordered so that an abort after any one leaves the thread
-// in a state that is "at most as privileged" as before — never more.
-//
-// On a step-3-through-6 failure the returned error is annotated with
-// which step failed and how far the partial application got. This
-// matters because the calling thread is left in an intermediate
-// state: e.g. capset has installed the new effective/permitted but
-// some bounding-drop syscalls have not yet run, so the caller's
-// "actual" capabilities diverge from the requested snapshot. Without
-// the step annotation an operator sees only the underlying errno
-// and has no way to reconstruct what state the thread is in.
+// Guarantees on failure: a step-2 rejection changes nothing. A
+// step-3 or step-4 failure leaves only ambient bits lowered. A step-5
+// failure leaves the target effective/permitted/inheritable installed
+// with CAP_SETPCAP removed again when the target drops it (applyTarget
+// retries the step-6 capset before returning), and a bounding set
+// reduced by the bits dropped before the failing one. A step-6 or
+// step-7 failure leaves the bounding set complete and the masks
+// described in the error. The error names the failing step and the
+// state the thread was left in.
 //
 // When a failure occurs after the thread state has already been
-// mutated (any successful ambient/capset/bounding syscall), the OS
-// thread pin is retained — the goroutine carries the lock away on
-// exit. Releasing a thread whose capability state diverged mid-way
-// would hand the scheduler a thread that behaves differently from
-// its peers. Failures before the first mutation (snapshot read,
-// validation) release the pin as usual. Same policy as the sibling
-// seccomp package.
-func applySnapshot(s Sets) (retErr error) {
+// mutated, the OS thread pin is retained — the goroutine carries the
+// lock away on exit. Releasing a thread whose capability state
+// diverged mid-way would hand the scheduler a thread that behaves
+// differently from its peers. Failures before the first mutation
+// (snapshot read, validation) release the pin as usual. Same policy as
+// the sibling seccomp package.
+func applyTarget(target func(cur Sets) Sets) (retErr error) {
 	runtime.LockOSThread()
 	mutated := false
 	defer func() {
@@ -202,11 +215,105 @@ func applySnapshot(s Sets) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("applySnapshot: read current state: %w", err)
 	}
+	s := target(cur)
+	if err = validateTarget(cur, s); err != nil {
+		return err
+	}
 
-	// Validate against the current bounding ceiling. The kernel will
-	// reject any effective/permitted/inheritable bit that is not in
-	// the bounding set; checking here produces a clearer error than
-	// EPERM with no context.
+	lowered, c, err := forEachCap(cur.Ambient&^s.Ambient, ambientLower)
+	mutated = lowered
+	if err != nil {
+		return fmt.Errorf(
+			"applySnapshot: step 3 (ambient lower of %s) failed; "+
+				"thread state: ambient bits up to but not including %s have been lowered, "+
+				"capset/bounding/ambient-raise have NOT run: %w",
+			c, c, err,
+		)
+	}
+
+	// Keep CAP_SETPCAP for the bounding drops; validateTarget has made
+	// sure it is in the current permitted set.
+	toDrop := cur.Bounding &^ s.Bounding
+	eff, perm := s.Effective, s.Permitted
+	if toDrop != 0 {
+		eff = setBit(eff, CAP_SETPCAP)
+		perm = setBit(perm, CAP_SETPCAP)
+	}
+	if err = capset(eff, perm, s.Inheritable); err != nil {
+		return fmt.Errorf(
+			"applySnapshot: step 4 (capset eff=%#x perm=%#x inh=%#x) failed; "+
+				"thread state: ambient lowered, capset rejected, "+
+				"effective/permitted/inheritable/bounding still match the pre-call snapshot: %w",
+			eff, perm, s.Inheritable, err,
+		)
+	}
+	mutated = true
+
+	if _, c, err = forEachCap(toDrop, boundingDrop); err != nil {
+		dropErr := fmt.Errorf(
+			"applySnapshot: step 5 (bounding drop of %s) failed; "+
+				"thread state: requested effective/permitted/inheritable installed, "+
+				"bounding bits up to but not including %s have been dropped, "+
+				"every bit at %s and above is still in the bounding set: %w",
+			c, c, c, err,
+		)
+		if eff == s.Effective && perm == s.Permitted {
+			return dropErr
+		}
+		if revertErr := capset(s.Effective, s.Permitted, s.Inheritable); revertErr != nil {
+			return errors.Join(dropErr, fmt.Errorf(
+				"applySnapshot: removing CAP_SETPCAP kept for the bounding drop failed; "+
+					"it is still effective and permitted: %w", revertErr))
+		}
+		return dropErr
+	}
+
+	if eff != s.Effective || perm != s.Permitted {
+		if err = capset(s.Effective, s.Permitted, s.Inheritable); err != nil {
+			return fmt.Errorf(
+				"applySnapshot: step 6 (capset eff=%#x perm=%#x inh=%#x) failed; "+
+					"thread state: bounding fully committed, CAP_SETPCAP kept for the drop "+
+					"is still effective and permitted: %w",
+				s.Effective, s.Permitted, s.Inheritable, err,
+			)
+		}
+	}
+
+	// The kernel requires a raised ambient bit to be in permitted ∩
+	// inheritable, which the capset above has installed.
+	if _, c, err = forEachCap(s.Ambient&^cur.Ambient, ambientRaise); err != nil {
+		return fmt.Errorf(
+			"applySnapshot: step 7 (ambient raise of %s) failed; "+
+				"thread state: capset and bounding fully committed, "+
+				"ambient bits up to but not including %s have been raised: %w",
+			c, c, err,
+		)
+	}
+	return nil
+}
+
+// forEachCap calls op for every cap in mask in ascending order and
+// stops at the first error, returning the cap it failed on. done
+// reports whether any call succeeded.
+func forEachCap(mask uint64, op func(Cap) error) (done bool, failed Cap, err error) {
+	for c := Cap(0); c <= capLastCap; c++ {
+		if !has(mask, c) {
+			continue
+		}
+		if err := op(c); err != nil {
+			return done, c, err
+		}
+		done = true
+	}
+	return done, 0, nil
+}
+
+// validateTarget rejects, before any syscall, a target the kernel
+// would refuse in the middle of the sequence.
+func validateTarget(cur, s Sets) error {
+	// The kernel rejects any effective/permitted/inheritable bit that
+	// is not in the bounding set; checking here produces a clearer
+	// error than EPERM with no context.
 	if s.Effective&^cur.Bounding != 0 {
 		return fmt.Errorf(
 			"%w: effective mask %#x exceeds bounding %#x",
@@ -225,90 +332,24 @@ func applySnapshot(s Sets) (retErr error) {
 			ErrInvalidOption, s.Inheritable, cur.Bounding,
 		)
 	}
-
-	// Lower ambient bits first. This is safe regardless of whether
-	// the upcoming capset succeeds, because lowering can only reduce
-	// privilege. A failure here means no other syscall has run yet,
-	// so the thread state matches the pre-call snapshot minus any
-	// successfully-lowered ambient bits.
-	toLower := cur.Ambient &^ s.Ambient
-	for c := Cap(0); c <= capLastCap; c++ {
-		if !has(toLower, c) {
-			continue
-		}
-		if err := ambientLower(c); err != nil {
-			return fmt.Errorf(
-				"applySnapshot: step 3 (ambient lower of %s) failed; "+
-					"thread state: ambient bits up to but not including %s have been lowered, "+
-					"capset/bounding/ambient-raise have NOT run: %w",
-				c, c, err,
-			)
-		}
-		mutated = true
-	}
-
-	// Install the new effective/permitted/inheritable. If this fails
-	// the capset itself was rejected, so the thread keeps its
-	// pre-call effective/permitted/inheritable but with the lowered
-	// ambient state from step 3.
-	if err := capset(s.Effective, s.Permitted, s.Inheritable); err != nil {
+	// PR_CAPBSET_DROP needs CAP_SETPCAP in the effective set; it can
+	// be made effective only from the permitted set.
+	if toDrop := cur.Bounding &^ s.Bounding; toDrop != 0 && !has(cur.Permitted, CAP_SETPCAP) {
 		return fmt.Errorf(
-			"applySnapshot: step 4 (capset eff=%#x perm=%#x inh=%#x) failed; "+
-				"thread state: ambient lowered, capset rejected, "+
-				"effective/permitted/inheritable still match the pre-call snapshot: %w",
-			s.Effective, s.Permitted, s.Inheritable, err,
+			"%w: dropping bounding bits %#x requires CAP_SETPCAP, which is not in the permitted set %#x",
+			ErrInvalidOption, toDrop, cur.Permitted,
 		)
-	}
-	mutated = true
-
-	// Drop bounding bits that should no longer be present. This is
-	// irreversible — once dropped from bounding, the bit cannot be
-	// re-acquired by this thread or any descendant. A failure here
-	// is the most dangerous case because capset has already
-	// committed: the requested effective/permitted/inheritable are
-	// installed, but the bounding ceiling is partially old.
-	toDrop := cur.Bounding &^ s.Bounding
-	for c := Cap(0); c <= capLastCap; c++ {
-		if !has(toDrop, c) {
-			continue
-		}
-		if err := boundingDrop(c); err != nil {
-			return fmt.Errorf(
-				"applySnapshot: step 5 (bounding drop of %s) failed; "+
-					"thread state: capset committed but bounding ceiling is "+
-					"partially the old set — bits up to but not including %s have been dropped, "+
-					"every bit at %s and above is still in the bounding set: %w",
-				c, c, c, err,
-			)
-		}
-	}
-
-	// Raise ambient bits that should be present but are not. The
-	// kernel enforces that cap is in permitted ∩ inheritable, which
-	// is now true because capset has already succeeded with the new
-	// masks. A failure here means capset and bounding-drops are
-	// fully committed but ambient is partial.
-	toRaise := s.Ambient &^ cur.Ambient
-	for c := Cap(0); c <= capLastCap; c++ {
-		if !has(toRaise, c) {
-			continue
-		}
-		if err := ambientRaise(c); err != nil {
-			return fmt.Errorf(
-				"applySnapshot: step 6 (ambient raise of %s) failed; "+
-					"thread state: capset and bounding fully committed, "+
-					"ambient bits up to but not including %s have been raised: %w",
-				c, c, err,
-			)
-		}
 	}
 	return nil
 }
 
 // dropAllExcept is the Linux implementation of [DropAll] /
-// [DropAllExcept]. It builds a Sets snapshot with the requested caps
-// preserved in effective/permitted/bounding and nothing in
-// inheritable/ambient, then delegates to [applySnapshot].
+// [DropAllExcept]. It keeps each requested cap where the thread
+// currently holds it — in bounding when it is in the bounding set, in
+// effective and permitted when it is permitted — clears everything
+// else, inheritable and ambient included, and delegates to
+// [applyTarget]. A requested cap the thread does not hold is not an
+// error: there is nothing to keep.
 func dropAllExcept(keep []Cap) error {
 	var mask uint64
 	for _, c := range keep {
@@ -317,12 +358,15 @@ func dropAllExcept(keep []Cap) error {
 		}
 		mask = setBit(mask, c)
 	}
-	return applySnapshot(Sets{
-		Effective:   mask,
-		Permitted:   mask,
-		Inheritable: 0,
-		Bounding:    mask,
-		Ambient:     0,
+	return applyTarget(func(cur Sets) Sets {
+		perm := cur.Permitted & mask
+		return Sets{
+			Effective:   perm,
+			Permitted:   perm,
+			Inheritable: 0,
+			Bounding:    cur.Bounding & mask,
+			Ambient:     0,
+		}
 	})
 }
 

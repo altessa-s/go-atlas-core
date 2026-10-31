@@ -14,155 +14,137 @@
 package capabilities_test
 
 import (
-	"os"
+	"errors"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/runtime/capabilities"
 	"github.com/altessa-s/go-atlas-core/runtime/internal/exectest"
 )
 
+// canDropBounding reports whether s holds CAP_SETPCAP in its permitted
+// set, which PR_CAPBSET_DROP needs in the effective set.
+func canDropBounding(s capabilities.Sets) bool {
+	return s.Has(capabilities.CAP_SETPCAP, capabilities.Permitted)
+}
+
+// getSets reads the calling thread's snapshot or fails the child.
+func getSets(when string) capabilities.Sets {
+	s, err := capabilities.Get()
+	if err != nil {
+		exectest.Failf("Get %s: %v", when, err)
+	}
+	return s
+}
+
+// requireRejectedUnchanged requires err to be ErrInvalidOption and the
+// thread's capabilities to still equal before: a request the kernel
+// would refuse must be rejected before any set is changed.
+func requireRejectedUnchanged(op string, err error, before capabilities.Sets) {
+	if !errors.Is(err, capabilities.ErrInvalidOption) {
+		exectest.Failf("%s without CAP_SETPCAP returned %v, want ErrInvalidOption", op, err)
+	}
+	if after := getSets("after the rejected " + op); after != before {
+		exectest.Failf("%s was rejected but changed the thread: before=%+v after=%+v", op, before, after)
+	}
+}
+
 // TestDropAll_ZeroesEverySetInSubprocess verifies that DropAll
 // actually clears effective/permitted/inheritable/bounding/ambient on
-// the calling thread. The test reads the snapshot via Get() after
-// DropAll and asserts every mask is zero.
+// the calling thread, against a real kernel, through the whole Apply
+// sequence.
 //
-// This is the highest-value test in the package because it covers the
-// full applySnapshot sequence end-to-end against a real kernel — the
-// existing unit tests only exercise the validation layer (which fails
-// before any syscall is issued).
-//
-// Pre-condition: a process can always drop its own caps regardless of
-// initial state, so this test does not require root or any specific
-// starting capability. If the binary already has zero caps the test
-// is still meaningful: it verifies the no-op path through
-// applySnapshot does not corrupt the snapshot.
+// Dropping bounding bits needs CAP_SETPCAP. A runner that holds it
+// (root, including a default Docker container) must end with every set
+// zero; that is the case the bounding drop used to fail with EPERM,
+// because capset had already removed CAP_SETPCAP from the effective
+// set. A runner without it (an unprivileged user with a non-empty
+// bounding set) must get ErrInvalidOption with its sets untouched. A
+// runner whose bounding set is already empty needs no privilege at all.
 func TestDropAll_ZeroesEverySetInSubprocess(t *testing.T) {
-	// Skip in CI environments where capabilities manipulation may fail
-	// due to container restrictions.
-	if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
-		t.Skip("skipping capabilities test in CI environment")
-	}
-
 	exectest.RunInSubprocess(t, func() {
-		if err := capabilities.DropAll(); err != nil {
+		before := getSets("before DropAll")
+		err := capabilities.DropAll()
+		if before.Bounding != 0 && !canDropBounding(before) {
+			requireRejectedUnchanged("DropAll", err, before)
+			return
+		}
+		if err != nil {
 			exectest.Failf("DropAll: %v", err)
 		}
-		got, err := capabilities.Get()
-		if err != nil {
-			exectest.Failf("Get after DropAll: %v", err)
-		}
-		if got.Effective != 0 {
-			exectest.Failf("Effective = %#x, want 0", got.Effective)
-		}
-		if got.Permitted != 0 {
-			exectest.Failf("Permitted = %#x, want 0", got.Permitted)
-		}
-		if got.Inheritable != 0 {
-			exectest.Failf("Inheritable = %#x, want 0", got.Inheritable)
-		}
-		if got.Bounding != 0 {
-			exectest.Failf("Bounding = %#x, want 0 "+
-				"(bounding drop is irreversible — DropAll must clear it)",
-				got.Bounding)
-		}
-		if got.Ambient != 0 {
-			exectest.Failf("Ambient = %#x, want 0", got.Ambient)
+		if got := getSets("after DropAll"); got != (capabilities.Sets{}) {
+			exectest.Failf("sets after DropAll = %+v, want all zero "+
+				"(bounding drop is irreversible — DropAll must clear it)", got)
 		}
 	})
 }
 
 // TestDropAllExcept_KeepsListedAndDropsRestInSubprocess covers the
-// "bind a privileged port then drop everything else" pattern. It
-// requests one capability be preserved and asserts:
+// "bind a privileged port then drop everything else" pattern. It asks
+// to keep CAP_NET_BIND_SERVICE and asserts that:
 //
-//   - the kept cap is in effective+permitted+bounding (where the
-//     kernel would let it land)
-//   - every other bit is zero
+//   - the kept cap stays in the bounding set when it was there, and is
+//     effective and permitted when it was permitted ("you cannot keep
+//     what you do not have": a runner without it ends with every set
+//     zero instead of an error);
+//   - every other bit is zero.
 //
-// Note: an unprivileged test runner may not have CAP_NET_BIND_SERVICE
-// in its initial bounding set. In that case the kernel will not let
-// the cap land in the new permitted set either, and the test will
-// observe everything-zero — which is still a correct outcome of
-// DropAllExcept (you cannot keep what you do not have). The
-// assertions below tolerate that case.
+// The CAP_SETPCAP rules of TestDropAll_ZeroesEverySetInSubprocess
+// apply to the bits that leave the bounding set.
 func TestDropAllExcept_KeepsListedAndDropsRestInSubprocess(t *testing.T) {
-	// Skip in CI environments where capabilities manipulation may fail
-	// due to container restrictions.
-	if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
-		t.Skip("skipping capabilities test in CI environment")
-	}
-
 	exectest.RunInSubprocess(t, func() {
-		// Read the starting snapshot so we can detect the
-		// "unprivileged runner" case correctly.
-		before, err := capabilities.Get()
-		if err != nil {
-			exectest.Failf("Get before DropAllExcept: %v", err)
-		}
+		before := getSets("before DropAllExcept")
 		bit := uint64(1) << capabilities.CAP_NET_BIND_SERVICE
-		hadCapBefore := before.Bounding&bit != 0
 
-		if err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE); err != nil {
+		err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE)
+		if before.Bounding&^bit != 0 && !canDropBounding(before) {
+			requireRejectedUnchanged("DropAllExcept", err, before)
+			return
+		}
+		if err != nil {
 			exectest.Failf("DropAllExcept(CAP_NET_BIND_SERVICE): %v", err)
 		}
-		after, err := capabilities.Get()
-		if err != nil {
-			exectest.Failf("Get after DropAllExcept: %v", err)
+		want := capabilities.Sets{
+			Effective: before.Permitted & bit,
+			Permitted: before.Permitted & bit,
+			Bounding:  before.Bounding & bit,
+		}
+		if got := getSets("after DropAllExcept"); got != want {
+			exectest.Failf("sets after DropAllExcept = %+v, want %+v", got, want)
+		}
+	})
+}
+
+// TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess covers a
+// thread that holds CAP_SETPCAP in its permitted set but not in its
+// effective set: Apply must still drop bounding bits, raising
+// CAP_SETPCAP for the drop only, and end with exactly the requested
+// sets, CAP_SETPCAP not effective. Skipped without CAP_SETPCAP.
+func TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess(t *testing.T) {
+	exectest.RunInSubprocess(t, func() {
+		cur := getSets("before Apply")
+		chown := uint64(1) << capabilities.CAP_CHOWN
+		if !canDropBounding(cur) || cur.Bounding&chown == 0 {
+			return
+		}
+		setpcap := uint64(1) << capabilities.CAP_SETPCAP
+
+		lowered := cur
+		lowered.Effective &^= setpcap
+		if err := capabilities.Apply(lowered); err != nil {
+			exectest.Failf("Apply(CAP_SETPCAP not effective): %v", err)
 		}
 
-		// Inheritable and Ambient must always be zero — the
-		// package documents that DropAllExcept clears them
-		// unconditionally.
-		if after.Inheritable != 0 {
-			exectest.Failf("Inheritable = %#x, want 0", after.Inheritable)
+		want := lowered
+		want.Effective &^= chown
+		want.Permitted &^= chown
+		want.Inheritable &^= chown
+		want.Ambient &^= chown
+		want.Bounding &^= chown
+		if err := capabilities.Apply(want); err != nil {
+			exectest.Failf("Apply(drop CAP_CHOWN from bounding): %v", err)
 		}
-		if after.Ambient != 0 {
-			exectest.Failf("Ambient = %#x, want 0", after.Ambient)
-		}
-
-		if hadCapBefore {
-			// Privileged starting state: the kept cap must
-			// survive in effective/permitted/bounding.
-			if after.Effective&bit == 0 {
-				exectest.Failf("Effective lost CAP_NET_BIND_SERVICE: %#x",
-					after.Effective)
-			}
-			if after.Permitted&bit == 0 {
-				exectest.Failf("Permitted lost CAP_NET_BIND_SERVICE: %#x",
-					after.Permitted)
-			}
-			if after.Bounding&bit == 0 {
-				exectest.Failf("Bounding lost CAP_NET_BIND_SERVICE: %#x",
-					after.Bounding)
-			}
-			// Every OTHER bit must be cleared.
-			if after.Effective & ^bit != 0 {
-				exectest.Failf("Effective has bits other than CAP_NET_BIND_SERVICE: %#x",
-					after.Effective)
-			}
-			if after.Permitted & ^bit != 0 {
-				exectest.Failf("Permitted has bits other than CAP_NET_BIND_SERVICE: %#x",
-					after.Permitted)
-			}
-			if after.Bounding & ^bit != 0 {
-				exectest.Failf("Bounding has bits other than CAP_NET_BIND_SERVICE: %#x",
-					after.Bounding)
-			}
-		} else {
-			// Unprivileged starting state: every set must be
-			// zero. "You cannot keep what you do not have."
-			if after.Effective != 0 {
-				exectest.Failf("unprivileged: Effective = %#x, want 0",
-					after.Effective)
-			}
-			if after.Permitted != 0 {
-				exectest.Failf("unprivileged: Permitted = %#x, want 0",
-					after.Permitted)
-			}
-			if after.Bounding != 0 {
-				exectest.Failf("unprivileged: Bounding = %#x, want 0",
-					after.Bounding)
-			}
+		if got := getSets("after Apply"); got != want {
+			exectest.Failf("sets after Apply = %+v, want %+v", got, want)
 		}
 	})
 }

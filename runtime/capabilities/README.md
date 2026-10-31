@@ -7,8 +7,10 @@ import "github.com/altessa-s/go-atlas-core/runtime/capabilities"
 A minimal, cgo-free Go wrapper around the Linux capabilities subsystem (`capset(2)`, `capget(2)`, `prctl(2)` with `PR_CAPBSET_*` / `PR_CAP_AMBIENT_*`).
 It lets a process drop capabilities at startup and confine itself to a strict allowlist without pulling in libcap.
 
-No root required to drop caps — any unprivileged process can reduce its own set. Raising caps requires them to already be present in the bounding
-ceiling, which is the standard Linux rule and not something this package works around.
+Any process can reduce its effective, permitted, inheritable and ambient sets without privilege. Dropping bits from the bounding set needs
+`CAP_SETPCAP` (root has it, including in a default Docker container); `DropAll`, `DropAllExcept` and `Apply` keep it effective until the bounding
+drops are done and reject a bounding drop without it with `ErrInvalidOption` before changing anything. Raising caps requires them to already be present
+in the bounding ceiling, which is the standard Linux rule and not something this package works around.
 
 ## API
 
@@ -21,8 +23,8 @@ ceiling, which is the standard Linux rule and not something this package works a
 | `(Sets).With(c Cap, kinds ...SetKind)` | Copy of the snapshot with `c` added to the named sets |
 | `Get()` | Read the current snapshot from the calling thread |
 | `DropAll()` | Drop every capability everywhere — the "nuclear option" |
-| `DropAllExcept(keep ...Cap)` | Drop every capability except those listed |
-| `Apply(s Sets)` | Install an exact `Sets` snapshot on the calling thread — a multi-step syscall sequence (not atomic); steps that succeeded stay in effect when a later one fails, so inspect the partial state on error |
+| `DropAllExcept(keep ...Cap)` | Drop every capability except those listed; a listed capability the thread does not hold is skipped, not an error |
+| `Apply(s Sets)` | Install an exact `Sets` snapshot on the calling thread — a multi-step syscall sequence (not atomic); impossible requests are rejected before any change, and steps that succeeded stay in effect when a later one fails, so inspect the partial state on error |
 | `BoundingDrop(c Cap)` | Remove `c` from the bounding set (irreversible) |
 | `AmbientClearAll()` | Clear the ambient set in one call |
 | `AmbientRaise(c Cap)` | Add `c` to the ambient set |
@@ -98,7 +100,13 @@ Linux capabilities are not a single mask but five related sets tracked per threa
 | Ambient | Preserved across non-privileged execve | `prctl(PR_CAP_AMBIENT_*)` |
 
 If you do not know which set you need, you want effective/permitted/bounding. `DropAllExcept` handles exactly those three; inheritable and ambient are
-cleared (safe default for a long-running service).
+cleared (safe default for a long-running service). A kept capability stays only where the thread already holds it: in bounding if it is in the bounding
+set, effective and permitted if it is permitted.
+
+`Apply` runs lower-ambient → capset → bounding drops → capset → raise-ambient. The first capset keeps `CAP_SETPCAP` effective for the bounding drops
+and the second removes it when the snapshot does not keep it. Every capset the kernel can refuse runs before the irreversible bounding drops, so a
+rejected capset leaves only ambient bits lowered; a failed bounding drop leaves the requested effective/permitted/inheritable installed and the bounding
+set partially reduced, and the error says how far it got.
 
 ## When to use it
 

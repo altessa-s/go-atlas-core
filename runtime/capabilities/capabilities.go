@@ -74,6 +74,11 @@ func Get() (Sets, error) {
 // returns nil the calling thread has zero capabilities and can never
 // raise any of them again for the lifetime of the process.
 //
+// Dropping bounding bits requires CAP_SETPCAP in the permitted set
+// (root has it, including in a default container). A thread without
+// it whose bounding set is not already empty cannot satisfy that
+// guarantee: DropAll returns [ErrInvalidOption] and changes nothing.
+//
 // Per-thread scope (read this before using):
 //
 // capset(2) is per-thread and Linux does not expose a way to apply a
@@ -96,10 +101,14 @@ func DropAll() error {
 }
 
 // DropAllExcept drops every capability except those in keep on the
-// calling THREAD. The listed capabilities are preserved in the
-// Effective, Permitted, and Bounding sets; Inheritable and Ambient
-// are cleared (standard practice for "drop everything except what I
-// need at startup"). An empty keep list is equivalent to [DropAll].
+// calling THREAD. A listed capability stays in the Bounding set when
+// it is there and stays in the Effective and Permitted sets (raised to
+// Effective if needed) when it is permitted; a listed capability the
+// thread does not hold is not an error — there is nothing to keep.
+// Inheritable and Ambient are cleared (standard practice for "drop
+// everything except what I need at startup"). An empty keep list is
+// equivalent to [DropAll], and the same CAP_SETPCAP requirement
+// applies to the bounding bits it drops.
 //
 // Per-thread scope: see the [DropAll] doc comment for the Go-runtime
 // caveat. DropAllExcept inherits the same limitation.
@@ -110,16 +119,22 @@ func DropAllExcept(keep ...Cap) error {
 }
 
 // Apply installs s on the calling THREAD via the standard
-// capset(2) / PR_CAPBSET_DROP / PR_CAP_AMBIENT_* syscall sequence.
-// The sequence is multi-step (lower ambient, then capset for
-// effective/permitted/inheritable, then drop bounding bits, then
-// raise ambient bits) and ordered so that an abort after any one step
-// leaves the thread "at most as privileged as before" — never more.
-// Apply is NOT atomic; the kernel exposes no syscall to install all
-// five sets in one call. Apply validates that no
-// Effective/Permitted/Inheritable bit exceeds the current Bounding
-// set up-front, since the kernel would otherwise reject that
-// combination with EPERM mid-sequence and produce a confusing error.
+// capset(2) / PR_CAPBSET_DROP / PR_CAP_AMBIENT_* syscall sequence:
+// lower ambient bits, capset the effective/permitted/inheritable masks
+// while keeping CAP_SETPCAP effective, drop bounding bits (which needs
+// CAP_SETPCAP), capset again to remove CAP_SETPCAP when s does not
+// keep it, then raise ambient bits. Apply is NOT atomic; the kernel
+// exposes no syscall to install all five sets in one call.
+//
+// Apply validates s up front and returns [ErrInvalidOption] without
+// changing anything when an Effective/Permitted/Inheritable bit
+// exceeds the current Bounding set, or when s drops bounding bits and
+// CAP_SETPCAP is not in the current Permitted set. Every capset the
+// kernel can refuse runs before the irreversible bounding drops, so an
+// [ErrFailed] from that capset leaves only ambient bits lowered. A
+// failure during the bounding drops leaves the requested
+// Effective/Permitted/Inheritable installed and the bounding set
+// partially reduced; the error names the step and the state reached.
 //
 // Apply does not raise Bounding or Ambient bits; it can only lower
 // them. Use [AmbientRaise] for additive ambient changes.

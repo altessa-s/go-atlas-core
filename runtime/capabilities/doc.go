@@ -36,7 +36,7 @@
 //     present in permitted and inheritable.
 //
 // [Sets] reports all five as 64-bit masks. [Apply] accepts a full
-// snapshot and installs it atomically (where the kernel permits);
+// snapshot and installs it in a validated, ordered syscall sequence;
 // [DropAll] / [DropAllExcept] are thin wrappers implementing the two
 // most common startup patterns.
 //
@@ -70,5 +70,9 @@
 //     be raised by any descendant, and the inheritable/ambient
 //     invariants are enforced by the kernel — not by this package.
 //   - Raising bits is possible only within the current ceilings.
-//     Dropping is always possible for an unprivileged process.
+//     Dropping effective/permitted/inheritable/ambient bits is always
+//     possible for an unprivileged process; dropping bounding bits
+//     needs CAP_SETPCAP in the permitted set, and [Apply], [DropAll]
+//     and [DropAllExcept] reject a bounding drop without it with
+//     [ErrInvalidOption] before changing anything.
 package capabilities
