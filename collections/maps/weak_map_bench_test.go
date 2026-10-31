@@ -72,17 +72,45 @@ func BenchmarkWeakMap_Get(b *testing.B) {
 	runtime.KeepAlive(vals)
 }
 
-// BenchmarkWeakMap_Set measures caching a freshly built value under an
-// existing key, which registers a GC cleanup for the new value; the replaced
-// values become garbage as they would in a cache.
+// BenchmarkWeakMap_Set measures caching a value under an existing key:
+//   - Fresh caches a freshly built value, which registers a GC cleanup for it
+//     and stops the replaced value's; the replaced values become garbage as
+//     they would in a cache.
+//   - ReplaceLive rotates the live values across the keys, so every Set
+//     replaces one live value with another; stopped cleanups must not pile up
+//     on the values that stay alive.
+//   - SameLive re-sets the value a key already holds.
 func BenchmarkWeakMap_Set(b *testing.B) {
 	const size = 1024
-	m, keys, vals := newWeakBenchMap(size)
-	b.ReportAllocs()
-	i := 0
-	for b.Loop() {
-		m.Set(keys[i%size], new(weakBenchValue))
-		i++
-	}
-	runtime.KeepAlive(vals)
+	b.Run("Fresh", func(b *testing.B) {
+		m, keys, vals := newWeakBenchMap(size)
+		b.ReportAllocs()
+		i := 0
+		for b.Loop() {
+			m.Set(keys[i%size], new(weakBenchValue))
+			i++
+		}
+		runtime.KeepAlive(vals)
+	})
+	b.Run("ReplaceLive", func(b *testing.B) {
+		m, keys, vals := newWeakBenchMap(size)
+		b.ReportAllocs()
+		i := 0
+		for b.Loop() {
+			// Round r = i/size gives key k the value k+r+1, never the one it holds.
+			m.Set(keys[i%size], vals[(i%size+i/size+1)%size])
+			i++
+		}
+		runtime.KeepAlive(vals)
+	})
+	b.Run("SameLive", func(b *testing.B) {
+		m, keys, vals := newWeakBenchMap(size)
+		b.ReportAllocs()
+		i := 0
+		for b.Loop() {
+			m.Set(keys[i%size], vals[i%size])
+			i++
+		}
+		runtime.KeepAlive(vals)
+	})
 }
