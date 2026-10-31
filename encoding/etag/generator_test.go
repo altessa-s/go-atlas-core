@@ -60,6 +60,15 @@ func TestGeneratorWithNewHash(t *testing.T) {
 	require.NotEqual(t, etag.NewGenerator().Hash([]byte(body)), g.Hash([]byte(body)))
 }
 
+func TestGeneratorWithNilNewHashKeepsDefault(t *testing.T) {
+	t.Parallel()
+
+	const body = "hello world"
+	g := etag.NewGenerator(etag.WithNewHash(nil))
+
+	require.Equal(t, etag.NewGenerator().Hash([]byte(body)), g.Hash([]byte(body)))
+}
+
 func TestGeneratorHashReaderError(t *testing.T) {
 	t.Parallel()
 
