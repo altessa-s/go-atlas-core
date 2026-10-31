@@ -5,6 +5,7 @@
 package nilcheck_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/types/nilcheck"
@@ -60,6 +61,32 @@ func BenchmarkRequireNotNilMiss(b *testing.B) {
 		err = nilcheck.RequireNotNil(nil, "field")
 	}
 	_ = err
+}
+
+// BenchmarkIsEmptyValue measures the reflection emptiness check validation
+// runs per field, including the whitespace scan for *string.
+func BenchmarkIsEmptyValue(b *testing.B) {
+	blank := "   \t "
+	text := "value"
+	for _, tc := range []struct {
+		name string
+		v    reflect.Value
+		want bool
+	}{
+		{name: "ZeroInt", v: reflect.ValueOf(0), want: true},
+		{name: "NonZeroString", v: reflect.ValueOf("value"), want: false},
+		{name: "BlankStringPtr", v: reflect.ValueOf(&blank), want: true},
+		{name: "TextStringPtr", v: reflect.ValueOf(&text), want: false},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if nilcheck.IsEmptyValue(tc.v) != tc.want {
+					b.Fatalf("IsEmptyValue != %v", tc.want)
+				}
+			}
+		})
+	}
 }
 
 func BenchmarkCheckerChain(b *testing.B) {
