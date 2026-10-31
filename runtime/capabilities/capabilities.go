@@ -126,18 +126,31 @@ func DropAllExcept(keep ...Cap) error {
 // keep it, then raise ambient bits. Apply is NOT atomic; the kernel
 // exposes no syscall to install all five sets in one call.
 //
-// Apply validates s up front and returns [ErrInvalidOption] without
-// changing anything when an Effective/Permitted/Inheritable bit
-// exceeds the current Bounding set, or when s drops bounding bits and
-// CAP_SETPCAP is not in the current Permitted set. Every capset the
-// kernel can refuse runs before the irreversible bounding drops, so an
-// [ErrFailed] from that capset leaves only ambient bits lowered. A
-// failure during the bounding drops leaves the requested
+// Apply validates s up front against the rules capset(2) enforces and
+// returns [ErrInvalidOption] without changing anything when s breaks
+// one of them:
+//
+//   - Permitted adds a bit that is not in the current Permitted set;
+//   - Effective has a bit that is not in s.Permitted;
+//   - Inheritable adds a bit that is not in the current Inheritable or
+//     Bounding set, or, while CAP_SETPCAP is not in the current
+//     Effective set, not in the current Inheritable or Permitted set;
+//   - Ambient has a bit that is not in both s.Permitted and
+//     s.Inheritable;
+//   - s drops bounding bits and CAP_SETPCAP is not in the current
+//     Permitted set.
+//
+// Effective and Permitted bits outside the Bounding set are allowed:
+// capset never adds a permitted bit, and the bounding set limits only
+// the inheritable bits it adds. The capset that keeps CAP_SETPCAP for the bounding drops
+// runs before them, so an [ErrFailed] from it leaves only ambient bits
+// lowered. A failure during the bounding drops leaves the requested
 // Effective/Permitted/Inheritable installed and the bounding set
 // partially reduced; the error names the step and the state reached.
 //
-// Apply does not raise Bounding or Ambient bits; it can only lower
-// them. Use [AmbientRaise] for additive ambient changes.
+// Apply does not raise Bounding bits; it can only lower them. It
+// raises the Ambient bits s adds, last, once the masks that allow them
+// are installed.
 //
 // Per-thread scope: see the [DropAll] doc comment for the Go-runtime
 // caveat. Apply inherits the same limitation.
@@ -250,7 +263,7 @@ func (s Sets) Has(c Cap, kinds ...SetKind) bool {
 // must be a subset of Permitted): callers building a snapshot for
 // [Apply] are responsible for the consistency. Use With to compose a
 // snapshot, then call Apply, which validates the result against the
-// current bounding ceiling and surfaces any kernel-side rejection.
+// capset(2) rules and the current thread state before changing it.
 func (s Sets) With(c Cap, kinds ...SetKind) Sets {
 	if c < 0 || c >= 64 {
 		return s

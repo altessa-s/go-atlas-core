@@ -175,11 +175,13 @@ func TestApply_PermittedDropIsPermanent(t *testing.T) {
 		}
 		requireMatchesProc(dropped)
 
-		// The kernel refuses to raise a bit that left the permitted set.
+		// The kernel refuses to raise a bit that left the permitted set;
+		// Apply rejects the request before changing anything.
 		err = capabilities.Apply(cur)
-		if !errors.Is(err, capabilities.ErrFailed) || !errors.Is(err, syscall.EPERM) {
-			exectest.Failf("re-raising CAP_CHOWN after dropping it from permitted returned %v, want ErrFailed wrapping EPERM", err)
+		if !errors.Is(err, capabilities.ErrInvalidOption) {
+			exectest.Failf("re-raising CAP_CHOWN after dropping it from permitted returned %v, want ErrInvalidOption", err)
 		}
+		requireMatchesProc(dropped)
 		if err := os.Chown(path, nobody, nobody); !errors.Is(err, syscall.EPERM) {
 			exectest.Failf("chown after dropping CAP_CHOWN from permitted returned %v, want EPERM", err)
 		}

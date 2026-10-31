@@ -165,20 +165,21 @@ func applySnapshot(s Sets) error {
 // It:
 //
 //  1. Pins the goroutine to its OS thread for the duration.
-//  2. Validates the target before changing anything: no requested
-//     effective/permitted/inheritable bit may exceed the current
-//     bounding set, and dropping bounding bits requires CAP_SETPCAP in
-//     the current permitted set, since PR_CAPBSET_DROP needs it in the
-//     effective set. A rejection returns [ErrInvalidOption] and leaves
-//     the thread untouched.
+//  2. Validates the target before changing anything (see
+//     [validateTarget]): the capset(2) rules for the target
+//     effective/permitted/inheritable masks, the target ambient mask
+//     within its permitted and inheritable masks, and CAP_SETPCAP in
+//     the current permitted set when bounding bits are dropped, since
+//     PR_CAPBSET_DROP needs it in the effective set. A rejection
+//     returns [ErrInvalidOption] and leaves the thread untouched.
 //  3. Lowers the ambient bits the target drops. Lowering needs no
 //     privilege.
 //  4. Calls capset(2) with the target effective/permitted/inheritable,
 //     keeping CAP_SETPCAP effective and permitted when bounding bits
-//     still have to be dropped, even if the target removes it. Every
-//     capset the kernel can refuse (raising a bit outside permitted,
-//     the inheritable rules) is refused here, before anything
-//     irreversible has happened.
+//     still have to be dropped, even if the target removes it. Step 2
+//     has already rejected every target the capset rules refuse, so a
+//     kernel refusal here, before anything irreversible has happened,
+//     comes from outside those rules (a security module, for one).
 //  5. Drops every bounding bit not in the target. This is the only
 //     irreversible step.
 //  6. If step 4 kept CAP_SETPCAP beyond the target, calls capset(2)
@@ -309,27 +310,47 @@ func forEachCap(mask uint64, op func(Cap) error) (done bool, failed Cap, err err
 }
 
 // validateTarget rejects, before any syscall, a target the kernel
-// would refuse in the middle of the sequence.
+// would refuse in the middle of the sequence. It checks the target
+// itself, not the masks of the intermediate capset that keeps
+// CAP_SETPCAP for the bounding drops: that capset passes whenever the
+// target does, and the target is what the final capset installs.
 func validateTarget(cur, s Sets) error {
-	// The kernel rejects any effective/permitted/inheritable bit that
-	// is not in the bounding set; checking here produces a clearer
-	// error than EPERM with no context.
-	if s.Effective&^cur.Bounding != 0 {
+	// The capset(2) rules of cap_capset in security/commoncap.c, against
+	// the thread's state before the call. The bounding set limits only
+	// new inheritable bits; permitted bits stay allowed outside it.
+	if extra := s.Permitted &^ cur.Permitted; extra != 0 {
 		return fmt.Errorf(
-			"%w: effective mask %#x exceeds bounding %#x",
-			ErrInvalidOption, s.Effective, cur.Bounding,
+			"%w: permitted mask %#x adds %#x, which is not in the current permitted set %#x",
+			ErrInvalidOption, s.Permitted, extra, cur.Permitted,
 		)
 	}
-	if s.Permitted&^cur.Bounding != 0 {
+	if extra := s.Effective &^ s.Permitted; extra != 0 {
 		return fmt.Errorf(
-			"%w: permitted mask %#x exceeds bounding %#x",
-			ErrInvalidOption, s.Permitted, cur.Bounding,
+			"%w: effective mask %#x has %#x, which is not in the requested permitted mask %#x",
+			ErrInvalidOption, s.Effective, extra, s.Permitted,
 		)
 	}
-	if s.Inheritable&^cur.Bounding != 0 {
+	if extra := s.Inheritable &^ (cur.Inheritable | cur.Bounding); extra != 0 {
 		return fmt.Errorf(
-			"%w: inheritable mask %#x exceeds bounding %#x",
-			ErrInvalidOption, s.Inheritable, cur.Bounding,
+			"%w: inheritable mask %#x adds %#x, which is in neither the current inheritable set %#x nor the bounding set %#x",
+			ErrInvalidOption, s.Inheritable, extra, cur.Inheritable, cur.Bounding,
+		)
+	}
+	if !has(cur.Effective, CAP_SETPCAP) {
+		if extra := s.Inheritable &^ (cur.Inheritable | cur.Permitted); extra != 0 {
+			return fmt.Errorf(
+				"%w: inheritable mask %#x adds %#x, which is in neither the current inheritable set %#x "+
+					"nor the permitted set %#x, and CAP_SETPCAP is not effective",
+				ErrInvalidOption, s.Inheritable, extra, cur.Inheritable, cur.Permitted,
+			)
+		}
+	}
+	// capset clears ambient bits that leave permitted ∩ inheritable, and
+	// PR_CAP_AMBIENT_RAISE refuses them.
+	if extra := s.Ambient &^ (s.Permitted & s.Inheritable); extra != 0 {
+		return fmt.Errorf(
+			"%w: ambient mask %#x has %#x, which is not in both the requested permitted %#x and inheritable %#x masks",
+			ErrInvalidOption, s.Ambient, extra, s.Permitted, s.Inheritable,
 		)
 	}
 	// PR_CAPBSET_DROP needs CAP_SETPCAP in the effective set; it can

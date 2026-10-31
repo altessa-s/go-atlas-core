@@ -9,8 +9,8 @@ It lets a process drop capabilities at startup and confine itself to a strict al
 
 Any process can reduce its effective, permitted, inheritable and ambient sets without privilege. Dropping bits from the bounding set needs
 `CAP_SETPCAP` (root has it, including in a default Docker container); `DropAll`, `DropAllExcept` and `Apply` keep it effective until the bounding
-drops are done and reject a bounding drop without it with `ErrInvalidOption` before changing anything. Raising caps requires them to already be present
-in the bounding ceiling, which is the standard Linux rule and not something this package works around.
+drops are done and reject a bounding drop without it with `ErrInvalidOption` before changing anything. A permitted bit can be kept but never added, and
+the bounding set limits only what can be added — the standard Linux rules, not something this package works around.
 
 ## API
 
@@ -103,10 +103,11 @@ If you do not know which set you need, you want effective/permitted/bounding. `D
 cleared (safe default for a long-running service). A kept capability stays only where the thread already holds it: in bounding if it is in the bounding
 set, effective and permitted if it is permitted.
 
-`Apply` runs lower-ambient → capset → bounding drops → capset → raise-ambient. The first capset keeps `CAP_SETPCAP` effective for the bounding drops
-and the second removes it when the snapshot does not keep it. Every capset the kernel can refuse runs before the irreversible bounding drops, so a
-rejected capset leaves only ambient bits lowered; a failed bounding drop leaves the requested effective/permitted/inheritable installed and the bounding
-set partially reduced, and the error says how far it got.
+`Apply` runs lower-ambient → capset → bounding drops → capset → raise-ambient. The first capset keeps `CAP_SETPCAP` effective for the bounding drops and
+the second removes it when the snapshot does not keep it. Before any of it, `Apply` checks the snapshot against the rules the kernel applies (see
+[Caveats](#caveats)) and rejects one that breaks them with `ErrInvalidOption`, leaving the thread untouched. A capset the kernel still refuses runs
+before the irreversible bounding drops and leaves only ambient bits lowered; a failed bounding drop leaves the requested effective/permitted/inheritable
+installed and the bounding set partially reduced, and the error says how far it got.
 
 ## When to use it
 
@@ -125,8 +126,12 @@ set partially reduced, and the error says how far it got.
   starts (systemd `CapabilityBoundingSet=`, container `--cap-drop`, or a launcher that drops them before `execve(2)`).
 - **Irreversible ceilings.** Bits dropped from the bounding set cannot be raised by this thread or any descendant. Once you call `BoundingDrop` or
   `DropAllExcept`, you cannot take it back.
-- **Raising is bounded.** `Apply` rejects any effective/permitted/inheritable bit that exceeds the current bounding set with `ErrInvalidOption`. This is
-  not a package choice — the kernel enforces it with `EPERM`, but we fail early with a clearer message.
+- **Raising is bounded.** `Apply` rejects with `ErrInvalidOption`, before changing anything, a snapshot that breaks a rule the kernel enforces: a
+  permitted bit not currently permitted, an effective bit outside the requested permitted mask, an inheritable bit outside the current inheritable and
+  bounding sets (or, without `CAP_SETPCAP` effective, outside the current inheritable and permitted sets), an ambient bit outside the requested
+  permitted and inheritable masks, or a bounding drop without `CAP_SETPCAP` permitted. The kernel would refuse these with `EPERM`, some of them only
+  after the irreversible bounding drops. Effective and permitted bits outside the bounding set are allowed: after `BoundingDrop(CAP_NET_BIND_SERVICE)`
+  the capability stays permitted, and `DropAllExcept(CAP_NET_BIND_SERVICE)` keeps it.
 - **Defense in depth, not isolation.** A malicious dependency already loaded in-process can still read every byte of memory in the host's address space.
   Capability dropping closes the "ambient privileged syscalls" vector only.
 

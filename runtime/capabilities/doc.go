@@ -72,7 +72,9 @@
 //   - Raising bits is possible only within the current ceilings.
 //     Dropping effective/permitted/inheritable/ambient bits is always
 //     possible for an unprivileged process; dropping bounding bits
-//     needs CAP_SETPCAP in the permitted set, and [Apply], [DropAll]
-//     and [DropAllExcept] reject a bounding drop without it with
-//     [ErrInvalidOption] before changing anything.
+//     needs CAP_SETPCAP in the permitted set. [Apply], [DropAll] and
+//     [DropAllExcept] check the capset(2) rules and that requirement
+//     up front and reject a request that breaks them with
+//     [ErrInvalidOption] before changing anything. Permitted bits
+//     outside the bounding set stay allowed.
 package capabilities

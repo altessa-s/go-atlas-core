@@ -15,6 +15,7 @@ package capabilities_test
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/runtime/capabilities"
@@ -41,7 +42,7 @@ func getSets(when string) capabilities.Sets {
 // would refuse must be rejected before any set is changed.
 func requireRejectedUnchanged(op string, err error, before capabilities.Sets) {
 	if !errors.Is(err, capabilities.ErrInvalidOption) {
-		exectest.Failf("%s without CAP_SETPCAP returned %v, want ErrInvalidOption", op, err)
+		exectest.Failf("%s returned %v, want ErrInvalidOption", op, err)
 	}
 	if after := getSets("after the rejected " + op); after != before {
 		exectest.Failf("%s was rejected but changed the thread: before=%+v after=%+v", op, before, after)
@@ -145,6 +146,117 @@ func TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess(t *testing.T) {
 		}
 		if got := getSets("after Apply"); got != want {
 			exectest.Failf("sets after Apply = %+v, want %+v", got, want)
+		}
+	})
+}
+
+// TestApply_EffectiveOutsidePermittedRejectedInSubprocess requests
+// CAP_SETPCAP effective but not permitted, with every bounding bit
+// dropped. capset refuses an effective bit outside the new permitted
+// set, so Apply must reject the snapshot before touching anything —
+// in particular before the irreversible bounding drops, which a thread
+// holding CAP_SETPCAP could otherwise perform.
+func TestApply_EffectiveOutsidePermittedRejectedInSubprocess(t *testing.T) {
+	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		before := getSets("before Apply")
+		err := capabilities.Apply(capabilities.Sets{Effective: uint64(1) << capabilities.CAP_SETPCAP})
+		requireRejectedUnchanged("Apply(effective outside permitted)", err, before)
+	})
+}
+
+// TestApply_InheritableRulesInSubprocess pins the capset rule for new
+// inheritable bits: without CAP_SETPCAP effective a bit may be added
+// only from the current inheritable or permitted set, and with it any
+// bit of the bounding set may be added. It lowers CAP_CHOWN from the
+// effective and permitted sets and CAP_SETPCAP from the effective set,
+// requires adding CAP_CHOWN to inheritable to be rejected with the
+// thread unchanged, then raises CAP_SETPCAP and requires the same
+// request to succeed. Needs CAP_SETPCAP permitted and CAP_CHOWN
+// permitted and in the bounding set; returns without asserting
+// otherwise.
+func TestApply_InheritableRulesInSubprocess(t *testing.T) {
+	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		cur := getSets("before Apply")
+		if !cur.Has(capabilities.CAP_SETPCAP, capabilities.Permitted) ||
+			!cur.Has(capabilities.CAP_CHOWN, capabilities.Permitted) ||
+			!cur.Has(capabilities.CAP_CHOWN, capabilities.Bounding) ||
+			cur.Has(capabilities.CAP_CHOWN, capabilities.Inheritable) {
+			return
+		}
+		chown := uint64(1) << capabilities.CAP_CHOWN
+		setpcap := uint64(1) << capabilities.CAP_SETPCAP
+
+		lowered := cur
+		lowered.Effective &^= chown | setpcap
+		lowered.Permitted &^= chown
+		lowered.Ambient &^= chown
+		if err := capabilities.Apply(lowered); err != nil {
+			exectest.Failf("Apply(lower CAP_CHOWN and CAP_SETPCAP): %v", err)
+		}
+		if got := getSets("after lowering"); got != lowered {
+			exectest.Failf("sets after lowering = %+v, want %+v", got, lowered)
+		}
+
+		capped := lowered
+		capped.Inheritable |= chown
+		err := capabilities.Apply(capped)
+		requireRejectedUnchanged("Apply(inheritable outside permitted without CAP_SETPCAP)", err, lowered)
+
+		// The kernel checks CAP_SETPCAP in the effective set the thread
+		// has before the call, so it has to be raised by a call of its
+		// own first.
+		raised := lowered
+		raised.Effective |= setpcap
+		if err := capabilities.Apply(raised); err != nil {
+			exectest.Failf("Apply(raise CAP_SETPCAP): %v", err)
+		}
+		raised.Inheritable |= chown
+		if err := capabilities.Apply(raised); err != nil {
+			exectest.Failf("Apply(inheritable from bounding with CAP_SETPCAP): %v", err)
+		}
+		if got := getSets("after raising"); got != raised {
+			exectest.Failf("sets after raising = %+v, want %+v", got, raised)
+		}
+	})
+}
+
+// TestDropAllExcept_KeepsPermittedOutsideBoundingInSubprocess drops
+// CAP_NET_BIND_SERVICE from the bounding set while it stays permitted,
+// which Linux allows, and then keeps it with DropAllExcept: the result
+// must hold it effective and permitted with an empty bounding set.
+// Needs CAP_SETPCAP effective and CAP_NET_BIND_SERVICE permitted and in
+// the bounding set; returns without asserting otherwise.
+func TestDropAllExcept_KeepsPermittedOutsideBoundingInSubprocess(t *testing.T) {
+	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		before := getSets("before BoundingDrop")
+		if !before.Has(capabilities.CAP_SETPCAP, capabilities.Effective) ||
+			!before.Has(capabilities.CAP_NET_BIND_SERVICE, capabilities.Permitted) ||
+			!before.Has(capabilities.CAP_NET_BIND_SERVICE, capabilities.Bounding) {
+			return
+		}
+		bit := uint64(1) << capabilities.CAP_NET_BIND_SERVICE
+
+		if err := capabilities.BoundingDrop(capabilities.CAP_NET_BIND_SERVICE); err != nil {
+			exectest.Failf("BoundingDrop(CAP_NET_BIND_SERVICE): %v", err)
+		}
+		mid := before
+		mid.Bounding &^= bit
+		if got := getSets("after BoundingDrop"); got != mid {
+			exectest.Failf("sets after BoundingDrop = %+v, want %+v", got, mid)
+		}
+
+		if err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE); err != nil {
+			exectest.Failf("DropAllExcept(CAP_NET_BIND_SERVICE) after BoundingDrop: %v", err)
+		}
+		want := capabilities.Sets{Effective: bit, Permitted: bit}
+		if got := getSets("after DropAllExcept"); got != want {
+			exectest.Failf("sets after DropAllExcept = %+v, want %+v", got, want)
 		}
 	})
 }
