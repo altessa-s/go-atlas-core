@@ -5,6 +5,7 @@
 package charset_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,7 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 )
 
 const cyrillic = "код;название\n50;Московская область\n"
@@ -89,4 +91,37 @@ func TestDecodeErrors(t *testing.T) {
 			require.Nil(t, got)
 		})
 	}
+}
+
+var errTransform = errors.New("transform failed")
+
+// failingTransformer is a transform.Transformer that rejects every input.
+type failingTransformer struct{ transform.NopResetter }
+
+func (failingTransformer) Transform(_, _ []byte, _ bool) (nDst, nSrc int, err error) {
+	return 0, 0, errTransform
+}
+
+// failingEncoding is an encoding.Encoding whose decoder always fails.
+type failingEncoding struct{}
+
+func (failingEncoding) NewDecoder() *encoding.Decoder {
+	return &encoding.Decoder{Transformer: failingTransformer{}}
+}
+
+func (failingEncoding) NewEncoder() *encoding.Encoder {
+	return &encoding.Encoder{Transformer: failingTransformer{}}
+}
+
+func TestDecodeFallbackFailure(t *testing.T) {
+	t.Parallel()
+
+	invalid := []byte{0xff, 0xfe, 'a'}
+	got, err := charset.Decode(invalid, "text/plain", failingEncoding{})
+	require.ErrorIs(t, err, errTransform, "the fallback decoder error is wrapped, not replaced")
+	require.Nil(t, got)
+
+	got, err = charset.Decode([]byte("valid"), "text/plain", failingEncoding{})
+	require.NoError(t, err, "valid UTF-8 never reaches the fallback")
+	require.Equal(t, []byte("valid"), got)
 }
