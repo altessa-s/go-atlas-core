@@ -158,3 +158,62 @@ func BenchmarkWAL_Append_Parallel(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkWAL_AppendSync measures a durable write: one record followed by
+// an explicit fsync of the active segment.
+func BenchmarkWAL_AppendSync(b *testing.B) {
+	w := newBenchWAL(b)
+	payload := make([]byte, 256)
+
+	b.ReportAllocs()
+	b.SetBytes(int64(len(payload)))
+	for b.Loop() {
+		if _, err := w.Append(payload); err != nil {
+			b.Fatalf("Append: %v", err)
+		}
+		if err := w.Sync(); err != nil {
+			b.Fatalf("Sync: %v", err)
+		}
+	}
+}
+
+// BenchmarkWAL_AppendAckCycle measures the steady state of a consumer that
+// acknowledges every record right after appending it, with small segments
+// so fully acknowledged sealed segments keep getting deleted.
+func BenchmarkWAL_AppendAckCycle(b *testing.B) {
+	const payloadSize = 128
+	segBytes := int64(recordHeaderSize+payloadSize) * 64
+	w := newBenchWAL(b, WithMaxSegmentBytes(segBytes))
+	payload := make([]byte, payloadSize)
+
+	b.ReportAllocs()
+	b.SetBytes(payloadSize)
+	for b.Loop() {
+		off, err := w.Append(payload)
+		if err != nil {
+			b.Fatalf("Append: %v", err)
+		}
+		w.Ack(off)
+	}
+	if st := w.Stats(); st.Pending != 0 {
+		b.Fatalf("pending = %d, want 0", st.Pending)
+	}
+}
+
+// BenchmarkWAL_Stats measures the metrics snapshot polled by exporters.
+func BenchmarkWAL_Stats(b *testing.B) {
+	w := newBenchWAL(b)
+	payload := make([]byte, 64)
+	for range 1024 {
+		if _, err := w.Append(payload); err != nil {
+			b.Fatalf("Append setup: %v", err)
+		}
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if w.Stats().Pending == 0 {
+			b.Fatal("no pending records")
+		}
+	}
+}
