@@ -81,6 +81,14 @@ func Get() (Sets, error) {
 //
 // Per-thread scope (read this before using):
 //
+// DropAll, DropAllExcept and Apply pin the goroutine to its OS thread
+// only for the duration of the call, and Get, BoundingDrop and the
+// ambient helpers do not pin it at all. Consecutive calls can therefore
+// run on different threads; a caller that builds on an earlier call
+// (Get then Apply, BoundingDrop then DropAllExcept, Apply then Get) must
+// call [runtime.LockOSThread] first and keep the thread for the whole
+// sequence.
+//
 // capset(2) is per-thread and Linux does not expose a way to apply a
 // new capability set to every thread of a process from userspace. The
 // Go runtime has typically already created several OS threads (sysmon,
@@ -153,7 +161,9 @@ func DropAllExcept(keep ...Cap) error {
 // are installed.
 //
 // Per-thread scope: see the [DropAll] doc comment for the Go-runtime
-// caveat. Apply inherits the same limitation.
+// caveat. Apply inherits the same limitation, and validates s against
+// the thread it runs on: a caller that builds s from an earlier [Get]
+// must hold [runtime.LockOSThread] across both calls.
 func Apply(s Sets) error {
 	return applySnapshot(s)
 }

@@ -120,10 +120,12 @@ installed and the bounding set partially reduced, and the error says how far it 
 ## Caveats
 
 - **Linux only.** On non-Linux platforms every function returns `ErrUnsupported` so cross-platform code can import the package without build tags.
-- **Per-thread scope.** `capset(2)` mutates only the calling thread. The package pins the goroutine to its OS thread around every mutating call
-  (`runtime.LockOSThread`), but the change lands on that thread only — even at startup the Go runtime already runs peer OS threads that keep their
-  capabilities, and the plugin sandbox is subject to the same limit. For a process-wide drop, drop capabilities externally before the Go binary
-  starts (systemd `CapabilityBoundingSet=`, container `--cap-drop`, or a launcher that drops them before `execve(2)`).
+- **Per-thread scope.** `capset(2)` mutates only the calling thread. The package pins the goroutine to its OS thread during `Apply`, `DropAll` and
+  `DropAllExcept` (`runtime.LockOSThread`), but the change lands on that thread only — even at startup the Go runtime already runs peer OS threads that
+  keep their capabilities, and the plugin sandbox is subject to the same limit. For a process-wide drop, drop capabilities externally before the Go
+  binary starts (systemd `CapabilityBoundingSet=`, container `--cap-drop`, or a launcher that drops them before `execve(2)`). The pin ends when the call
+  returns, and `Get`, `BoundingDrop` and the ambient helpers do not pin at all, so consecutive calls may land on different threads: wrap a sequence that
+  builds on earlier results (`Get` then `Apply`, `BoundingDrop` then `DropAllExcept`, `Apply` then `Get`) in `runtime.LockOSThread`.
 - **Irreversible ceilings.** Bits dropped from the bounding set cannot be raised by this thread or any descendant. Once you call `BoundingDrop` or
   `DropAllExcept`, you cannot take it back.
 - **Raising is bounded.** `Apply` rejects with `ErrInvalidOption`, before changing anything, a snapshot that breaks a rule the kernel enforces: a
