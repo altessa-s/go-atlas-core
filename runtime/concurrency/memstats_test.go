@@ -5,7 +5,9 @@
 package concurrency_test
 
 import (
+	"math"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -109,4 +111,31 @@ func TestMemStatsCache_AsMemorySource(t *testing.T) {
 
 	limit := concurrency.MemoryAwareConcurrency(100, 500, 1000, concurrency.WithAvailableMemory(cache.RuntimeHeadroom))
 	require.GreaterOrEqual(t, limit(), concurrency.MinConcurrencyLimit)
+}
+
+// TestMemStatsCache_RuntimeHeadroom is serial: it changes the process-wide
+// memory limit through debug.SetMemoryLimit and restores it on cleanup.
+func TestMemStatsCache_RuntimeHeadroom(t *testing.T) {
+	previous := debug.SetMemoryLimit(-1)
+	t.Cleanup(func() { debug.SetMemoryLimit(previous) })
+
+	cache := concurrency.NewMemStatsCache(time.Hour, newFakeClock())
+
+	debug.SetMemoryLimit(math.MaxInt64)
+	_, known := cache.RuntimeHeadroom()
+	require.False(t, known, "without a runtime limit the headroom is unknown")
+
+	stats := cache.Get()
+	used := stats.Sys - min(stats.Sys, stats.HeapReleased)
+
+	const extra = 1 << 30
+	debug.SetMemoryLimit(int64(used + extra))
+	available, known := cache.RuntimeHeadroom()
+	require.True(t, known)
+	require.Equal(t, uint64(extra), available, "headroom is the limit minus runtime-managed memory of the cached snapshot")
+
+	debug.SetMemoryLimit(int64(used / 2))
+	available, known = cache.RuntimeHeadroom()
+	require.True(t, known)
+	require.Zero(t, available, "a limit below current usage leaves no headroom")
 }
