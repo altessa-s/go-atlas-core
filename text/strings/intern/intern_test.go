@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -124,6 +125,76 @@ func TestInterner_JoinWith(t *testing.T) {
 		return strings.Join(parts, "-")
 	})
 	require.Equal(t, "a-b", got)
+}
+
+func TestInterner_JoinEmptyPartsDoesNotIntern(t *testing.T) {
+	t.Parallel()
+
+	interner := intern.New(100)
+	called := false
+
+	require.Empty(t, interner.JoinString(nil, ","))
+	require.Empty(t, interner.JoinWith([]string{}, func([]string) string {
+		called = true
+		return "unexpected"
+	}))
+	require.False(t, called, "the joiner is not called for empty parts")
+	require.True(t, interner.IsEmpty())
+	require.Equal(t, intern.Stats{MaxSize: 100}, interner.Stats(), "the empty string bypasses every cache")
+}
+
+func TestInterner_JoinResultIsCanonical(t *testing.T) {
+	t.Parallel()
+
+	interner := intern.New(100)
+	joined := interner.JoinString([]string{"a", "b"}, ",")
+	viaJoiner := interner.JoinWith([]string{"a", "b"}, func(parts []string) string { return strings.Join(parts, ",") })
+
+	require.Equal(t, "a,b", viaJoiner)
+	require.Equal(t, int64(1), interner.Size(), "both joins intern the same entry")
+	require.Same(t, unsafe.StringData(joined), unsafe.StringData(viaJoiner))
+}
+
+// TestInterner_String_CacheTiers follows one string through the three lookup
+// tiers: a miss creates it, cold-cache hits count accesses until it reaches
+// HotCacheThreshold and is promoted, and later lookups hit the hot cache.
+func TestInterner_String_CacheTiers(t *testing.T) {
+	t.Parallel()
+
+	interner := intern.New(100)
+	for range intern.HotCacheThreshold {
+		require.Equal(t, "tiered", interner.String("tiered"))
+	}
+
+	stats := interner.Stats()
+	require.Equal(t, uint64(1), stats.Misses)
+	require.Equal(t, uint64(intern.HotCacheThreshold-1), stats.ColdHits)
+	require.Zero(t, stats.HotHits, "promotion happens on the threshold access, not before")
+
+	for range 3 {
+		require.Equal(t, "tiered", interner.String("tiered"))
+	}
+	stats = interner.Stats()
+	require.Equal(t, uint64(3), stats.HotHits)
+	require.Equal(t, uint64(intern.HotCacheThreshold-1), stats.ColdHits)
+	require.Equal(t, int64(1), interner.Size(), "the hot cache does not add entries")
+}
+
+func TestInterner_String_EmptyIsNotInterned(t *testing.T) {
+	t.Parallel()
+
+	interner := intern.New(100)
+	require.Empty(t, interner.String(""))
+	require.True(t, interner.IsEmpty())
+	require.Zero(t, interner.Stats().Misses)
+}
+
+func TestWithClock_NilKeepsDefault(t *testing.T) {
+	t.Parallel()
+
+	interner := intern.New(10, intern.WithClock(nil))
+	require.Equal(t, "x", interner.String("x"))
+	require.Equal(t, int64(1), interner.Size())
 }
 
 func TestInterner_SizeAndLoadFactor(t *testing.T) {
