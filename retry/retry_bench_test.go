@@ -91,3 +91,64 @@ func BenchmarkDo_JoinLastError(b *testing.B) {
 		_ = policy.Do(ctx, fn)
 	}
 }
+
+// BenchmarkExponential measures the delay computation with the options a
+// production policy sets: a cap and random jitter, sequentially and from
+// many goroutines sharing one NextDelayFunc.
+func BenchmarkExponential(b *testing.B) {
+	next := retry.Exponential(100*time.Millisecond,
+		retry.WithExponentialFactor(2),
+		retry.WithExponentialMaxDelay(30*time.Second),
+		retry.WithExponentialJitter(0.2),
+	)
+	b.Run("JitterCapped", func(b *testing.B) {
+		b.ReportAllocs()
+		var sink time.Duration
+		i := 0
+		for b.Loop() {
+			sink += next(i%16, nil)
+			i++
+		}
+		if sink <= 0 {
+			b.Fatal("non-positive delays")
+		}
+	})
+	b.Run("JitterCappedParallel", func(b *testing.B) {
+		b.ReportAllocs()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				if next(i%16, nil) <= 0 {
+					b.Error("non-positive delay")
+					return
+				}
+				i++
+			}
+		})
+	})
+}
+
+// BenchmarkDo_RealTimerWait measures a retry loop that really waits on the
+// system clock between attempts, which exercises the reused timer.
+func BenchmarkDo_RealTimerWait(b *testing.B) {
+	failErr := errors.New("fail")
+	ctx := b.Context()
+	policy := retry.NewPolicy(
+		retry.WithMaxAttempts(3),
+		retry.WithNextDelay(func(int, error) time.Duration { return time.Microsecond }),
+	)
+	b.ReportAllocs()
+	for b.Loop() {
+		calls := 0
+		err := policy.Do(ctx, func(context.Context) error {
+			calls++
+			if calls < 4 {
+				return failErr
+			}
+			return nil
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
