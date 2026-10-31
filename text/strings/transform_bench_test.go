@@ -35,3 +35,36 @@ func BenchmarkScreamingSnakeToCamelCase(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkToSnakeCase(b *testing.B) {
+	for _, tc := range []struct{ name, in string }{
+		{name: "ASCII", in: "maxRetryCountPerRequest"},
+		{name: "Acronym", in: "HTTPServerTLSConfig"},
+		{name: "Unicode", in: "größeÜberAllesMüller"},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if corestrings.ToSnakeCase(tc.in) == "" {
+					b.Fatal("empty result")
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkToScreamingSnakeCase(b *testing.B) {
+	for _, tc := range []struct{ name, in string }{
+		{name: "ASCII", in: "maxRetryCountPerRequest"},
+		{name: "Unicode", in: "größeÜberAllesMüller"},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if corestrings.ToScreamingSnakeCase(tc.in) == "" {
+					b.Fatal("empty result")
+				}
+			}
+		})
+	}
+}

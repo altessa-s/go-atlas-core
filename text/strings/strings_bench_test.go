@@ -197,3 +197,29 @@ func BenchmarkTo(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkContains measures the option combinations of Contains on a
+// paragraph-sized haystack: first-match search, case-insensitive search,
+// whole-word search and occurrence counting.
+func BenchmarkContains(b *testing.B) {
+	haystack := strings.Repeat("The quick brown fox jumps over the lazy dog. ", 20) + "Needle at the end."
+	for _, tc := range []struct {
+		name   string
+		substr string
+		opts   corestrings.ContainsOptions
+	}{
+		{name: "CaseSensitive", substr: "Needle", opts: corestrings.ContainsOptions{CaseSensitive: true}},
+		{name: "CaseInsensitive", substr: "NEEDLE", opts: corestrings.ContainsOptions{}},
+		{name: "WholeWords", substr: "fox", opts: corestrings.ContainsOptions{CaseSensitive: true, MatchWholeWords: true}},
+		{name: "Count", substr: "the", opts: corestrings.ContainsOptions{Count: true}},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if !corestrings.Contains(haystack, tc.substr, tc.opts).Found {
+					b.Fatalf("%q not found", tc.substr)
+				}
+			}
+		})
+	}
+}
