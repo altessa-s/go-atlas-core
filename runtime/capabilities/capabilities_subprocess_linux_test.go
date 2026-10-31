@@ -10,6 +10,11 @@
 // successful DropAll/DropAllExcept call would contaminate every later
 // test in the same binary. These tests run in a re-execed child that
 // exits immediately after the assertion.
+//
+// Capability sets are per thread, and the package releases its OS-thread
+// pin when a call returns. Every body therefore locks its OS thread
+// first and keeps it through setup, mutations and assertions, so each
+// call and each snapshot sees the same thread.
 
 package capabilities_test
 
@@ -63,6 +68,8 @@ func requireRejectedUnchanged(op string, err error, before capabilities.Sets) {
 // runner whose bounding set is already empty needs no privilege at all.
 func TestDropAll_ZeroesEverySetInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		before := getSets("before DropAll")
 		err := capabilities.DropAll()
 		if before.Bounding != 0 && !canDropBounding(before) {
@@ -93,6 +100,8 @@ func TestDropAll_ZeroesEverySetInSubprocess(t *testing.T) {
 // apply to the bits that leave the bounding set.
 func TestDropAllExcept_KeepsListedAndDropsRestInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		before := getSets("before DropAllExcept")
 		bit := uint64(1) << capabilities.CAP_NET_BIND_SERVICE
 
@@ -122,6 +131,8 @@ func TestDropAllExcept_KeepsListedAndDropsRestInSubprocess(t *testing.T) {
 // sets, CAP_SETPCAP not effective. Skipped without CAP_SETPCAP.
 func TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		cur := getSets("before Apply")
 		chown := uint64(1) << capabilities.CAP_CHOWN
 		if !canDropBounding(cur) || cur.Bounding&chown == 0 {
@@ -133,6 +144,12 @@ func TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess(t *testing.T) {
 		lowered.Effective &^= setpcap
 		if err := capabilities.Apply(lowered); err != nil {
 			exectest.Failf("Apply(CAP_SETPCAP not effective): %v", err)
+		}
+		mid := getSets("after lowering CAP_SETPCAP")
+		if mid != lowered || mid.Has(capabilities.CAP_SETPCAP, capabilities.Effective) ||
+			!mid.Has(capabilities.CAP_SETPCAP, capabilities.Permitted) {
+			exectest.Failf("sets after lowering CAP_SETPCAP = %+v, want %+v "+
+				"(CAP_SETPCAP permitted but not effective)", mid, lowered)
 		}
 
 		want := lowered
@@ -268,6 +285,8 @@ func TestDropAllExcept_KeepsPermittedOutsideBoundingInSubprocess(t *testing.T) {
 // other subprocess test in this file is unsound.
 func TestGet_ReturnsKernelStateInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		first, err := capabilities.Get()
 		if err != nil {
 			exectest.Failf("first Get: %v", err)

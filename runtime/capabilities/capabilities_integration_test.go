@@ -10,6 +10,8 @@
 // the capability back even as root. Each test runs in a re-executed
 // child because drops are irreversible; a child that does not start
 // with CAP_CHOWN (an unprivileged runner) returns without asserting.
+// Capability sets are per thread, so each child locks its OS thread
+// first and keeps it for every call, /proc read, probe and fork.
 
 package capabilities_test
 
@@ -118,6 +120,8 @@ func requireMatchesProc(s capabilities.Sets) {
 func TestApply_EffectiveDropDeniesChownUntilRaised(t *testing.T) {
 	dir := sharedTempDir(t)
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		if !hasChown() {
 			return
 		}
@@ -155,6 +159,8 @@ func TestApply_EffectiveDropDeniesChownUntilRaised(t *testing.T) {
 func TestApply_PermittedDropIsPermanent(t *testing.T) {
 	dir := sharedTempDir(t)
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		if !hasChown() {
 			return
 		}
@@ -190,6 +196,8 @@ func TestApply_PermittedDropIsPermanent(t *testing.T) {
 
 func TestBoundingDrop_ExecdChildCannotRegainCapability(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		if !hasChown() {
 			return
 		}
@@ -198,11 +206,6 @@ func TestBoundingDrop_ExecdChildCannotRegainCapability(t *testing.T) {
 			// No cat in the image: nothing to exec into.
 			return
 		}
-		// The bounding set is per thread and BoundingDrop does not pin
-		// the goroutine: hold the thread so the fork below clones the
-		// thread that dropped the capability.
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
 		if err := capabilities.BoundingDrop(capabilities.CAP_CHOWN); err != nil {
 			exectest.Failf("BoundingDrop(CAP_CHOWN): %v", err)
 		}
