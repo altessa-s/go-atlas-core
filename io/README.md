@@ -36,9 +36,11 @@ the file system.
 
 Adapts a `RangeOpener` — any "open a ranged read at offset" function (S3 `GetObject` with a `Range` header, an HTTP Range request) — to
 `io.ReadSeekCloser` (`NewRangeReadSeeker(ctx, size, open)`) for consumers that need random access over a remote object without downloading it up front.
-Reads lazily open a ranged request at the current position; `Seek` only moves the position and forces the next `Read` to reopen. A body shorter than the
-requested range surfaces as `io.ErrUnexpectedEOF`; `Seek` rejects bad input with `ErrInvalidWhence` or `ErrNegativePosition`. Not safe for concurrent
-use; the caller must `Close` it to release the open body.
+Reads lazily open a ranged request at the current position; `Seek` only moves the position and forces the next `Read` to reopen. `Read` never delivers
+bytes past `size`. A body shorter than the requested range surfaces as `io.ErrUnexpectedEOF`; a body that continues past the range end (a source that
+ignored `Range` and returned the whole object, or returned more than asked) surfaces as `ErrRangeOverrun` once the range is delivered, marking those
+bytes as suspect. `Seek` rejects bad input with `ErrInvalidWhence` or `ErrNegativePosition`. Not safe for concurrent use; the caller must `Close` it to
+release the open body.
 
 ## Spool
 
