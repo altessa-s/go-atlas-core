@@ -19,7 +19,7 @@ func TestLimitedReadCloserPreservesReadErrorAtLimit(t *testing.T) {
 	failure := errors.New("reader failed")
 	reader := coreio.NewLimitedReadCloser(io.NopCloser(&dataAndErrorReader{data: "abcdef", err: failure}), 5)
 	data, err := io.ReadAll(reader)
-	require.Equal(t, "abcdef", string(data))
+	require.Equal(t, "abcde", string(data))
 	require.ErrorIs(t, err, coreio.ErrReadLimitExceeded)
 	require.ErrorIs(t, err, failure)
 }

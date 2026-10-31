@@ -3,7 +3,7 @@
 
 package etag
 
-// Option is a functional option for configuring versionOptions.
+// VersionOption is a functional option for configuring versionOptions.
 type VersionOption func(o *versionOptions)
 
 // WithSingleton enables the singleton option.

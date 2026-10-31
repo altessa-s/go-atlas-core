@@ -5,7 +5,8 @@ import "github.com/altessa-s/go-atlas-core/types/bits"
 ```
 
 Package `bits` provides generic bit manipulation functions for all integer types. Covers single-bit operations, range operations, counting, rotation,
-and masking. All functions are generic over `constraints.Integer` and work with any bit width.
+and masking. All functions are generic over `constraints.Integer` and work with any bit width. The width of a type is the size of its underlying type,
+so a named type such as `type myByte uint8` is 8 bits wide, and `int`, `uint` and `uintptr` follow the target platform.
 
 ## Single-bit operations
 

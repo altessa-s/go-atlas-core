@@ -5,6 +5,7 @@
 package secure_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/text/strings/secure"
@@ -39,6 +40,36 @@ func BenchmarkEqual(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = secure.Equal("correct horse battery staple", "correct horse battery stapl3")
+	}
+}
+
+// BenchmarkPrefixMatch measures the constant-time authorization-scheme check
+// run on every authenticated request.
+func BenchmarkPrefixMatch(b *testing.B) {
+	const header = "Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature"
+	b.ReportAllocs()
+	for b.Loop() {
+		if !secure.PrefixMatch(header, "bearer ") {
+			b.Fatal("scheme not matched")
+		}
+	}
+}
+
+// BenchmarkSubstringMatch measures the quadratic constant-time search at
+// header-sized and URL-sized inputs.
+func BenchmarkSubstringMatch(b *testing.B) {
+	for _, tc := range []struct{ name, s string }{
+		{name: "Header_64B", s: "Basic dXNlcjpwYXNzd29yZA== realm=\"internal\" token=SeCrEt-value"},
+		{name: "URL_256B", s: "https://example.test/api/v1/resources?" + strings.Repeat("filter=a&", 24) + "token=SECRET-value"},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if !secure.SubstringMatch(tc.s, "secret-value") {
+					b.Fatal("substring not matched")
+				}
+			}
+		})
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Option is a functional option for configuring exponentialOptions.
+// ExponentialOption is a functional option for configuring exponentialOptions.
 type ExponentialOption func(o *exponentialOptions)
 
 // WithExponentialFactor sets the factor option.

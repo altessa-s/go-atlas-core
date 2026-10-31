@@ -13,10 +13,12 @@ in long-running services. Typical usage: borrow via `GetBuffer`, write, then `Pu
 
 ## LimitedReadCloser
 
-`NewLimitedReadCloser(rc, limit)` wraps an `io.ReadCloser` with a byte-count limit. Returns `ErrReadLimitExceeded` when the limit is exceeded instead of
-silently truncating the data. Safe for concurrent reads — a mutex serializes each `Read` with the running byte total, so the limit holds across
-goroutines; `Close` delegates to the underlying closer. An underlying read error remains available through `errors.Is` when the same read exceeds the
-limit.
+`NewLimitedReadCloser(rc, limit)` wraps an `io.ReadCloser` with a byte-count limit. It never delivers more than `limit` bytes: when the source holds
+more, `Read` returns the bytes up to the limit with `ErrReadLimitExceeded` instead of silently truncating, and every later `Read` returns the error
+again without data. A source of exactly `limit` bytes reads to `io.EOF` without error. To detect the overflow it reads one byte past the limit from the
+source; that byte is never handed to the caller. Safe for concurrent reads — a mutex serializes each `Read` with the running byte total, so the limit
+holds across goroutines; `Close` delegates to the underlying closer. An underlying read error remains available through `errors.Is` when the same read
+exceeds the limit.
 
 ## ReadAllLimited
 
@@ -34,9 +36,11 @@ the file system.
 
 Adapts a `RangeOpener` — any "open a ranged read at offset" function (S3 `GetObject` with a `Range` header, an HTTP Range request) — to
 `io.ReadSeekCloser` (`NewRangeReadSeeker(ctx, size, open)`) for consumers that need random access over a remote object without downloading it up front.
-Reads lazily open a ranged request at the current position; `Seek` only moves the position and forces the next `Read` to reopen. A body shorter than the
-requested range surfaces as `io.ErrUnexpectedEOF`; `Seek` rejects bad input with `ErrInvalidWhence` or `ErrNegativePosition`. Not safe for concurrent
-use; the caller must `Close` it to release the open body.
+Reads lazily open a ranged request at the current position; `Seek` only moves the position and forces the next `Read` to reopen. `Read` never delivers
+bytes past `size`. A body shorter than the requested range surfaces as `io.ErrUnexpectedEOF`; a body that continues past the range end (a source that
+ignored `Range` and returned the whole object, or returned more than asked) surfaces as `ErrRangeOverrun` once the range is delivered, marking those
+bytes as suspect. `Seek` rejects bad input with `ErrInvalidWhence` or `ErrNegativePosition`. Not safe for concurrent use; the caller must `Close` it to
+release the open body.
 
 ## Spool
 

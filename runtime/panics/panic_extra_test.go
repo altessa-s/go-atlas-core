@@ -252,3 +252,37 @@ func TestHandleOpts_SetShutdown(t *testing.T) {
 	require.NotNil(t, opts.Shutdown)
 	require.Nil(t, opts.SetShutdown(nil).Shutdown, "SetShutdown(nil) restores the default")
 }
+
+// message and messagePtr are types defined over string and *string, which the
+// assertion helpers' ~string | ~*string constraint admits.
+type (
+	message    string
+	messagePtr *string
+)
+
+func TestMust_MessageTypes(t *testing.T) {
+	t.Parallel()
+
+	text := "invariant violated"
+	cases := []struct {
+		name string
+		fail func()
+		want string
+	}{
+		{name: "string", fail: func() { panics.Must(false, text) }, want: text},
+		{name: "*string", fail: func() { panics.Must(false, &text) }, want: text},
+		{name: "defined string", fail: func() { panics.Must(false, message(text)) }, want: text},
+		{name: "defined *string", fail: func() { panics.Must(false, messagePtr(&text)) }, want: text},
+		{name: "nil *string", fail: func() { panics.Must(false, (*string)(nil)) }, want: "(*string)(nil)"},
+		{name: "nil defined *string", fail: func() { panics.Must(false, messagePtr(nil)) }, want: "(panics_test.messagePtr)(nil)"},
+		{name: "MustNonNil with defined *string", fail: func() { panics.MustNonNil(nil, messagePtr(&text)) }, want: text},
+		{name: "MustNonZero with nil *string", fail: func() { panics.MustNonZero(0, (*string)(nil)) }, want: "(*string)(nil)"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.PanicsWithValue(t, tc.want, tc.fail)
+		})
+	}
+}

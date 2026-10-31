@@ -35,6 +35,35 @@ func BenchmarkApplyTimeout_ExistingDeadline(b *testing.B) {
 	}
 }
 
+// BenchmarkWithMaxTimeout measures capping a request context: the sooner
+// incoming deadline is kept as is, a later one gets a new timer context.
+func BenchmarkWithMaxTimeout(b *testing.B) {
+	b.Run("SoonerDeadline", func(b *testing.B) {
+		ctx, cancel := context.WithTimeout(b.Context(), time.Second)
+		defer cancel()
+		b.ReportAllocs()
+		for b.Loop() {
+			tctx, tcancel := corecontext.WithMaxTimeout(ctx, time.Hour)
+			tcancel()
+			if tctx != ctx {
+				b.Fatal("context replaced despite sooner deadline")
+			}
+		}
+	})
+	b.Run("LaterDeadline", func(b *testing.B) {
+		ctx, cancel := context.WithTimeout(b.Context(), time.Hour)
+		defer cancel()
+		b.ReportAllocs()
+		for b.Loop() {
+			tctx, tcancel := corecontext.WithMaxTimeout(ctx, time.Second)
+			tcancel()
+			if tctx == ctx {
+				b.Fatal("deadline not capped")
+			}
+		}
+	})
+}
+
 func BenchmarkWithDefault(b *testing.B) {
 	ctx := b.Context() // no deadline => timer context is created
 

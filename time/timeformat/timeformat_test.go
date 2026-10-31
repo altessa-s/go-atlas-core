@@ -68,3 +68,52 @@ func TestFormatDuration_UnixMicroIsNanoseconds(t *testing.T) {
 	require.True(t, ok, "expected int64 for UnixMicro duration, got %T", got)
 	require.Equal(t, d.Nanoseconds(), ns)
 }
+
+func TestFormatTime_Values(t *testing.T) {
+	t.Parallel()
+
+	in := time.Date(2023, 11, 14, 22, 13, 20, 123456789, time.UTC)
+	tests := []struct {
+		format Format
+		want   any
+	}{
+		{RFC3339, "2023-11-14T22:13:20Z"},
+		{RFC3339Nano, "2023-11-14T22:13:20.123456789Z"},
+		{Unix, int64(1700000000)},
+		{UnixMilli, int64(1700000000123)},
+		{UnixMicro, int64(1700000000123456)},
+		{UnixNano, int64(1700000000123456789)},
+		{Format("bogus"), "2023-11-14T22:13:20Z"},
+		{Format(""), "2023-11-14T22:13:20Z"},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.format), func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, FormatTime(in, tc.format))
+		})
+	}
+}
+
+func TestFormatDuration_AllFormats(t *testing.T) {
+	t.Parallel()
+
+	d := 90*time.Second + 250*time.Millisecond
+	tests := []struct {
+		format Format
+		want   any
+	}{
+		{Unix, d.Nanoseconds()},
+		{UnixMilli, d.Nanoseconds()},
+		{UnixMicro, d.Nanoseconds()},
+		{UnixNano, d.Nanoseconds()},
+		{RFC3339, d},
+		{RFC3339Nano, d},
+		{Format("bogus"), d},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.format), func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, FormatDuration(d, tc.format))
+		})
+	}
+}

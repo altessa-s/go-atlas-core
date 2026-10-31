@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 
@@ -25,12 +26,16 @@ type rangeCall struct {
 // rangeSource serves a RangeOpener over an in-memory byte slice and records
 // every requested range. truncateTo, when positive, caps the returned body
 // length to simulate a source returning fewer bytes than the requested range.
+// ignoreRange simulates a server that ignores the Range header and returns the
+// whole object; trailer appends bytes past the requested range end.
 type rangeSource struct {
-	mu         sync.Mutex
-	data       []byte
-	calls      []rangeCall
-	openErr    error
-	truncateTo int
+	mu          sync.Mutex
+	data        []byte
+	calls       []rangeCall
+	openErr     error
+	truncateTo  int
+	ignoreRange bool
+	trailer     []byte
 }
 
 func (s *rangeSource) open(_ context.Context, offset, length int64) (io.ReadCloser, error) {
@@ -42,9 +47,13 @@ func (s *rangeSource) open(_ context.Context, offset, length int64) (io.ReadClos
 	s.mu.Unlock()
 	end := min(offset+length, int64(len(s.data)))
 	body := s.data[offset:end]
+	if s.ignoreRange {
+		body = s.data
+	}
 	if s.truncateTo > 0 && len(body) > s.truncateTo {
 		body = body[:s.truncateTo]
 	}
+	body = append(slices.Clip(body), s.trailer...)
 	return io.NopCloser(bytes.NewReader(body)), nil
 }
 
@@ -233,4 +242,180 @@ func TestRangeReadSeeker_CloseIsIdempotent(t *testing.T) {
 
 	require.NoError(t, rs.Close())
 	require.NoError(t, rs.Close(), "Close must be idempotent")
+}
+
+func TestRangeReadSeeker_LongerBodyIsRangeOverrun(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		src    *rangeSource
+		seekTo int64
+		want   string
+	}{
+		{
+			name: "trailing bytes past the range",
+			src:  &rangeSource{data: []byte(rangeTestObject), trailer: []byte("EXTRA")},
+			want: rangeTestObject,
+		},
+		{
+			name:   "trailing bytes past a range after seek",
+			src:    &rangeSource{data: []byte(rangeTestObject), trailer: []byte("!")},
+			seekTo: 6,
+			want:   "world",
+		},
+		{
+			name:   "server ignored Range at a non-zero offset",
+			src:    &rangeSource{data: []byte(rangeTestObject), ignoreRange: true},
+			seekTo: 6,
+			want:   "hello", // the first bytes of the whole object, capped to the range length
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rs := newTestRangeReadSeeker(t, tc.src)
+			defer rs.Close() //nolint:errcheck // best-effort test cleanup
+
+			_, err := rs.Seek(tc.seekTo, io.SeekStart)
+			require.NoError(t, err)
+
+			got, err := io.ReadAll(rs)
+			require.ErrorIs(t, err, coreio.ErrRangeOverrun,
+				"a body longer than the requested range must surface ErrRangeOverrun")
+			require.Equal(t, tc.want, string(got), "no byte past the range end may be delivered")
+
+			pos, err := rs.Seek(0, io.SeekCurrent)
+			require.NoError(t, err)
+			require.Equal(t, int64(len(rangeTestObject)), pos, "the position must never pass the object size")
+
+			n, err := rs.Read(make([]byte, 4))
+			require.Zero(t, n)
+			require.ErrorIs(t, err, io.EOF)
+		})
+	}
+}
+
+func TestRangeReadSeeker_ReadNeverPassesRangeEnd(t *testing.T) {
+	t.Parallel()
+
+	src := &rangeSource{data: []byte(rangeTestObject), trailer: []byte("EXTRA")}
+	rs := newTestRangeReadSeeker(t, src)
+	defer rs.Close() //nolint:errcheck // best-effort test cleanup
+
+	_, err := rs.Seek(-2, io.SeekEnd)
+	require.NoError(t, err)
+
+	buf := make([]byte, 64)
+	n, err := rs.Read(buf)
+	require.Equal(t, 2, n, "a single Read must not deliver more than the remaining range")
+	require.Equal(t, "ld", string(buf[:n]))
+	require.ErrorIs(t, err, coreio.ErrRangeOverrun)
+}
+
+func TestRangeReadSeeker_IgnoredRangeAtOffsetZeroIsExact(t *testing.T) {
+	t.Parallel()
+
+	src := &rangeSource{data: []byte(rangeTestObject), ignoreRange: true}
+	rs := newTestRangeReadSeeker(t, src)
+	defer rs.Close() //nolint:errcheck // best-effort test cleanup
+
+	got, err := io.ReadAll(rs)
+	require.NoError(t, err, "a whole-object body for a range starting at 0 is exactly the range")
+	require.Equal(t, rangeTestObject, string(got))
+}
+
+func TestRangeReadSeeker_ShortBodyAfterSeekIsUnexpectedEOF(t *testing.T) {
+	t.Parallel()
+
+	src := &rangeSource{data: []byte(rangeTestObject), truncateTo: 2}
+	rs := newTestRangeReadSeeker(t, src)
+	defer rs.Close() //nolint:errcheck // best-effort test cleanup
+
+	_, err := rs.Seek(6, io.SeekStart)
+	require.NoError(t, err)
+
+	got, err := io.ReadAll(rs)
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	require.Equal(t, "wo", string(got))
+}
+
+func TestRangeReadSeeker_SeeksAcrossBoundaries(t *testing.T) {
+	t.Parallel()
+
+	src := &rangeSource{data: []byte(rangeTestObject)}
+	rs := newTestRangeReadSeeker(t, src)
+	defer rs.Close() //nolint:errcheck // best-effort test cleanup
+
+	head := make([]byte, 3)
+	_, err := io.ReadFull(rs, head)
+	require.NoError(t, err)
+	require.Equal(t, "hel", string(head))
+
+	_, err = rs.Seek(1, io.SeekStart)
+	require.NoError(t, err)
+	mid := make([]byte, 4)
+	_, err = io.ReadFull(rs, mid)
+	require.NoError(t, err)
+	require.Equal(t, "ello", string(mid))
+
+	_, err = rs.Seek(-1, io.SeekEnd)
+	require.NoError(t, err)
+	buf := make([]byte, 8)
+	n, err := rs.Read(buf)
+	require.Equal(t, "d", string(buf[:n]))
+	if err == nil {
+		n, err = rs.Read(buf)
+		require.Zero(t, n)
+	}
+	require.ErrorIs(t, err, io.EOF)
+
+	require.Equal(t, []rangeCall{{0, 11}, {1, 10}, {10, 1}}, src.calls)
+}
+
+func TestRangeReadSeeker_ZeroLengthRange(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		data   string
+		seekTo int64
+	}{
+		{name: "empty object", data: ""},
+		{name: "position at the object end", data: rangeTestObject, seekTo: int64(len(rangeTestObject))},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := &rangeSource{data: []byte(tc.data), trailer: []byte("EXTRA")}
+			rs := newTestRangeReadSeeker(t, src)
+			defer rs.Close() //nolint:errcheck // best-effort test cleanup
+
+			_, err := rs.Seek(tc.seekTo, io.SeekStart)
+			require.NoError(t, err)
+
+			n, err := rs.Read(make([]byte, 4))
+			require.Zero(t, n)
+			require.ErrorIs(t, err, io.EOF)
+			require.Empty(t, src.calls, "a zero-length range must not open a ranged read")
+		})
+	}
+}
+
+func TestRangeReadSeeker_BodyErrorAtRangeEndIsSurfaced(t *testing.T) {
+	t.Parallel()
+
+	sentinel := errors.New("checksum mismatch")
+	open := func(_ context.Context, offset, length int64) (io.ReadCloser, error) {
+		body := io.MultiReader(bytes.NewReader([]byte(rangeTestObject)[offset:offset+length]), coreio.NewErrorReader(sentinel))
+		return io.NopCloser(body), nil
+	}
+	rs := coreio.NewRangeReadSeeker(t.Context(), int64(len(rangeTestObject)), open)
+	defer rs.Close() //nolint:errcheck // best-effort test cleanup
+
+	got, err := io.ReadAll(rs)
+	require.ErrorIs(t, err, sentinel, "an error the body reports at the range end must not be swallowed")
+	require.Equal(t, rangeTestObject, string(got))
 }

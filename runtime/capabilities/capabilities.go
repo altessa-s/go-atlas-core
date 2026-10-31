@@ -74,7 +74,20 @@ func Get() (Sets, error) {
 // returns nil the calling thread has zero capabilities and can never
 // raise any of them again for the lifetime of the process.
 //
+// Dropping bounding bits requires CAP_SETPCAP in the permitted set
+// (root has it, including in a default container). A thread without
+// it whose bounding set is not already empty cannot satisfy that
+// guarantee: DropAll returns [ErrInvalidOption] and changes nothing.
+//
 // Per-thread scope (read this before using):
+//
+// DropAll, DropAllExcept and Apply pin the goroutine to its OS thread
+// only for the duration of the call, and Get, BoundingDrop and the
+// ambient helpers do not pin it at all. Consecutive calls can therefore
+// run on different threads; a caller that builds on an earlier call
+// (Get then Apply, BoundingDrop then DropAllExcept, Apply then Get) must
+// call [runtime.LockOSThread] first and keep the thread for the whole
+// sequence.
 //
 // capset(2) is per-thread and Linux does not expose a way to apply a
 // new capability set to every thread of a process from userspace. The
@@ -96,10 +109,14 @@ func DropAll() error {
 }
 
 // DropAllExcept drops every capability except those in keep on the
-// calling THREAD. The listed capabilities are preserved in the
-// Effective, Permitted, and Bounding sets; Inheritable and Ambient
-// are cleared (standard practice for "drop everything except what I
-// need at startup"). An empty keep list is equivalent to [DropAll].
+// calling THREAD. A listed capability stays in the Bounding set when
+// it is there and stays in the Effective and Permitted sets (raised to
+// Effective if needed) when it is permitted; a listed capability the
+// thread does not hold is not an error — there is nothing to keep.
+// Inheritable and Ambient are cleared (standard practice for "drop
+// everything except what I need at startup"). An empty keep list is
+// equivalent to [DropAll], and the same CAP_SETPCAP requirement
+// applies to the bounding bits it drops.
 //
 // Per-thread scope: see the [DropAll] doc comment for the Go-runtime
 // caveat. DropAllExcept inherits the same limitation.
@@ -110,22 +127,43 @@ func DropAllExcept(keep ...Cap) error {
 }
 
 // Apply installs s on the calling THREAD via the standard
-// capset(2) / PR_CAPBSET_DROP / PR_CAP_AMBIENT_* syscall sequence.
-// The sequence is multi-step (lower ambient, then capset for
-// effective/permitted/inheritable, then drop bounding bits, then
-// raise ambient bits) and ordered so that an abort after any one step
-// leaves the thread "at most as privileged as before" — never more.
-// Apply is NOT atomic; the kernel exposes no syscall to install all
-// five sets in one call. Apply validates that no
-// Effective/Permitted/Inheritable bit exceeds the current Bounding
-// set up-front, since the kernel would otherwise reject that
-// combination with EPERM mid-sequence and produce a confusing error.
+// capset(2) / PR_CAPBSET_DROP / PR_CAP_AMBIENT_* syscall sequence:
+// lower ambient bits, capset the effective/permitted/inheritable masks
+// while keeping CAP_SETPCAP effective, drop bounding bits (which needs
+// CAP_SETPCAP), capset again to remove CAP_SETPCAP when s does not
+// keep it, then raise ambient bits. Apply is NOT atomic; the kernel
+// exposes no syscall to install all five sets in one call.
 //
-// Apply does not raise Bounding or Ambient bits; it can only lower
-// them. Use [AmbientRaise] for additive ambient changes.
+// Apply validates s up front against the rules capset(2) enforces and
+// returns [ErrInvalidOption] without changing anything when s breaks
+// one of them:
+//
+//   - Permitted adds a bit that is not in the current Permitted set;
+//   - Effective has a bit that is not in s.Permitted;
+//   - Inheritable adds a bit that is not in the current Inheritable or
+//     Bounding set, or, while CAP_SETPCAP is not in the current
+//     Effective set, not in the current Inheritable or Permitted set;
+//   - Ambient has a bit that is not in both s.Permitted and
+//     s.Inheritable;
+//   - s drops bounding bits and CAP_SETPCAP is not in the current
+//     Permitted set.
+//
+// Effective and Permitted bits outside the Bounding set are allowed:
+// capset never adds a permitted bit, and the bounding set limits only
+// the inheritable bits it adds. The capset that keeps CAP_SETPCAP for the bounding drops
+// runs before them, so an [ErrFailed] from it leaves only ambient bits
+// lowered. A failure during the bounding drops leaves the requested
+// Effective/Permitted/Inheritable installed and the bounding set
+// partially reduced; the error names the step and the state reached.
+//
+// Apply does not raise Bounding bits; it can only lower them. It
+// raises the Ambient bits s adds, last, once the masks that allow them
+// are installed.
 //
 // Per-thread scope: see the [DropAll] doc comment for the Go-runtime
-// caveat. Apply inherits the same limitation.
+// caveat. Apply inherits the same limitation, and validates s against
+// the thread it runs on: a caller that builds s from an earlier [Get]
+// must hold [runtime.LockOSThread] across both calls.
 func Apply(s Sets) error {
 	return applySnapshot(s)
 }
@@ -235,7 +273,7 @@ func (s Sets) Has(c Cap, kinds ...SetKind) bool {
 // must be a subset of Permitted): callers building a snapshot for
 // [Apply] are responsible for the consistency. Use With to compose a
 // snapshot, then call Apply, which validates the result against the
-// current bounding ceiling and surfaces any kernel-side rejection.
+// capset(2) rules and the current thread state before changing it.
 func (s Sets) With(c Cap, kinds ...SetKind) Sets {
 	if c < 0 || c >= 64 {
 		return s

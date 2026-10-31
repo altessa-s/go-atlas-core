@@ -66,6 +66,9 @@ ownership is shared or inverted.
 | `MustResult`      | `err` is non-nil; otherwise returns `T`          |
 | `InvalidArgument` | condition is `true` (wraps `ErrInvalidArgument`) |
 
+`Must`, `MustNonNil` and `MustNonZero` take `msg` as a string, a `*string` or a type defined over either, and panic with its text as a `string`. A nil
+pointer is never dereferenced: the panic value is its `%#v` form, such as `(*string)(nil)`.
+
 ## Configuration
 
 | Function                 | Description                                         |

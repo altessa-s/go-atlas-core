@@ -7,8 +7,10 @@ import "github.com/altessa-s/go-atlas-core/runtime/capabilities"
 A minimal, cgo-free Go wrapper around the Linux capabilities subsystem (`capset(2)`, `capget(2)`, `prctl(2)` with `PR_CAPBSET_*` / `PR_CAP_AMBIENT_*`).
 It lets a process drop capabilities at startup and confine itself to a strict allowlist without pulling in libcap.
 
-No root required to drop caps — any unprivileged process can reduce its own set. Raising caps requires them to already be present in the bounding
-ceiling, which is the standard Linux rule and not something this package works around.
+Any process can reduce its effective, permitted, inheritable and ambient sets without privilege. Dropping bits from the bounding set needs
+`CAP_SETPCAP` (root has it, including in a default Docker container); `DropAll`, `DropAllExcept` and `Apply` keep it effective until the bounding
+drops are done and reject a bounding drop without it with `ErrInvalidOption` before changing anything. A permitted bit can be kept but never added, and
+the bounding set limits only what can be added — the standard Linux rules, not something this package works around.
 
 ## API
 
@@ -20,9 +22,9 @@ ceiling, which is the standard Linux rule and not something this package works a
 | `(Sets).Has(c Cap, kinds ...SetKind)` | Report whether `c` is in any of the named sets (Effective when none given) |
 | `(Sets).With(c Cap, kinds ...SetKind)` | Copy of the snapshot with `c` added to the named sets |
 | `Get()` | Read the current snapshot from the calling thread |
-| `DropAll()` | Drop every capability everywhere — the "nuclear option" |
-| `DropAllExcept(keep ...Cap)` | Drop every capability except those listed |
-| `Apply(s Sets)` | Install an exact `Sets` snapshot on the calling thread — a multi-step syscall sequence (not atomic); steps that succeeded stay in effect when a later one fails, so inspect the partial state on error |
+| `DropAll()` | Drop every capability of the calling thread — the "nuclear option" |
+| `DropAllExcept(keep ...Cap)` | Drop every capability except those listed; a listed capability the thread does not hold is skipped, not an error |
+| `Apply(s Sets)` | Install an exact `Sets` snapshot on the calling thread — a multi-step syscall sequence (not atomic); impossible requests are rejected before any change, and steps that succeeded stay in effect when a later one fails, so inspect the partial state on error |
 | `BoundingDrop(c Cap)` | Remove `c` from the bounding set (irreversible) |
 | `AmbientClearAll()` | Clear the ambient set in one call |
 | `AmbientRaise(c Cap)` | Add `c` to the ambient set |
@@ -35,43 +37,57 @@ ceiling, which is the standard Linux rule and not something this package works a
 
 ## Quick start
 
-### Nuclear option — drop everything
+Every call changes the calling OS thread only. Keep the thread locked (`runtime.LockOSThread`) from the drop through the restricted work, and do that
+work on this goroutine: goroutines it starts run on other threads, which keep their capabilities. To restrict a whole service, drop capabilities when
+it is launched (systemd `CapabilityBoundingSet=`, container `--cap-drop`, a launcher before `execve(2)`); see [Caveats](#caveats).
+
+### Nuclear option — drop everything on this thread
 
 ```go
 package main
 
 import (
     "log"
+    "runtime"
 
     "github.com/altessa-s/go-atlas-core/runtime/capabilities"
 )
 
 func main() {
+    runtime.LockOSThread()
+    defer runtime.UnlockOSThread()
+
     if err := capabilities.DropAll(); err != nil {
         log.Fatalf("capabilities: %v", err)
     }
-    run()
+    runRestricted() // runs on this thread; must not hand the restricted work to other goroutines
 }
 ```
 
-### Bind a privileged port then drop everything else
+### Bind a privileged port then drop everything else on this thread
 
 ```go
+runtime.LockOSThread()
+defer runtime.UnlockOSThread()
+
 // Bind first, while CAP_NET_BIND_SERVICE is still effective.
 ln, err := net.Listen("tcp", ":443")
 if err != nil { log.Fatal(err) }
 
-// Drop everything except what we still need.
+// Drop everything except what this thread still needs.
 if err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE); err != nil {
     log.Fatalf("capabilities: %v", err)
 }
 
-serve(ln)
+// Only work done on this thread is restricted; the goroutines an HTTP
+// server starts are not. Restrict a whole service at launch time instead.
+acceptLoop(ln)
 ```
 
 ### Resolve operator config from YAML
 
 ```go
+// The caller holds runtime.LockOSThread across this and the restricted work.
 var keep []capabilities.Cap
 for _, name := range cfg.Sandbox.Capabilities.Keep {
     c, err := capabilities.ParseName(name)
@@ -98,7 +114,14 @@ Linux capabilities are not a single mask but five related sets tracked per threa
 | Ambient | Preserved across non-privileged execve | `prctl(PR_CAP_AMBIENT_*)` |
 
 If you do not know which set you need, you want effective/permitted/bounding. `DropAllExcept` handles exactly those three; inheritable and ambient are
-cleared (safe default for a long-running service).
+cleared (safe default for a long-running service). A kept capability stays only where the thread already holds it: in bounding if it is in the bounding
+set, effective and permitted if it is permitted.
+
+`Apply` runs lower-ambient → capset → bounding drops → capset → raise-ambient. The first capset keeps `CAP_SETPCAP` effective for the bounding drops and
+the second removes it when the snapshot does not keep it. Before any of it, `Apply` checks the snapshot against the rules the kernel applies (see
+[Caveats](#caveats)) and rejects one that breaks them with `ErrInvalidOption`, leaving the thread untouched. A capset the kernel still refuses runs
+before the irreversible bounding drops and leaves only ambient bits lowered; a failed bounding drop leaves the requested effective/permitted/inheritable
+installed and the bounding set partially reduced, and the error says how far it got.
 
 ## When to use it
 
@@ -111,14 +134,20 @@ cleared (safe default for a long-running service).
 ## Caveats
 
 - **Linux only.** On non-Linux platforms every function returns `ErrUnsupported` so cross-platform code can import the package without build tags.
-- **Per-thread scope.** `capset(2)` mutates only the calling thread. The package pins the goroutine to its OS thread around every mutating call
-  (`runtime.LockOSThread`), but the change lands on that thread only — even at startup the Go runtime already runs peer OS threads that keep their
-  capabilities, and the plugin sandbox is subject to the same limit. For a process-wide drop, drop capabilities externally before the Go binary
-  starts (systemd `CapabilityBoundingSet=`, container `--cap-drop`, or a launcher that drops them before `execve(2)`).
+- **Per-thread scope.** `capset(2)` mutates only the calling thread. The package pins the goroutine to its OS thread during `Apply`, `DropAll` and
+  `DropAllExcept` (`runtime.LockOSThread`), but the change lands on that thread only — even at startup the Go runtime already runs peer OS threads that
+  keep their capabilities, and the plugin sandbox is subject to the same limit. For a process-wide drop, drop capabilities externally before the Go
+  binary starts (systemd `CapabilityBoundingSet=`, container `--cap-drop`, or a launcher that drops them before `execve(2)`). The pin ends when the call
+  returns, and `Get`, `BoundingDrop` and the ambient helpers do not pin at all, so consecutive calls may land on different threads: wrap a sequence that
+  builds on earlier results (`Get` then `Apply`, `BoundingDrop` then `DropAllExcept`, `Apply` then `Get`) in `runtime.LockOSThread`.
 - **Irreversible ceilings.** Bits dropped from the bounding set cannot be raised by this thread or any descendant. Once you call `BoundingDrop` or
   `DropAllExcept`, you cannot take it back.
-- **Raising is bounded.** `Apply` rejects any effective/permitted/inheritable bit that exceeds the current bounding set with `ErrInvalidOption`. This is
-  not a package choice — the kernel enforces it with `EPERM`, but we fail early with a clearer message.
+- **Raising is bounded.** `Apply` rejects with `ErrInvalidOption`, before changing anything, a snapshot that breaks a rule the kernel enforces: a
+  permitted bit not currently permitted, an effective bit outside the requested permitted mask, an inheritable bit outside the current inheritable and
+  bounding sets (or, without `CAP_SETPCAP` effective, outside the current inheritable and permitted sets), an ambient bit outside the requested
+  permitted and inheritable masks, or a bounding drop without `CAP_SETPCAP` permitted. The kernel would refuse these with `EPERM`, some of them only
+  after the irreversible bounding drops. Effective and permitted bits outside the bounding set are allowed: after `BoundingDrop(CAP_NET_BIND_SERVICE)`
+  the capability stays permitted, and `DropAllExcept(CAP_NET_BIND_SERVICE)` keeps it.
 - **Defense in depth, not isolation.** A malicious dependency already loaded in-process can still read every byte of memory in the host's address space.
   Capability dropping closes the "ambient privileged syscalls" vector only.
 
@@ -134,11 +163,17 @@ import (
     "fmt"
     "log"
     "net"
+    "runtime"
 
     "github.com/altessa-s/go-atlas-core/runtime/capabilities"
 )
 
 func main() {
+    // Snapshots, drops and probes must run on one thread: capabilities are
+    // per thread.
+    runtime.LockOSThread()
+    defer runtime.UnlockOSThread()
+
     before, err := capabilities.Get()
     must(err)
     fmt.Printf("before: %+v\n", before)

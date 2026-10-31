@@ -38,25 +38,13 @@ const (
 	MaxBitPositionUint64 = BitsInUint64 - 1
 )
 
-// getBitWidth returns the bit width for the given integer type.
+// getBitWidth returns the bit width of T. It is taken from the size of T's
+// underlying type, so named integer types (type myByte uint8) get the same
+// width as the predeclared type they are defined over, and int, uint and
+// uintptr get the width of the target platform.
 func getBitWidth[T constraints.Integer]() uint64 {
 	var zero T
-	switch any(zero).(type) {
-	case uint8, int8:
-		return BitsInByte
-	case uint16, int16:
-		return BitsInUint16
-	case uint32, int32:
-		return BitsInUint32
-	case uint64, int64:
-		return BitsInUint64
-	case uint, int:
-		return uint64(unsafe.Sizeof(uint(0)) * BitsInByte) // #nosec G103 -- compile-time size query only, no pointer arithmetic
-	case uintptr:
-		return uint64(unsafe.Sizeof(uintptr(0)) * BitsInByte) // #nosec G103 -- compile-time size query only, no pointer arithmetic
-	default:
-		return BitsInUint64
-	}
+	return uint64(unsafe.Sizeof(zero)) * BitsInByte // #nosec G103 -- size query only, no pointer arithmetic
 }
 
 // isValidBitPosition checks if a bit position is valid for type T.

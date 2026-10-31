@@ -83,9 +83,10 @@ Best practices:
 the GC reclaims the value via `runtime.AddCleanup` — no periodic sweeps, manual eviction, or background goroutines needed; `Len` is approximate, so
 call `Cleanup` first for an exact count. Safe for concurrent access.
 
-`Set(key, nil)` behaves like `Delete`; setting a non-nil value re-arms the cleanup, and the old cleanup callback becomes a no-op because it checks
-pointer identity before deleting. `Range` takes a snapshot of all live entries under a write lock and then iterates without holding any lock, so the
-callback may safely call other `WeakMap` methods without deadlocking.
+`Set(key, nil)` behaves like `Delete`. Each entry owns exactly one cleanup: replacing the value of a key stops the previous value's cleanup, `Delete`
+stops it too, and setting the value a key already holds is a no-op. A cleanup that was already queued when its entry was replaced or deleted checks the
+entry's generation and never removes the newer entry. `Range` takes a snapshot of all live entries under a write lock and then iterates without holding
+any lock, so the callback may safely call other `WeakMap` methods without deadlocking.
 
 When to use:
 

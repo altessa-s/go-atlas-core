@@ -106,6 +106,64 @@ func TestLimitedReadCloser_ExactlyOneByte(t *testing.T) {
 	require.Equal(t, "x", string(buf))
 }
 
+// The byte read past the limit to detect an overflow must never reach the
+// caller, whatever the buffer size and however the reads are split.
+func TestLimitedReadCloser_NeverDeliversPastLimit(t *testing.T) {
+	t.Parallel()
+
+	const limit = 1024
+	cases := []struct {
+		name    string
+		srcLen  int
+		bufSize int
+		wantErr bool
+	}{
+		{name: "large buffer over limit", srcLen: 4096, bufSize: 8192, wantErr: true},
+		{name: "small buffer over limit", srcLen: 4096, bufSize: 7, wantErr: true},
+		{name: "one over with buffer of limit plus one", srcLen: limit + 1, bufSize: limit + 1, wantErr: true},
+		{name: "exact limit with large buffer", srcLen: limit, bufSize: 8192},
+		{name: "exact limit with buffer of limit", srcLen: limit, bufSize: limit},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			lrc := coreio.NewLimitedReadCloser(io.NopCloser(strings.NewReader(strings.Repeat("a", tc.srcLen))), limit)
+			buf := make([]byte, tc.bufSize)
+			var delivered int
+			var err error
+			for err == nil {
+				var n int
+				n, err = lrc.Read(buf)
+				delivered += n
+			}
+			require.LessOrEqual(t, delivered, limit)
+			if tc.wantErr {
+				require.ErrorIs(t, err, coreio.ErrReadLimitExceeded)
+				require.Equal(t, limit, delivered)
+				return
+			}
+			require.ErrorIs(t, err, io.EOF)
+			require.NotErrorIs(t, err, coreio.ErrReadLimitExceeded)
+			require.Equal(t, tc.srcLen, delivered)
+		})
+	}
+}
+
+func TestLimitedReadCloser_ReadAllReturnsLimitBytes(t *testing.T) {
+	t.Parallel()
+
+	lrc := coreio.NewLimitedReadCloser(io.NopCloser(strings.NewReader("hello world")), 5)
+	buf, err := io.ReadAll(lrc)
+	require.ErrorIs(t, err, coreio.ErrReadLimitExceeded)
+	require.Equal(t, "hello", string(buf))
+
+	// The overflow is sticky: later reads deliver nothing and keep reporting it.
+	n, err := lrc.Read(make([]byte, 8))
+	require.Zero(t, n)
+	require.ErrorIs(t, err, coreio.ErrReadLimitExceeded)
+}
+
 // endlessReader is a goroutine-safe source of zero bytes that counts what it
 // served.
 type endlessReader struct {

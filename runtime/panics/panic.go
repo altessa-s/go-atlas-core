@@ -24,22 +24,35 @@ import (
 // the caller-supplied condition is true. Use [errors.Is] to check for it.
 var ErrInvalidArgument = errors.New("invalid argument")
 
-// panicMsg is an internal helper function that panics with the given message.
-// It supports both string values and pointers to strings.
+// panicMsg is an internal helper function that panics with the text of msg.
+// It supports strings, pointers to strings and types defined over either. A
+// type switch matches only the predeclared string and *string, so defined types
+// take the reflect path. A nil pointer is not dereferenced: the panic value is
+// its %#v form, as for other non-string values.
 func panicMsg[M interface{ ~string | ~*string }](msg M) {
+	var ptr *string
 	switch t := any(msg).(type) {
 	case string:
 		panic(t)
 	case *string:
-		panic(*t)
+		ptr = t
 	default:
+		rv := reflect.ValueOf(msg)
+		if rv.Kind() == reflect.String {
+			panic(rv.String())
+		}
+		ptr, _ = reflect.TypeAssert[*string](rv.Convert(reflect.TypeFor[*string]()))
+	}
+	if ptr == nil {
 		panic(fmt.Sprintf("%#v", msg))
 	}
+	panic(*ptr)
 }
 
 // MustNonNil panics with msg if v is nil. Use it to enforce non-nil preconditions
 // such as required constructor parameters or injected dependencies. The msg
-// parameter accepts either a string or a *string.
+// parameter accepts a string, a *string or a type defined over either; the
+// panic value is its text, or the %#v form of a nil pointer.
 func MustNonNil[M interface{ ~string | ~*string }](v any, msg M) {
 	if v == nil {
 		panicMsg(msg)
@@ -48,7 +61,8 @@ func MustNonNil[M interface{ ~string | ~*string }](v any, msg M) {
 
 // MustNonZero panics with msg if v is nil or the zero value for its type
 // (as determined by [reflect.Value.IsZero]: false, 0, "", nil pointer, etc.).
-// The msg parameter accepts either a string or a *string.
+// The msg parameter accepts a string, a *string or a type defined over either;
+// the panic value is its text, or the %#v form of a nil pointer.
 func MustNonZero[M interface{ ~string | ~*string }](v any, msg M) {
 	if v == nil {
 		panicMsg(msg)
@@ -85,7 +99,8 @@ func MustResult[T any](val T, err error) T {
 
 // Must panics with msg if ok is false. It provides a concise way to enforce
 // runtime invariants that should never be violated. The msg parameter accepts
-// either a string or a *string.
+// a string, a *string or a type defined over either; the panic value is its
+// text, or the %#v form of a nil pointer.
 //
 // Example:
 //

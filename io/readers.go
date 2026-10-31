@@ -42,10 +42,11 @@ func NewErrorReader(err error) *ErrorReader {
 }
 
 // LimitedReadCloser wraps an [io.ReadCloser] and enforces a maximum number of bytes
-// that may be read. If a Read call causes the cumulative byte count to exceed the
-// configured limit, Read returns an error wrapping [ErrReadLimitExceeded]. The
-// underlying reader's Close method is preserved and delegated to by
-// [LimitedReadCloser.Close].
+// that may be read. It never delivers more than the configured limit: once the
+// source turns out to hold more, Read returns an error wrapping
+// [ErrReadLimitExceeded], and every later Read returns it again without data. A
+// source of exactly limit bytes reads to [io.EOF] without error. The underlying
+// reader's Close method is preserved and delegated to by [LimitedReadCloser.Close].
 //
 // LimitedReadCloser is safe for concurrent reads: a mutex serializes each read of
 // the underlying reader with the update of the running byte total, so the limit
@@ -56,13 +57,14 @@ type LimitedReadCloser struct {
 	limit  int64
 
 	mu   sync.Mutex
-	read int64 // guarded by mu
+	read int64 // bytes pulled from the source, at most limit+1; guarded by mu
 }
 
 // NewLimitedReadCloser creates a [LimitedReadCloser] that allows at most limit bytes
 // to be read from rc. Internally, the underlying reader is wrapped with an
 // [io.LimitReader] set to limit+1 so that an over-read can be detected and reported
-// as [ErrReadLimitExceeded] rather than a silent truncation at the boundary.
+// as [ErrReadLimitExceeded] rather than a silent truncation at the boundary; that
+// extra byte is consumed from rc but never handed to the caller.
 func NewLimitedReadCloser(rc io.ReadCloser, limit int64) *LimitedReadCloser {
 	var reader io.Reader = rc
 	if limit < math.MaxInt64 {
@@ -76,9 +78,11 @@ func NewLimitedReadCloser(rc io.ReadCloser, limit int64) *LimitedReadCloser {
 }
 
 // Read reads up to len(p) bytes from the underlying reader into p. It returns the
-// number of bytes read and any error encountered. If the cumulative bytes read exceed
-// the configured limit, Read returns an error wrapping [ErrReadLimitExceeded].
-// An underlying read error is preserved when the limit is exceeded.
+// number of bytes read and any error encountered. The cumulative count returned
+// across calls never exceeds the configured limit: when the source holds more,
+// Read returns the bytes up to the limit with an error wrapping
+// [ErrReadLimitExceeded]. Bytes of p past the returned count may have been
+// overwritten. An underlying read error is preserved when the limit is exceeded.
 // Concurrent Read calls are serialized.
 func (l *LimitedReadCloser) Read(p []byte) (n int, err error) {
 	l.mu.Lock()
@@ -86,12 +90,13 @@ func (l *LimitedReadCloser) Read(p []byte) (n int, err error) {
 
 	n, err = l.reader.Read(p)
 
+	// remaining is what may still be delivered before this read; it is negative
+	// only once an earlier read already detected the overflow.
+	remaining := l.limit - l.read
 	l.read += int64(n)
-	totalRead := l.read
-
-	// Check if we've exceeded the limit
-	if totalRead > l.limit {
-		return n, errors.Join(coreerrs.Wrapf(ErrReadLimitExceeded, "%d bytes read, limit is %d", totalRead, l.limit), err)
+	if l.read > l.limit {
+		n = int(max(min(remaining, int64(n)), 0))
+		return n, errors.Join(coreerrs.Wrapf(ErrReadLimitExceeded, "more than %d bytes available", l.limit), err)
 	}
 
 	return n, err

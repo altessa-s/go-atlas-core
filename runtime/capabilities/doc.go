@@ -9,15 +9,27 @@
 //
 // # Quick start
 //
-// Drop every capability before loading untrusted code:
+// Every call changes the calling OS thread only, so lock the thread
+// from the drop through the restricted work and keep that work on this
+// goroutine (goroutines it starts run on other threads, which keep
+// their capabilities). To restrict a whole service, drop capabilities
+// when it is launched; see Caveats.
 //
+// Drop every capability of this thread before running untrusted code
+// on it:
+//
+//	runtime.LockOSThread()
+//	defer runtime.UnlockOSThread()
 //	if err := capabilities.DropAll(); err != nil {
 //	    log.Fatalf("capabilities: %v", err)
 //	}
+//	runRestricted()
 //
-// Preserve one capability (typical "bind a privileged port then drop
-// everything else" pattern):
+// Preserve one capability on this thread (the "bind a privileged port
+// then drop everything else" pattern):
 //
+//	runtime.LockOSThread()
+//	defer runtime.UnlockOSThread()
 //	if err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE); err != nil {
 //	    log.Fatalf("capabilities: %v", err)
 //	}
@@ -36,7 +48,7 @@
 //     present in permitted and inheritable.
 //
 // [Sets] reports all five as 64-bit masks. [Apply] accepts a full
-// snapshot and installs it atomically (where the kernel permits);
+// snapshot and installs it in a validated, ordered syscall sequence;
 // [DropAll] / [DropAllExcept] are thin wrappers implementing the two
 // most common startup patterns.
 //
@@ -63,12 +75,29 @@
 //     [ErrUnsupported] or its zero-value equivalent so cross-platform
 //     code can import the package without build tags.
 //   - Per-thread scope. capset(2) mutates only the calling thread. The
-//     package pins the goroutine to its OS thread around every
-//     mutating call, but for the change to cover the whole process
-//     callers must apply before spawning any goroutines.
+//     package pins the goroutine to its OS thread for the duration of
+//     [Apply], [DropAll] and [DropAllExcept], but the change lands on
+//     that thread only: even at the start of main the Go runtime already
+//     runs peer OS threads that keep their capabilities, so calling
+//     before spawning goroutines does not make the drop process-wide.
+//     For a process-wide drop, drop capabilities externally before the
+//     Go binary starts (systemd CapabilityBoundingSet=, container
+//     --cap-drop, or a launcher that drops them before execve(2)); work
+//     restricted by this package must stay pinned to the thread that
+//     made the call. The pin ends when the call returns, and [Get],
+//     [BoundingDrop] and the ambient helpers do not pin at all, so a
+//     sequence of calls that builds on earlier results (Get then Apply,
+//     BoundingDrop then DropAllExcept) must run under
+//     [runtime.LockOSThread] to stay on one thread.
 //   - Irreversible ceilings. Bits dropped from the bounding set cannot
 //     be raised by any descendant, and the inheritable/ambient
 //     invariants are enforced by the kernel — not by this package.
 //   - Raising bits is possible only within the current ceilings.
-//     Dropping is always possible for an unprivileged process.
+//     Dropping effective/permitted/inheritable/ambient bits is always
+//     possible for an unprivileged process; dropping bounding bits
+//     needs CAP_SETPCAP in the permitted set. [Apply], [DropAll] and
+//     [DropAllExcept] check the capset(2) rules and that requirement
+//     up front and reject a request that breaks them with
+//     [ErrInvalidOption] before changing anything. Permitted bits
+//     outside the bounding set stay allowed.
 package capabilities
