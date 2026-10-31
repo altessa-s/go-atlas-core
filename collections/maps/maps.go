@@ -4,7 +4,11 @@
 
 package maps
 
-import "maps"
+import (
+	"cmp"
+	"maps"
+	"slices"
+)
 
 // Merge creates a new map containing all key-value pairs from both src and dst.
 // When a key exists in both maps, the value from src takes precedence over dst.
@@ -276,4 +280,28 @@ func ToKeyValueSlice[K comparable, V any](m map[K]V) []any {
 		slice = append(slice, key, value)
 	}
 	return slice
+}
+
+// ToSortedKeyValueSlice returns alternating keys and values in ascending key order.
+// Nil and empty maps return nil. Floating-point NaNs sort before other keys;
+// entries with equal-order keys (including NaNs) have unspecified relative order.
+func ToSortedKeyValueSlice[K cmp.Ordered, V any](m map[K]V) []any {
+	if len(m) == 0 {
+		return nil
+	}
+	// Sort entries, not keys followed by lookups: NaN keys cannot be looked up.
+	type entry struct {
+		key   K
+		value V
+	}
+	entries := make([]entry, 0, len(m))
+	for k, v := range m {
+		entries = append(entries, entry{k, v})
+	}
+	slices.SortFunc(entries, func(a, b entry) int { return cmp.Compare(a.key, b.key) })
+	result := make([]any, 0, len(m)*2)
+	for _, e := range entries {
+		result = append(result, e.key, e.value)
+	}
+	return result
 }
