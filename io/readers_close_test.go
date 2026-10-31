@@ -46,11 +46,17 @@ func TestPutBuffer(t *testing.T) {
 		require.NotPanics(t, func() { coreio.PutBuffer(nil) })
 	})
 
-	t.Run("pooled buffer is reset", func(t *testing.T) {
+	t.Run("pooled buffer comes back empty", func(t *testing.T) {
 		t.Parallel()
-		buf := bytes.NewBufferString("data")
+		// The buffer must not be touched after PutBuffer: another
+		// goroutine may already own it through the pool.
+		buf := coreio.GetBuffer()
+		buf.WriteString("data")
 		coreio.PutBuffer(buf)
-		require.Zero(t, buf.Len())
+
+		got := coreio.GetBuffer()
+		require.Zero(t, got.Len())
+		coreio.PutBuffer(got)
 	})
 
 	t.Run("oversized buffer is discarded untouched", func(t *testing.T) {
