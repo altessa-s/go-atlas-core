@@ -64,9 +64,15 @@
 //     code can import the package without build tags.
 //   - Per-thread scope. capset(2) mutates only the calling thread. The
 //     package pins the goroutine to its OS thread for the duration of
-//     [Apply], [DropAll] and [DropAllExcept], but for the change to
-//     cover the whole process callers must apply before spawning any
-//     goroutines. The pin ends when the call returns, and [Get],
+//     [Apply], [DropAll] and [DropAllExcept], but the change lands on
+//     that thread only: even at the start of main the Go runtime already
+//     runs peer OS threads that keep their capabilities, so calling
+//     before spawning goroutines does not make the drop process-wide.
+//     For a process-wide drop, drop capabilities externally before the
+//     Go binary starts (systemd CapabilityBoundingSet=, container
+//     --cap-drop, or a launcher that drops them before execve(2)); work
+//     restricted by this package must stay pinned to the thread that
+//     made the call. The pin ends when the call returns, and [Get],
 //     [BoundingDrop] and the ambient helpers do not pin at all, so a
 //     sequence of calls that builds on earlier results (Get then Apply,
 //     BoundingDrop then DropAllExcept) must run under
