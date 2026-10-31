@@ -16,6 +16,7 @@
 package nonewprivs_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/runtime/internal/exectest"
@@ -30,6 +31,11 @@ import (
 // side, not just that the syscall returned nil.
 func TestSet_RoundTripInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		// Set and Enabled act on the calling thread only: keep the
+		// goroutine there so Enabled reads the thread Set changed.
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
 		// Pre-condition: read but do not assert. The CI runner may
 		// have inherited NO_NEW_PRIVS from a wrapping container or
 		// systemd unit, so a "must be false before Set" assertion
@@ -44,13 +50,7 @@ func TestSet_RoundTripInSubprocess(t *testing.T) {
 		}
 
 		// Post-condition: NNP must now report enabled on the
-		// calling thread. Set is documented as per-thread, and
-		// this test runs both Set and Enabled on the same
-		// goroutine without intervening blocking syscalls, so the
-		// Go runtime is highly unlikely to migrate us mid-test.
-		// We do not pin via runtime.LockOSThread because we want
-		// the test to fail if a real per-thread divergence
-		// surfaces — that would be a regression worth catching.
+		// calling thread.
 		got, err := nonewprivs.Enabled()
 		if err != nil {
 			exectest.Failf("Enabled() after Set: %v", err)
@@ -67,6 +67,9 @@ func TestSet_RoundTripInSubprocess(t *testing.T) {
 // and the documented contract on [Set] promises idempotence.
 func TestSet_IdempotentInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
 		if err := nonewprivs.Set(); err != nil {
 			exectest.Failf("first Set: %v", err)
 		}
