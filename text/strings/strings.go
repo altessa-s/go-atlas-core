@@ -29,8 +29,9 @@ var regexCacheSize atomic.Int64
 const maxRegexCacheSize = 256
 
 // IsEmpty reports whether str is empty or contains only whitespace characters.
-// The generic type parameter accepts both string and *string values. A nil
-// *string is treated as empty and returns true. Whitespace detection uses
+// The generic type parameter accepts string and *string values and any type
+// defined over them (type name string, type namePtr *string). A nil pointer is
+// treated as empty and returns true. Whitespace detection uses
 // [strings.TrimSpace], so all Unicode whitespace code points are recognized.
 //
 // For a non-generic alternative that works only on plain strings, see
@@ -42,19 +43,31 @@ const maxRegexCacheSize = 256
 //	IsEmpty("  ")      // true
 //	IsEmpty("hello")   // false
 func IsEmpty[T ~string | ~*string](str T) bool {
+	v, _, _ := resolveString(str)
+	return len(strings.TrimSpace(v)) == 0
+}
+
+// resolveString returns the string str holds and, when T is a pointer form,
+// str itself as a *string (nil for a nil pointer); isPtr reports the pointer
+// form. A type switch matches only the predeclared string and *string, so
+// types defined over them take the reflect path.
+func resolveString[T ~string | ~*string](str T) (value string, ptr *string, isPtr bool) {
 	switch v := any(str).(type) {
 	case string:
-		return len(strings.TrimSpace(v)) == 0
+		return v, nil, false
 	case *string:
-		if v == nil {
-			return true
-		}
-		return len(strings.TrimSpace(*v)) == 0
+		ptr = v
 	default:
-		// This should never happen with the type constraint
-		// but we return true for safety (empty by default)
-		return true
+		rv := reflect.ValueOf(str)
+		if rv.Kind() == reflect.String {
+			return rv.String(), nil, false
+		}
+		ptr, _ = reflect.TypeAssert[*string](rv.Convert(reflect.TypeFor[*string]()))
 	}
+	if ptr == nil {
+		return "", nil, true
+	}
+	return *ptr, ptr, true
 }
 
 // Pre-instantiated converters for common numeric types. Each variable is a
@@ -80,10 +93,11 @@ var (
 	ToFloat64 = To[float64]
 )
 
-// ToPtr converts a string or *string into a *string, returning nil when the
-// value is empty or contains only whitespace. For *string inputs, the original
-// pointer is returned if it passes the non-empty check; for string inputs a
-// new pointer is allocated. Nil *string inputs return nil.
+// ToPtr converts a string or *string, or a type defined over either, into a
+// *string, returning nil when the value is empty or contains only whitespace.
+// For pointer inputs, the original pointer is returned as a *string if it
+// passes the non-empty check; for string inputs a new pointer is allocated.
+// Nil pointer inputs return nil.
 //
 // Example:
 //
@@ -91,19 +105,14 @@ var (
 //	ToPtr("")       // nil
 //	ToPtr("  ")     // nil
 func ToPtr[T interface{ ~string | ~*string }](str T) *string {
-	switch t := any(str).(type) {
-	case *string:
-		if t == nil || strings.TrimSpace(*t) == "" {
-			return nil
-		}
-		return t
-	case string:
-		if t == "" || strings.TrimSpace(t) == "" {
-			return nil
-		}
-		return &t
+	v, ptr, isPtr := resolveString(str)
+	if strings.TrimSpace(v) == "" {
+		return nil
 	}
-	return nil
+	if isPtr {
+		return ptr
+	}
+	return &v
 }
 
 // FromPtr dereferences ptr and returns the pointed-to string. If ptr is nil,

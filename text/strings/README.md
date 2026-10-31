@@ -22,6 +22,9 @@ allocation-aware, and safe for concurrent use from multiple goroutines. Secret h
 `IsEmpty` checks emptiness via `strings.TrimSpace`, recognizing every Unicode whitespace code point; `IsEmptyOrWhitespace` is the allocation-free
 alternative for plain strings — it iterates runes directly and returns on the first non-space rune instead of trimming both ends.
 
+`IsEmpty` and `ToPtr` also accept types defined over `string` or `*string` (`type name string`, `type namePtr *string`); `ToPtr` returns a pointer
+input as the same `*string`.
+
 ## Case and trimming
 
 | Function                            | Description                            |
