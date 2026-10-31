@@ -67,6 +67,8 @@ func New[K comparable, V any](opts ...Option) *Group[K, V] {
 
 // Do computes fn once per in-flight key, or joins an existing computation.
 // There is no background queue: a new key at capacity returns ErrOverloaded.
+// Keys unequal to themselves (such as NaN) run independently without deduplication,
+// but still count toward capacity and Wait.
 // Callers wait independently; WithLifecycle enables parent and last-waiter
 // cancellation of shared work without disabling the group timeout.
 // Callback panics are re-raised in callers still waiting for the result unless
@@ -102,7 +104,10 @@ func (g *Group[K, V]) DoShared(ctx context.Context, key K, fn func(context.Conte
 			work, cancel = context.WithCancel(work)
 			c.lifecycle = &lifecycleWaiters{cancel: cancel}
 		}
-		g.calls[key] = c
+		// Non-reflexive keys cannot be retrieved or deleted from a map.
+		if key == key { //nolint:gocritic // Self-comparison detects NaN, including within composite keys.
+			g.calls[key] = c
+		}
 		g.active++
 		g.wg.Add(1)
 		go g.run(work, key, c, fn)
