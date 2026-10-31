@@ -74,19 +74,21 @@ is part of.
 
 ## Subpackages
 
-| Package                        | Description                                                        |
-|--------------------------------|--------------------------------------------------------------------|
-| [appinfo](appinfo)           | Application metadata, build info, env vars, directory paths        |
-| [capabilities](capabilities) | Linux capability dropping via capset(2) / prctl(2)                 |
-| [concurrency](concurrency)   | Adaptive concurrency limits, batch processing                      |
-| [helpers](helpers)           | Goroutine ID extraction (debug only)                               |
-| [landlock](landlock)         | Linux Landlock LSM filesystem allowlist (kernel 5.13+)             |
-| [nonewprivs](nonewprivs)     | `PR_SET_NO_NEW_PRIVS` primitive (SUID-escalation defense)          |
-| [panics](panics)             | Panic recovery, assertions (`Must`, `MustNonNil`, `MustError`)     |
-| [rlimits](rlimits)           | Linux process resource caps via setrlimit(2)                       |
-| [seccomp](seccomp)           | Linux seccomp-BPF denylist of 23 dangerous syscalls                |
-| [signals](signals)           | OS signal handling with priority, timeouts, graceful shutdown      |
-| [singleflight](singleflight) | Cancellable, bounded deduplication of concurrent calls by key      |
+| Package                      | Description                                                    |
+|------------------------------|----------------------------------------------------------------|
+| [appinfo](appinfo)           | Application metadata, build info, env vars, directory paths    |
+| [capabilities](capabilities) | Linux capability dropping via capset(2) / prctl(2)             |
+| [concurrency](concurrency)   | Adaptive concurrency limits, batch processing                  |
+| [cycle](cycle)               | Exclusive manual or external cycle driver                      |
+| [helpers](helpers)           | Goroutine ID extraction (debug only)                           |
+| [landlock](landlock)         | Linux Landlock LSM filesystem allowlist (kernel 5.13+)         |
+| [leakcheck](leakcheck)       | Process-wide goroutine leak reporting                          |
+| [nonewprivs](nonewprivs)     | `PR_SET_NO_NEW_PRIVS` primitive (SUID-escalation defense)      |
+| [panics](panics)             | Panic recovery, assertions (`Must`, `MustNonNil`, `MustError`) |
+| [rlimits](rlimits)           | Linux process resource caps via setrlimit(2)                   |
+| [seccomp](seccomp)           | Linux seccomp-BPF denylist of 23 dangerous syscalls            |
+| [signals](signals)           | OS signal handling with priority, timeouts, graceful shutdown  |
+| [singleflight](singleflight) | Cancellable, bounded deduplication of concurrent calls by key  |
 
 ## Hardening
 
