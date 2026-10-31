@@ -44,6 +44,39 @@ func TestWithTempDir(t *testing.T) {
 	}
 }
 
+// TestWithTempDirValues checks how WithTempDir normalizes its argument: the
+// value is trimmed, and a blank string or a nil pointer leaves the default
+// directory for temporary files in place.
+func TestWithTempDirValues(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	blank := "   "
+	tests := []struct {
+		name    string
+		opt     spool.Option
+		wantDir string
+	}{
+		{name: "padded string", opt: spool.WithTempDir(" \t" + dir + "\n"), wantDir: dir},
+		{name: "pointer", opt: spool.WithTempDir(&dir), wantDir: dir},
+		{name: "blank string", opt: spool.WithTempDir(blank), wantDir: os.TempDir()},
+		{name: "blank pointer", opt: spool.WithTempDir(&blank), wantDir: os.TempDir()},
+		{name: "nil pointer", opt: spool.WithTempDir((*string)(nil)), wantDir: os.TempDir()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sp, err := spool.New(strings.NewReader("spills to disk"), spool.WithMemThreshold(4), tc.opt)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = sp.Close() })
+
+			f, ok := sp.ReadSeeker.(*os.File)
+			require.True(t, ok, "the content is spilled to a file")
+			require.Equal(t, filepath.Clean(tc.wantDir), filepath.Dir(f.Name()))
+		})
+	}
+}
+
 func TestWithTempDirMissing(t *testing.T) {
 	t.Parallel()
 
