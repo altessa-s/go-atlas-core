@@ -17,6 +17,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/runtime/internal/exectest"
@@ -39,6 +40,11 @@ import (
 // Landlock has nothing to test.
 func TestApply_RestrictsAccessInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
+		// The domain lands on the calling thread only: keep the
+		// goroutine there so the reads below run restricted.
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
 		if !landlock.Supported() {
 			// Pre-Landlock kernel — exit cleanly. The child has
 			// already emitted the sentinel inside RunInSubprocess,

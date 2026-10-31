@@ -10,6 +10,10 @@
 // a program exec'd from the restricted thread inherits the domain.
 // Each test runs in a re-executed child because Apply is irreversible;
 // on kernels without Landlock the child returns without asserting.
+// The domain lands on the calling thread only, so every body holds
+// runtime.LockOSThread from Apply through the last assertion: a
+// migrated goroutine would probe the filesystem, or fork the exec'd
+// program, from an unrestricted peer thread.
 
 package landlock_test
 
@@ -18,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/altessa-s/go-atlas-core/runtime/internal/exectest"
@@ -76,6 +81,9 @@ func requireDenied(op string, err error) {
 func TestApply_EnforcesReadAndWriteRights(t *testing.T) {
 	rw, ro, out := landlockTree(t)
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
 		if !landlock.Supported() {
 			return
 		}
@@ -129,6 +137,9 @@ func TestApply_EnforcesReadAndWriteRights(t *testing.T) {
 func TestApply_ExecInheritsDomain(t *testing.T) {
 	rw, _, out := landlockTree(t)
 	exectest.RunInSubprocess(t, func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
 		if !landlock.Supported() {
 			return
 		}
