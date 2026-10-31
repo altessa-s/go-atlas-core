@@ -118,3 +118,119 @@ func TestToScreamingSnakeCase_Complex(t *testing.T) {
 		require.Equal(t, tt.want, corestrings.ToScreamingSnakeCase(tt.input))
 	}
 }
+
+func TestToPtr_StringPointer(t *testing.T) {
+	t.Parallel()
+
+	word := "hello"
+	blank := " \t\n"
+	empty := ""
+
+	tests := []struct {
+		name string
+		in   *string
+		want *string
+	}{
+		{name: "nil pointer", in: nil, want: nil},
+		{name: "empty value", in: &empty, want: nil},
+		{name: "whitespace value", in: &blank, want: nil},
+		{name: "non-empty value returns the same pointer", in: &word, want: &word},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := corestrings.ToPtr(tc.in)
+			if tc.want == nil {
+				require.Nil(t, got)
+				return
+			}
+			require.Same(t, tc.want, got)
+		})
+	}
+}
+
+func TestToPtr_StringReturnsFreshPointer(t *testing.T) {
+	t.Parallel()
+
+	a := corestrings.ToPtr(" padded ")
+	b := corestrings.ToPtr(" padded ")
+	require.NotNil(t, a)
+	require.Equal(t, " padded ", *a, "the value is not trimmed")
+	require.NotSame(t, a, b)
+}
+
+func TestUnsafeConversions_Empty(t *testing.T) {
+	t.Parallel()
+
+	require.Nil(t, corestrings.ToBytesUnsafe(""))
+	require.Empty(t, corestrings.FromBytesUnsafe(nil))
+	require.Empty(t, corestrings.FromBytesUnsafe([]byte{}))
+	require.Empty(t, corestrings.FromBytesUnsafe(make([]byte, 0, 16)))
+}
+
+func TestConcat_Variants(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		parts []string
+		want  string
+	}{
+		{name: "no parts", parts: nil, want: ""},
+		{name: "one part", parts: []string{"solo"}, want: "solo"},
+		{name: "all empty", parts: []string{"", "", ""}, want: ""},
+		{name: "some empty", parts: []string{"a", "", "b"}, want: "ab"},
+		{name: "multibyte", parts: []string{"при", "вет", "!"}, want: "привет!"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, corestrings.ConcatUnsafe(tc.parts...))
+			require.Equal(t, tc.want, corestrings.Concat(tc.parts...))
+		})
+	}
+}
+
+// TestConcatUnsafe_DoesNotAliasInputs guards the safety contract: the result
+// owns a fresh buffer, so it does not alias any input part.
+func TestConcatUnsafe_DoesNotAliasInputs(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("abc")
+	got := corestrings.ConcatUnsafe(corestrings.FromBytesUnsafe(src), "def")
+	src[0] = 'X'
+	require.Equal(t, "abcdef", got)
+}
+
+func TestPutStringBuilder_NilAndReset(t *testing.T) {
+	t.Parallel()
+
+	require.NotPanics(t, func() { corestrings.PutStringBuilder(nil) })
+
+	sb := corestrings.GetStringBuilder()
+	sb.WriteString("leftover")
+	corestrings.PutStringBuilder(sb)
+	require.Zero(t, sb.Len(), "PutStringBuilder resets the builder")
+
+	next := corestrings.GetStringBuilder()
+	require.Zero(t, next.Len(), "a pooled builder is handed out empty")
+	corestrings.PutStringBuilder(next)
+}
+
+func TestJoin_SkipEmptyAllEmpty(t *testing.T) {
+	t.Parallel()
+
+	got := corestrings.Join([]string{"", "", ""}, corestrings.JoinOptions{
+		Separator: ",", SkipEmpty: true, Prefix: "[", Suffix: "]",
+	})
+	require.Empty(t, got, "prefix and suffix are not added to an empty result")
+}
+
+func TestSplit_CaseInsensitiveInvalidUTF8Separator(t *testing.T) {
+	t.Parallel()
+
+	got := corestrings.Split("a\xffB\xffc", corestrings.SplitOptions{Separator: "\xff", MaxSplits: -1})
+	require.Equal(t, []string{"a", "B", "c"}, got)
+}
