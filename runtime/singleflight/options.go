@@ -6,7 +6,10 @@ package singleflight
 
 //go:generate optgen generate
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // DefaultMaxConcurrent limits distinct computations admitted at once.
 const DefaultMaxConcurrent = 1024
@@ -15,6 +18,11 @@ const DefaultMaxConcurrent = 1024
 const DefaultTimeout = 15 * time.Second
 
 type options struct {
+	// lifecycle cancels work independently of callers; nil preserves legacy behavior.
+	lifecycle context.Context
+	// panicAsError replaces recovered panics without retaining their values.
+	panicAsError error
+
 	maxConcurrent int           `optgen:"default=DefaultMaxConcurrent"`
 	timeout       time.Duration `optgen:"default=DefaultTimeout"`
 }

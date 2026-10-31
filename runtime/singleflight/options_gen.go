@@ -4,16 +4,31 @@
 package singleflight
 
 import (
+	"context"
 	"time"
 )
 
 // Option is a functional option for configuring options.
 type Option func(o *options)
 
+// WithLifecycle sets the lifecycle option.
+func WithLifecycle(v context.Context) Option {
+	return func(o *options) {
+		o.lifecycle = v
+	}
+}
+
 // WithMaxConcurrent sets the maxConcurrent option.
 func WithMaxConcurrent(v int) Option {
 	return func(o *options) {
 		o.maxConcurrent = v
+	}
+}
+
+// WithPanicAsError sets the panicAsError option.
+func WithPanicAsError(v error) Option {
+	return func(o *options) {
+		o.panicAsError = v
 	}
 }
 

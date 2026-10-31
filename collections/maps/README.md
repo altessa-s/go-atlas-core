@@ -12,21 +12,25 @@ maps without modifying inputs; nil maps are treated as empty and never cause pan
 
 ## Functions
 
-| Function                 | Description                                          |
-|--------------------------|------------------------------------------------------|
-| `Merge`                  | Combine two maps; source keys take precedence        |
-| `Swap`                   | Transpose keys and values                            |
-| `FilterMap`              | Return entries matching a predicate                  |
-| `ConvertMap`             | Transform keys and values via a mapping function     |
-| `FromSlice`              | Build a map from a slice using a key extractor       |
-| `FromSliceWith`          | Build a map from a slice using a key-value extractor |
-| `ToKeyValueSlice`        | Flatten a map to `[]any{k1, v1, k2, v2, ...}`        |
-| `MergeWith`              | Combine two maps with a custom conflict resolver      |
-| `MergeAll`               | Overlay N maps in order; last layer wins              |
-| `MergeDeep`              | Recursively merge nested `map[string]any` structures  |
-| `FromFlatMap`            | Expand dot-separated keys into nested maps            |
-| `FromFlatMapWithHandler` | Same as `FromFlatMap` with a conflict callback        |
-| `ToFlatMap`              | Flatten nested maps into dot-separated keys           |
+| Function                 | Description                                                |
+|--------------------------|------------------------------------------------------------|
+| `ConvertMap`             | Transform keys and values via a mapping function           |
+| `FilterMap`              | Return entries matching a predicate                        |
+| `FromFlatMap`            | Expand dot-separated keys into nested maps                 |
+| `FromFlatMapWithHandler` | Same as `FromFlatMap` with a conflict callback             |
+| `FromSlice`              | Build a map from a slice using a key extractor             |
+| `FromSliceWith`          | Build a map from a slice using a key-value extractor       |
+| `Merge`                  | Combine two maps; source keys take precedence              |
+| `MergeAll`               | Overlay N maps in order; last layer wins                   |
+| `MergeDeep`              | Recursively merge nested `map[string]any` structures       |
+| `MergeWith`              | Combine two maps with a custom conflict resolver           |
+| `Swap`                   | Transpose keys and values                                  |
+| `ToFlatMap`              | Flatten nested maps into dot-separated keys                |
+| `ToKeyValueSlice`        | Flatten a map to `[]any{k1, v1, k2, v2, ...}`              |
+| `ToSortedKeyValueSlice`  | Flatten alternating keys and values in ascending key order |
+
+`ToSortedKeyValueSlice` returns alternating keys and values sorted by key.
+`ToKeyValueSlice` has random iteration order. Both return nil for empty input.
 
 `FromFlatMap` processes keys in lexical order: scalar parents block their descendants, while explicit dotted entries override values inside map
 parents. Nested `map[string]any` values are copied before expansion, including nil maps; other reference values remain shared. `ToFlatMap` preserves

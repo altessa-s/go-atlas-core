@@ -23,19 +23,19 @@ profile — so earlier toolchains cannot build it.
 
 ## Packages
 
-| Package                      | Description                                                                 |
-|------------------------------|-----------------------------------------------------------------------------|
-| [collections](./collections) | Generic maps and slices utilities, iterators, pools                         |
-| [context](./context)         | Context timeout helpers                                                     |
-| [encoding](./encoding)       | Hashing, serialization, composite keys and entity-tags (ETags)              |
-| [errors](./errors)           | Error wrapping, construction, classification; network checks (`network`)    |
-| [id](./id)                   | Service identity                                                            |
-| [io](./io)                   | Buffer pools, limited readers, file-system helpers, spooling, WAL           |
-| [retry](./retry)             | Stdlib-only retry loop with pluggable delay policies                        |
-| [runtime](./runtime)         | Shutdown hooks, concurrency, singleflight, signals, panics, sandboxing      |
-| [text](./text)               | String manipulation, interning, secure storage, charsets                    |
-| [time](./time)               | Time formatting, calendar dates (`time/civil`), clocks (`time/clock`)       |
-| [types](./types)             | Bits, constraints, nil checks, optional, pointers, redacted strings, result |
+| Package                      | Description                                                                         |
+|------------------------------|-------------------------------------------------------------------------------------|
+| [collections](./collections) | Generic maps and slices utilities, iterators, pools                                 |
+| [context](./context)         | Context timeout helpers                                                             |
+| [encoding](./encoding)       | Hashing, serialization, composite keys and entity-tags (ETags)                      |
+| [errors](./errors)           | Error wrapping, construction, classification; network checks (`network`)            |
+| [id](./id)                   | Service identity                                                                    |
+| [io](./io)                   | Buffer pools, limited readers, file-system helpers, spooling, WAL                   |
+| [retry](./retry)             | Stdlib-only retry loop with pluggable delay policies                                |
+| [runtime](./runtime)         | Shutdown hooks, cycles, leak checks, concurrency, singleflight, signals, sandboxing |
+| [text](./text)               | String manipulation, interning, secure storage, charsets                            |
+| [time](./time)               | Time formatting, calendar dates (`time/civil`), clocks (`time/clock`)               |
+| [types](./types)             | Bits, constraints, nil checks, optional, pointers, redacted strings, result         |
 
 ## Design principles
 
