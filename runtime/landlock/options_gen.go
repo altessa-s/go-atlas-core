@@ -20,9 +20,9 @@ func WithReadPaths(v ...string) Option {
 		for i, element := range v {
 			transformed[i] = strings.TrimSpace(element)
 		}
+		deduped := make([]string, 0, len(transformed))
 		{
 			seen := make(map[string]struct{}, len(transformed))
-			deduped := make([]string, 0, len(transformed))
 			for _, item := range transformed {
 				if _, ok := seen[item]; ok {
 					continue
@@ -30,9 +30,8 @@ func WithReadPaths(v ...string) Option {
 				seen[item] = struct{}{}
 				deduped = append(deduped, item)
 			}
-			transformed = deduped
 		}
-		o.readPaths = append(o.readPaths, transformed...)
+		o.readPaths = append(o.readPaths, deduped...)
 	}
 }
 
@@ -46,9 +45,9 @@ func WithReadWritePaths(v ...string) Option {
 		for i, element := range v {
 			transformed[i] = strings.TrimSpace(element)
 		}
+		deduped := make([]string, 0, len(transformed))
 		{
 			seen := make(map[string]struct{}, len(transformed))
-			deduped := make([]string, 0, len(transformed))
 			for _, item := range transformed {
 				if _, ok := seen[item]; ok {
 					continue
@@ -56,9 +55,8 @@ func WithReadWritePaths(v ...string) Option {
 				seen[item] = struct{}{}
 				deduped = append(deduped, item)
 			}
-			transformed = deduped
 		}
-		o.readWritePaths = append(o.readWritePaths, transformed...)
+		o.readWritePaths = append(o.readWritePaths, deduped...)
 	}
 }
 

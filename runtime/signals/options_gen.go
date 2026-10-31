@@ -87,9 +87,9 @@ func WithSignals(v ...os.Signal) Option {
 		if len(v) == 0 {
 			return
 		}
+		deduped := make([]os.Signal, 0, len(v))
 		{
 			seen := make(map[os.Signal]struct{}, len(v))
-			deduped := make([]os.Signal, 0, len(v))
 			for _, item := range v {
 				if _, ok := seen[item]; ok {
 					continue
@@ -97,9 +97,8 @@ func WithSignals(v ...os.Signal) Option {
 				seen[item] = struct{}{}
 				deduped = append(deduped, item)
 			}
-			v = deduped
 		}
-		o.signals = v
+		o.signals = deduped
 	}
 }
 
