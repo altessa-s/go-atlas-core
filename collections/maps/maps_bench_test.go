@@ -117,3 +117,89 @@ func BenchmarkFlatMap(b *testing.B) {
 		}
 	})
 }
+
+type benchRecord struct {
+	ID   string
+	Rank int
+}
+
+func benchRecords(size int) []benchRecord {
+	records := make([]benchRecord, size)
+	for i := range size {
+		records[i] = benchRecord{ID: fmt.Sprintf("id-%d", i), Rank: i}
+	}
+	return records
+}
+
+func benchStringMap(size int) map[string]int {
+	m := make(map[string]int, size)
+	for i := range size {
+		m[fmt.Sprintf("k%d", i)] = i
+	}
+	return m
+}
+
+// BenchmarkFromSlice measures indexing a slice of records by key.
+func BenchmarkFromSlice(b *testing.B) {
+	for _, size := range []int{100, 10000} {
+		records := benchRecords(size)
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				m := coremaps.FromSlice(records, func(r benchRecord) string { return r.ID })
+				if len(m) != size {
+					b.Fatalf("len = %d, want %d", len(m), size)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkConvertMap measures re-keying and re-typing a whole map.
+func BenchmarkConvertMap(b *testing.B) {
+	for _, size := range []int{100, 10000} {
+		input := benchStringMap(size)
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				m := coremaps.ConvertMap(input, func(k string, v int) (int, string) { return v, k })
+				if len(m) != size {
+					b.Fatalf("len = %d, want %d", len(m), size)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkSwap measures inverting a map.
+func BenchmarkSwap(b *testing.B) {
+	for _, size := range []int{100, 10000} {
+		input := benchStringMap(size)
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				m := coremaps.Swap(input)
+				if len(m) != size {
+					b.Fatalf("len = %d, want %d", len(m), size)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkToKeyValueSlice measures flattening a small attribute map into
+// the key/value argument list loggers take.
+func BenchmarkToKeyValueSlice(b *testing.B) {
+	for _, size := range []int{8, 64} {
+		input := benchStringMap(size)
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				kv := coremaps.ToKeyValueSlice(input)
+				if len(kv) != 2*size {
+					b.Fatalf("len = %d, want %d", len(kv), 2*size)
+				}
+			}
+		})
+	}
+}
