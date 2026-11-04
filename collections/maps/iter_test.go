@@ -113,10 +113,12 @@ func TestWeakMap_Range(t *testing.T) {
 	wm := coremaps.NewWeakMap[string, int]()
 	v1 := 1
 	v2 := 2
+
 	wm.Set("a", &v1)
 	wm.Set("b", &v2)
 
 	count := 0
+
 	wm.Range(func(key string, value *int) bool {
 		count++
 		return true

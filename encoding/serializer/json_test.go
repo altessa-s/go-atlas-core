@@ -109,6 +109,7 @@ func TestJSON_StricterDefaults(t *testing.T) {
 		t.Parallel()
 
 		in := []byte("\"a\xffb\"")
+
 		var out string
 		require.NoError(t, v1.Deserialize(in, &out))
 		require.Error(t, v2.Deserialize(in, &out))
@@ -119,6 +120,7 @@ func TestJSON_StricterDefaults(t *testing.T) {
 		t.Parallel()
 
 		in := []byte(`{"name":"a","name":"b"}`)
+
 		var out testhelpers.Person
 		require.NoError(t, v1.Deserialize(in, &out))
 		require.Equal(t, "b", out.Name)
@@ -135,6 +137,7 @@ func TestJSON_StricterDefaults(t *testing.T) {
 		t.Parallel()
 
 		in := []byte(`{"NAME":"a"}`)
+
 		var out1, out2 testhelpers.Person
 		require.NoError(t, v1.Deserialize(in, &out1))
 		require.Equal(t, "a", out1.Name)
@@ -152,6 +155,7 @@ func TestJSON_StricterDefaults(t *testing.T) {
 		out1, err := v1.Serialize(in)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"s":null,"m":null}`, string(out1))
+
 		out2, err := v2.Serialize(in)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"s":[],"m":{}}`, string(out2))
@@ -161,6 +165,7 @@ func TestJSON_StricterDefaults(t *testing.T) {
 		t.Parallel()
 
 		in := []byte(`{"name":"a","extra":1}`)
+
 		var out testhelpers.Person
 		require.NoError(t, v2.Deserialize(in, &out))
 		require.Error(t, serializer.NewJSON(json.RejectUnknownMembers(true)).Deserialize(in, &out))
@@ -200,6 +205,7 @@ func TestJSON_DeserializeErrors(t *testing.T) {
 	t.Parallel()
 
 	s := &serializer.JSON{}
+
 	var out testhelpers.Person
 	require.Error(t, s.Deserialize([]byte(`{`), &out))
 	require.Error(t, s.Deserialize([]byte(`{"age":"x"}`), &out))

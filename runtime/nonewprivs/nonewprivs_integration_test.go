@@ -32,22 +32,27 @@ func noNewPrivsField(status []byte) string {
 			return strings.TrimSpace(v)
 		}
 	}
+
 	exectest.Failf("NoNewPrivs not found in status:\n%s", status)
+
 	return ""
 }
 
 func TestSet_VisibleInThreadStatus(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
 
 		if err := nonewprivs.Set(); err != nil {
 			exectest.Failf("Set: %v", err)
 		}
+
 		status, err := os.ReadFile("/proc/thread-self/status")
 		if err != nil {
 			exectest.Failf("read /proc/thread-self/status: %v", err)
 		}
+
 		if got := noNewPrivsField(status); got != "1" {
 			exectest.Failf("NoNewPrivs of the calling thread = %q after Set, want 1", got)
 		}
@@ -64,6 +69,7 @@ func TestSet_InheritedByExecdChild(t *testing.T) {
 		// Fork happens on the calling thread; pin it so the child is
 		// cloned from the thread that has the bit.
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
 
 		if err := nonewprivs.Set(); err != nil {
@@ -76,6 +82,7 @@ func TestSet_InheritedByExecdChild(t *testing.T) {
 		if err != nil {
 			exectest.Failf("exec %s: %v", cat, err)
 		}
+
 		if got := noNewPrivsField(status); got != "1" {
 			exectest.Failf("NoNewPrivs of the exec'd child = %q, want 1", got)
 		}

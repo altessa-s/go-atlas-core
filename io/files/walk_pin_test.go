@@ -28,10 +28,12 @@ func TestWalk_EarlyStopPin(t *testing.T) {
 		var seen []string
 		for e, err := range files.Walk(root, files.WithRecursive(), files.WithFollowSymlinks()) {
 			seen = append(seen, filepath.Base(e.Path))
+
 			if err != nil {
 				break
 			}
 		}
+
 		require.Equal(t, []string{"a-broken", "a-broken"}, seen, "the link, then its stat error; b-file never visited")
 	})
 
@@ -43,13 +45,16 @@ func TestWalk_EarlyStopPin(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(root, "b-file"), nil, 0o600))
 
 		var seen []string
+
 		for e, err := range files.Walk(root, files.WithRecursive()) {
 			require.NoError(t, err)
+
 			seen = append(seen, filepath.Base(e.Path))
 			if filepath.Base(e.Path) == "inner" {
 				break
 			}
 		}
+
 		require.Equal(t, []string{"a-dir", "inner"}, seen)
 	})
 }

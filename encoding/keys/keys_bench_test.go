@@ -17,6 +17,7 @@ var (
 
 func BenchmarkCompose(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		composeSink = keys.Compose("transport", "POST:/api/v1/users", "550e8400-e29b-41d4-a716-446655440000")
 	}
@@ -24,7 +25,9 @@ func BenchmarkCompose(b *testing.B) {
 
 func BenchmarkDigest(b *testing.B) {
 	method, body := []byte("/billing.v1.ProviderService/CreateProvider"), []byte(`{"name":"p","baseUrl":"https://example.com"}`)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		digestSink = keys.Digest(method, body)
 	}

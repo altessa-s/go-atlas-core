@@ -23,6 +23,7 @@ func x32Insns() int {
 	if rejectX32 {
 		return x32GuardLen
 	}
+
 	return 0
 }
 
@@ -83,6 +84,7 @@ func TestBuildFilter_X32Check(t *testing.T) {
 	if runtime.GOARCH != "amd64" {
 		require.Equal(t, uint16(unix.BPF_JMP|unix.BPF_JEQ|unix.BPF_K), inst.Code, "prog[3].Code")
 		require.Equal(t, dangerousSyscalls[0], inst.K, "prog[3].K")
+
 		return
 	}
 
@@ -124,6 +126,7 @@ func TestBuildFilter_JEQChain(t *testing.T) {
 		inst := prog[pos]
 		require.Equal(t, uint16(unix.BPF_JMP|unix.BPF_JEQ|unix.BPF_K), inst.Code, "prog[%d].Code", pos)
 		require.Equal(t, nr, inst.K, "prog[%d].K", pos)
+
 		wantJt := uint8(n - i)
 		require.Equal(t, wantJt, inst.Jt, "prog[%d].Jt", pos)
 		require.Equal(t, uint8(0), inst.Jf, "prog[%d].Jf", pos)
@@ -150,6 +153,7 @@ func TestBuildFilter_ReturnInstructions(t *testing.T) {
 		pos  int
 		want uint32
 	}
+
 	cases := []tc{
 		{"RET ALLOW (fallthrough)", n + 3, retAllow},
 		{"RET DENY (on match)", n + 4, retDeny},
@@ -158,6 +162,7 @@ func TestBuildFilter_ReturnInstructions(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
+
 			inst := prog[c.pos]
 			require.Equal(t, uint16(unix.BPF_RET|unix.BPF_K), inst.Code, "prog[%d].Code", c.pos)
 			require.Equal(t, c.want, inst.K, "prog[%d].K", c.pos)
@@ -197,8 +202,10 @@ func runFilter(t *testing.T, prog []unix.SockFilter, arch, nr uint32) uint32 {
 	for i, inst := range prog {
 		raw[i] = bpf.RawInstruction{Op: inst.Code, Jt: inst.Jt, Jf: inst.Jf, K: inst.K}
 	}
+
 	insts, ok := bpf.Disassemble(raw)
 	require.True(t, ok, "filter contains instructions the interpreter cannot decode")
+
 	vm, err := bpf.NewVM(insts)
 	require.NoError(t, err)
 
@@ -209,6 +216,7 @@ func runFilter(t *testing.T, prog []unix.SockFilter, arch, nr uint32) uint32 {
 
 	ret, err := vm.Run(data)
 	require.NoError(t, err)
+
 	return uint32(ret)
 }
 
@@ -228,6 +236,7 @@ func TestBuildFilter_Behavior(t *testing.T) {
 		nr   uint32
 		want uint32
 	}
+
 	cases := []tc{
 		{"allowed syscall", expectedArch, uint32(unix.SYS_GETPID), retAllow},
 		{"wrong arch", expectedArch ^ 0xFFFF, uint32(unix.SYS_GETPID), retKill},
@@ -247,6 +256,7 @@ func TestBuildFilter_Behavior(t *testing.T) {
 	if runtime.GOARCH != "amd64" {
 		x32Want = retAllow
 	}
+
 	cases = append(cases,
 		tc{"x32 mount", expectedArch, x32SyscallBit | uint32(unix.SYS_MOUNT), x32Want},
 		tc{"x32 bpf", expectedArch, x32SyscallBit | uint32(unix.SYS_BPF), x32Want},

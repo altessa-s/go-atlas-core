@@ -24,6 +24,7 @@ func BenchmarkNew_InMemory(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		sp.Close()
 	}
 }
@@ -40,6 +41,7 @@ func BenchmarkNew_Spill(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		sp.Close()
 	}
 }
@@ -56,6 +58,7 @@ func BenchmarkReread(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			payload := []byte(strings.Repeat("x", tc.size))
+
 			sp, err := spool.New(bytes.NewReader(payload),
 				spool.WithMemThreshold(256<<10),
 				spool.WithTempDir(b.TempDir()),
@@ -63,19 +66,24 @@ func BenchmarkReread(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+
 			b.Cleanup(func() { _ = sp.Close() })
+
 			buf := make([]byte, 32<<10)
 
 			b.SetBytes(int64(tc.size))
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if _, err := sp.Seek(0, io.SeekStart); err != nil {
 					b.Fatal(err)
 				}
+
 				n, err := io.CopyBuffer(io.Discard, sp, buf)
 				if err != nil {
 					b.Fatal(err)
 				}
+
 				if n != int64(tc.size) {
 					b.Fatalf("read %d bytes, want %d", n, tc.size)
 				}
@@ -89,15 +97,18 @@ func BenchmarkReread(b *testing.B) {
 func BenchmarkNew_Tee(b *testing.B) {
 	payload := []byte(strings.Repeat("x", 256<<10))
 	tee := sha256.New()
+
 	b.SetBytes(int64(len(payload)))
 	b.ReportAllocs()
 
 	for b.Loop() {
 		tee.Reset()
+
 		sp, err := spool.New(bytes.NewReader(payload), spool.WithTee(tee))
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		_ = sp.Close()
 	}
 }

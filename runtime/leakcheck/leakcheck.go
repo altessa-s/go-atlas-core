@@ -19,9 +19,11 @@ func Check() error {
 		if err := profile.WriteTo(&stacks, 1); err != nil {
 			return fmt.Errorf("goroutine leak profile: %w", err)
 		}
+
 		if n := profile.Count(); n > 0 {
 			return fmt.Errorf("%d leaked goroutines:\n%s", n, stacks.String())
 		}
 	}
+
 	return nil
 }

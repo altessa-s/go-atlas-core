@@ -22,6 +22,7 @@ func TestPriorityQueueCustomPriorityOrdering(t *testing.T) {
 	const customLow = Priority(10)
 
 	pq := newPriorityQueue()
+
 	entries := makeHandlersWithPriorities([]Priority{
 		PriorityLow, PriorityHighest, customLow, PriorityNormal, customLow, PriorityLowest,
 	})
@@ -38,6 +39,7 @@ func TestPriorityQueueCustomPriorityOrdering(t *testing.T) {
 	for i, h := range got {
 		priorities[i] = h.priority
 	}
+
 	require.Equal(t,
 		[]Priority{PriorityHighest, PriorityNormal, PriorityLow, customLow, customLow, PriorityLowest},
 		priorities)
@@ -70,20 +72,24 @@ func TestPriorityQueueMixedPrioritiesMatchSort(t *testing.T) {
 			t.Parallel()
 
 			entries := makeHandlersWithPriorities(tc.priorities)
+
 			pq := newPriorityQueue()
 			for _, e := range entries {
 				pq.addHandler(e)
 			}
+
 			got := pq.getHandlersInOrder()
 
 			want := slices.Clone(entries)
 			(&Signal{}).sortHandlersByPriority(want)
 
 			require.Len(t, got, len(want))
+
 			for i := range want {
 				require.Equal(t, want[i].priority, got[i].priority, "priority at i=%d", i)
 				require.Equal(t, want[i].timeout, got[i].timeout, "identity at i=%d", i)
 			}
+
 			assertSortedDescending(t, got)
 			assertStable(t, got)
 		})

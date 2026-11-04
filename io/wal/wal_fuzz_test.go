@@ -30,6 +30,7 @@ func encodeRecord(payload []byte) []byte {
 	out := make([]byte, 8, 8+len(payload))
 	binary.LittleEndian.PutUint32(out[0:4], uint32(len(payload)))
 	binary.LittleEndian.PutUint32(out[4:8], crc32.ChecksumIEEE(payload))
+
 	return append(out, payload...)
 }
 
@@ -63,6 +64,7 @@ func FuzzRecoverArbitrarySegment(f *testing.F) {
 	f.Add(func() []byte {                                    // Good record whose CRC was flipped.
 		rec := encodeRecord([]byte("hello"))
 		rec[4] ^= 0xff
+
 		return rec
 	}())
 
@@ -105,6 +107,7 @@ func FuzzRecoverReturnsAnUnbrokenPrefix(f *testing.F) {
 		if len(first) == 0 || len(second) == 0 {
 			t.Skip("Append rejects empty payloads by contract")
 		}
+
 		if len(first) > maxFuzzPayload || len(second) > maxFuzzPayload {
 			t.Skip("oversized payload; Append's size limit is not what this target is about")
 		}
@@ -128,11 +131,13 @@ func FuzzRecoverReturnsAnUnbrokenPrefix(f *testing.F) {
 
 		reopened, recovered, err := wal.Open(dir)
 		require.NoError(t, err)
+
 		defer func() { _ = reopened.Close() }()
 
 		want := [][]byte{first, second}
 		require.LessOrEqual(t, len(recovered), len(want),
 			"recovery produced more records than were ever appended")
+
 		for i, rec := range recovered {
 			require.Equal(t, want[i], rec.Payload,
 				"record %d differs: recovery must return an unbroken prefix, never a gap or a reorder", i)

@@ -133,6 +133,7 @@ func DefaultLimitFunc() int {
 // Returns a function that can be used with WithConcurrencyLimitFunc options.
 func MemoryAwareConcurrency(lowMemoryMB, mediumMemoryMB, highMemoryMB uint64, opts ...MemoryOption) ConcurrencyLimitFunc {
 	options := newMemoryOptions(opts...)
+
 	return func() int {
 		// Use cached memory stats to avoid frequent STW pauses
 		availableMemoryMB, known := getAvailableMemoryMB(options.availableMemory)
@@ -206,6 +207,7 @@ func AdaptiveConcurrency(
 	memoryLowMB, memoryMediumMB uint64, getLoad func() float64, highLoadThreshold float64, opts ...MemoryOption,
 ) ConcurrencyLimitFunc {
 	options := newMemoryOptions(opts...)
+
 	return func() int {
 		cpuCount := runtime.NumCPU()
 		baseConcurrency := cpuCount * DefaultConcurrencyMultiplier

@@ -207,6 +207,7 @@ func ParseName(name string) (Cap, error) {
 	if c, ok := nameToCap.Get(key); ok {
 		return c, nil
 	}
+
 	return 0, fmt.Errorf("%w: unknown capability %q", ErrInvalidOption, name)
 }
 
@@ -220,6 +221,7 @@ func (c Cap) String() string {
 	if name, ok := capToName.Get(c); ok {
 		return name
 	}
+
 	return fmt.Sprintf("CAP_UNKNOWN(%d)", int(c))
 }
 
@@ -237,12 +239,15 @@ func (s Sets) Has(c Cap, kinds ...SetKind) bool {
 	if c < 0 || c >= 64 {
 		return false
 	}
+
 	bit := uint64(1) << uint(c)
 	if len(kinds) == 0 {
 		return s.Effective&bit != 0
 	}
+
 	for _, k := range kinds {
 		var mask uint64
+
 		switch k {
 		case Effective:
 			mask = s.Effective
@@ -257,10 +262,12 @@ func (s Sets) Has(c Cap, kinds ...SetKind) bool {
 		default:
 			continue
 		}
+
 		if mask&bit != 0 {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -278,7 +285,9 @@ func (s Sets) With(c Cap, kinds ...SetKind) Sets {
 	if c < 0 || c >= 64 {
 		return s
 	}
+
 	bit := uint64(1) << uint(c)
+
 	for _, k := range kinds {
 		switch k {
 		case Effective:
@@ -293,6 +302,7 @@ func (s Sets) With(c Cap, kinds ...SetKind) Sets {
 			s.Ambient |= bit
 		}
 	}
+
 	return s
 }
 

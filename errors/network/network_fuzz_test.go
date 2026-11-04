@@ -40,6 +40,7 @@ func FuzzNetworkMatchersLookOnlyInsideAURLError(f *testing.F) {
 				"a plain error was classified as a redirect failure: %q", message)
 			require.False(t, network.IsUnsupportedProtocolScheme(plain),
 				"a plain error was classified as a scheme failure: %q", message)
+
 			return
 		}
 

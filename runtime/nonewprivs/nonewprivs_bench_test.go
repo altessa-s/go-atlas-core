@@ -18,5 +18,6 @@ func BenchmarkEnabled(b *testing.B) {
 	for b.Loop() {
 		sink, _ = nonewprivs.Enabled()
 	}
+
 	_ = sink
 }

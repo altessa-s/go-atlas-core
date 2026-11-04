@@ -20,6 +20,7 @@ func BenchmarkWithDisableCoreDumps(b *testing.B) {
 	for b.Loop() {
 		sink = rlimits.WithDisableCoreDumps()
 	}
+
 	_ = sink
 }
 
@@ -28,6 +29,7 @@ func BenchmarkWithMaxOpenFiles(b *testing.B) {
 	for b.Loop() {
 		sink = rlimits.WithMaxOpenFiles(1024)
 	}
+
 	_ = sink
 }
 
@@ -36,5 +38,6 @@ func BenchmarkWithMemoryBytes(b *testing.B) {
 	for b.Loop() {
 		sink = rlimits.WithMemoryBytes(1 << 30)
 	}
+
 	_ = sink
 }

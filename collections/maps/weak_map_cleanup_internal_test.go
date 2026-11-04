@@ -25,6 +25,7 @@ func TestWeakMap_ReplaceStopsPreviousCleanup(t *testing.T) {
 	t.Parallel()
 
 	m := NewWeakMap[int, [32]byte]()
+
 	a, b := new([32]byte), new([32]byte)
 	defer runtime.KeepAlive(a)
 	defer runtime.KeepAlive(b)
@@ -35,12 +36,15 @@ func TestWeakMap_ReplaceStopsPreviousCleanup(t *testing.T) {
 	}()
 
 	var cleanups []*observedCleanup
+
 	for i := range 128 {
 		key := i % 16
+
 		val := a
 		if i/16%2 != 0 {
 			val = b
 		}
+
 		m.Set(key, val)
 
 		// Both values remain live throughout the test, so no cleanup callback
@@ -49,6 +53,7 @@ func TestWeakMap_ReplaceStopsPreviousCleanup(t *testing.T) {
 		current := &observedCleanup{cleanup: entry.cleanup}
 		entry.cleanup = current
 		m.data[key] = entry
+
 		cleanups = append(cleanups, current)
 
 		// Exactly the latest cleanup for each key must remain unstopped.
@@ -57,6 +62,7 @@ func TestWeakMap_ReplaceStopsPreviousCleanup(t *testing.T) {
 			if j <= i-16 {
 				want = 1
 			}
+
 			if cleanup.stops != want {
 				t.Fatalf("after Set %d: cleanup %d stopped %d times, want %d", i, j, cleanup.stops, want)
 			}

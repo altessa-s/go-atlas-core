@@ -52,6 +52,7 @@ func TestErr(t *testing.T) {
 	require.Equal(t, 99, r.OrDefault(99))
 
 	var seen error
+
 	got := r.OrElse(func(e error) int {
 		seen = e
 		return 7
@@ -132,6 +133,7 @@ func TestOrElseInvocationCount(t *testing.T) {
 		t.Parallel()
 
 		var calls int
+
 		got := result.Ok("x").OrElse(func(error) string {
 			calls++
 			return "y"
@@ -144,6 +146,7 @@ func TestOrElseInvocationCount(t *testing.T) {
 		t.Parallel()
 
 		var calls int
+
 		got := result.Err[string](errSentinel).OrElse(func(error) string {
 			calls++
 			return "y"
@@ -157,6 +160,7 @@ func TestOrElseNilFnPanicsOnErr(t *testing.T) {
 	t.Parallel()
 
 	r := result.Err[string](errSentinel)
+
 	require.Panics(t, func() {
 		r.OrElse(nil)
 	})
@@ -182,24 +186,28 @@ func TestGenericInstantiation(t *testing.T) {
 
 	t.Run("struct", func(t *testing.T) {
 		t.Parallel()
+
 		s := fooStruct{A: 1, B: "x"}
 		require.Equal(t, s, result.Ok(s).Value())
 	})
 
 	t.Run("pointer", func(t *testing.T) {
 		t.Parallel()
+
 		p := &fooStruct{A: 2}
 		require.Same(t, p, result.Ok(p).Value())
 	})
 
 	t.Run("slice", func(t *testing.T) {
 		t.Parallel()
+
 		sl := []int{1, 2, 3}
 		require.Equal(t, sl, result.Ok(sl).Value())
 	})
 
 	t.Run("nil pointer Err", func(t *testing.T) {
 		t.Parallel()
+
 		r := result.Err[*fooStruct](errSentinel)
 		require.True(t, r.IsErr())
 		require.Nil(t, r.Value())

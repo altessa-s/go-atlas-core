@@ -25,20 +25,24 @@ func Merge[K comparable, T any](src map[K]T, dst map[K]T) map[K]T {
 		if len(dst) == 0 {
 			return nil
 		}
+
 		result := make(map[K]T, len(dst))
 		maps.Copy(result, dst)
+
 		return result
 	}
 
 	if len(dst) == 0 {
 		result := make(map[K]T, len(src))
 		maps.Copy(result, src)
+
 		return result
 	}
 
 	result := make(map[K]T, len(dst)+len(src))
 	maps.Copy(result, dst)
 	maps.Copy(result, src)
+
 	return result
 }
 
@@ -92,6 +96,7 @@ func FilterMap[K comparable, T any](collection map[K]T, predicate func(K, T) boo
 	if len(result) == 0 {
 		return nil
 	}
+
 	return result
 }
 
@@ -120,6 +125,7 @@ func ConvertMap[K1, K2 comparable, T1, T2 any](collection map[K1]T1, f func(K1, 
 		newKey, newValue := f(key, value)
 		result[newKey] = newValue
 	}
+
 	return result
 }
 
@@ -203,18 +209,23 @@ func MergeWith[K comparable, V any](src, dst map[K]V, resolve func(K, V, V) V) m
 		if len(dst) == 0 {
 			return nil
 		}
+
 		result := make(map[K]V, len(dst))
 		maps.Copy(result, dst)
+
 		return result
 	}
+
 	if len(dst) == 0 {
 		result := make(map[K]V, len(src))
 		maps.Copy(result, src)
+
 		return result
 	}
 
 	result := make(map[K]V, len(dst)+len(src))
 	maps.Copy(result, dst)
+
 	for k, srcVal := range src {
 		if dstVal, ok := result[k]; ok {
 			result[k] = resolve(k, srcVal, dstVal)
@@ -222,6 +233,7 @@ func MergeWith[K comparable, V any](src, dst map[K]V, resolve func(K, V, V) V) m
 			result[k] = srcVal
 		}
 	}
+
 	return result
 }
 
@@ -247,6 +259,7 @@ func MergeAll[K comparable, V any](layers ...map[K]V) map[K]V {
 	for _, l := range layers {
 		totalSize += len(l)
 	}
+
 	if totalSize == 0 {
 		return nil
 	}
@@ -255,6 +268,7 @@ func MergeAll[K comparable, V any](layers ...map[K]V) map[K]V {
 	for _, layer := range layers {
 		maps.Copy(result, layer)
 	}
+
 	return result
 }
 
@@ -279,6 +293,7 @@ func ToKeyValueSlice[K comparable, V any](m map[K]V) []any {
 	for key, value := range m {
 		slice = append(slice, key, value)
 	}
+
 	return slice
 }
 
@@ -294,14 +309,18 @@ func ToSortedKeyValueSlice[K cmp.Ordered, V any](m map[K]V) []any {
 		key   K
 		value V
 	}
+
 	entries := make([]entry, 0, len(m))
 	for k, v := range m {
 		entries = append(entries, entry{k, v})
 	}
+
 	slices.SortFunc(entries, func(a, b entry) int { return cmp.Compare(a.key, b.key) })
+
 	result := make([]any, 0, len(m)*2)
 	for _, e := range entries {
 		result = append(result, e.key, e.value)
 	}
+
 	return result
 }

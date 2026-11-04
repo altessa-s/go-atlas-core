@@ -16,6 +16,7 @@ import (
 
 func TestLimitedReadCloserPreservesReadErrorAtLimit(t *testing.T) {
 	t.Parallel()
+
 	failure := errors.New("reader failed")
 	reader := coreio.NewLimitedReadCloser(io.NopCloser(&dataAndErrorReader{data: "abcdef", err: failure}), 5)
 	data, err := io.ReadAll(reader)

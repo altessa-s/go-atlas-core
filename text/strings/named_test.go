@@ -21,6 +21,7 @@ func TestIsEmpty_NamedTypes(t *testing.T) {
 	t.Parallel()
 
 	hello, blank := "hello", " \t"
+
 	tests := []struct {
 		name string
 		got  bool
@@ -46,6 +47,7 @@ func TestToPtr_NamedTypes(t *testing.T) {
 
 	t.Run("named string", func(t *testing.T) {
 		t.Parallel()
+
 		got := corestrings.ToPtr(name("hello"))
 		require.NotNil(t, got)
 		require.Equal(t, "hello", *got)
@@ -57,12 +59,14 @@ func TestToPtr_NamedTypes(t *testing.T) {
 	})
 	t.Run("named pointer returns the original pointer", func(t *testing.T) {
 		t.Parallel()
+
 		hello := "hello"
 		got := corestrings.ToPtr(namePtr(&hello))
 		require.Same(t, &hello, got)
 	})
 	t.Run("named pointer to whitespace and nil named pointer", func(t *testing.T) {
 		t.Parallel()
+
 		blank := " "
 		require.Nil(t, corestrings.ToPtr(namePtr(&blank)))
 		require.Nil(t, corestrings.ToPtr(namePtr(nil)))

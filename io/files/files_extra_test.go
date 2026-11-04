@@ -19,6 +19,7 @@ func TestCurrentExecutableDir(t *testing.T) {
 	if dir == "" {
 		t.Skip("CurrentExecutableDir() returned empty (may happen in some test environments)")
 	}
+
 	require.True(t, filepath.IsAbs(dir), "CurrentExecutableDir() = %q, want absolute path", dir)
 }
 

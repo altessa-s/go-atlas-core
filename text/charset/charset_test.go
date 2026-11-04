@@ -10,20 +10,22 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/altessa-s/go-atlas-core/text/charset"
-
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
+
+	"github.com/altessa-s/go-atlas-core/text/charset"
 )
 
 const cyrillic = "код;название\n50;Московская область\n"
 
 func encode(t *testing.T, enc encoding.Encoding, s string) []byte {
 	t.Helper()
+
 	out, err := enc.NewEncoder().Bytes([]byte(s))
 	require.NoError(t, err)
+
 	return out
 }
 
@@ -61,6 +63,7 @@ func TestDecode(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, err := charset.Decode(tc.raw, tc.contentType, tc.fallback)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, string(got))
@@ -72,6 +75,7 @@ func TestDecodeErrors(t *testing.T) {
 	t.Parallel()
 
 	cp1251 := encode(t, charmap.Windows1251, cyrillic)
+
 	cases := []struct {
 		name        string
 		raw         []byte
@@ -86,6 +90,7 @@ func TestDecodeErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, err := charset.Decode(tc.raw, tc.contentType, tc.fallback)
 			require.ErrorIs(t, err, tc.want)
 			require.Nil(t, got)

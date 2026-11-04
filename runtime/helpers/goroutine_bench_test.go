@@ -15,5 +15,6 @@ func BenchmarkGoroutineID(b *testing.B) {
 	for b.Loop() {
 		sink = helpers.GoroutineID()
 	}
+
 	_ = sink
 }

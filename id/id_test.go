@@ -91,6 +91,7 @@ func TestNew_EnvFallbackToFile(t *testing.T) {
 	// No env set, should fall back to file
 	s, err := New(path, "NONEXISTENT_ENV_FOR_TEST_12345")
 	require.NoError(t, err)
+
 	id := s.ID()
 	require.NotEmpty(t, id, "expected non-empty ID from file provider")
 	require.Len(t, id, 32)
@@ -130,6 +131,7 @@ func TestMustNew_Panics(t *testing.T) {
 	defer func() {
 		require.NotNil(t, recover(), "expected panic for invalid inputs")
 	}()
+
 	MustNew("") // empty file path with no env should fail
 }
 
@@ -146,6 +148,7 @@ func TestMustNewWithProvider_Panics(t *testing.T) {
 	defer func() {
 		require.NotNil(t, recover(), "expected panic for nil provider")
 	}()
+
 	MustNewWithProvider(nil)
 }
 
@@ -178,6 +181,7 @@ func TestMustNewWithFileProvider_Panics(t *testing.T) {
 	defer func() {
 		require.NotNil(t, recover(), "expected panic for empty file path")
 	}()
+
 	MustNewWithFileProvider("")
 }
 

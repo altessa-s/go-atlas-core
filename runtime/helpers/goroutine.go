@@ -30,6 +30,7 @@ const (
 //	id := helpers.GoroutineID()
 func GoroutineID() int {
 	var buf [stackBufferSizeGoroutine]byte
+
 	n := runtime.Stack(buf[:], false)
 	b := buf[:n]
 
@@ -39,11 +40,13 @@ func GoroutineID() int {
 	}
 
 	id := 0
+
 	for i := len(goroutinePrefix); i < len(b); i++ {
 		ch := b[i]
 		if ch < '0' || ch > '9' {
 			return id
 		}
+
 		id = id*intBase10 + int(ch-'0')
 	}
 

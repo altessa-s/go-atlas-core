@@ -43,6 +43,7 @@ func (b *appendBatch) add(payload []byte, crc uint32) int {
 	b.offs = append(b.offs, Offset{})
 	b.errs = append(b.errs, nil)
 	b.refs++
+
 	return len(b.offs) - 1
 }
 

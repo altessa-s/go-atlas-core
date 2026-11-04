@@ -86,21 +86,26 @@ func (g *Group[K, V]) DoShared(ctx context.Context, key K, fn func(context.Conte
 	if err := ctx.Err(); err != nil {
 		return zero, false, err
 	}
+
 	g.mu.Lock()
 	if g.closed {
 		g.mu.Unlock()
 		return zero, false, ErrClosed
 	}
+
 	c, exists := g.calls[key]
 	if !exists {
 		if g.maxConcurrent > 0 && g.active >= g.maxConcurrent {
 			g.mu.Unlock()
 			return zero, false, ErrOverloaded
 		}
+
 		c = &call[V]{done: make(chan struct{})}
 		work := context.WithoutCancel(ctx)
+
 		if g.lifecycle != nil {
 			var cancel context.CancelFunc
+
 			work, cancel = context.WithCancel(work)
 			c.lifecycle = &lifecycleWaiters{cancel: cancel}
 		}
@@ -108,34 +113,42 @@ func (g *Group[K, V]) DoShared(ctx context.Context, key K, fn func(context.Conte
 		if key == key { //nolint:gocritic // Self-comparison detects NaN, including within composite keys.
 			g.calls[key] = c
 		}
+
 		g.active++
+
 		g.wg.Add(1)
 		go g.run(work, key, c, fn)
 	} else {
 		c.joined = true
 	}
+
 	if c.lifecycle != nil {
 		c.lifecycle.count++
 	}
 	g.mu.Unlock()
+
 	select {
 	case <-ctx.Done():
 		if g.lifecycle != nil {
 			g.mu.Lock()
+
 			c.lifecycle.count--
 			if c.lifecycle.count == 0 {
 				c.lifecycle.cancel()
+
 				if g.calls[key] == c {
 					delete(g.calls, key)
 				}
 			}
 			g.mu.Unlock()
 		}
+
 		return zero, false, ctx.Err()
 	case <-c.done:
 		if c.panicValue != nil {
 			panic(c.panicValue)
 		}
+
 		return c.value, c.joined, c.err
 	}
 }
@@ -165,15 +178,19 @@ func (g *Group[K, V]) Wait() {
 
 func (g *Group[K, V]) run(ctx context.Context, key K, c *call[V], fn func(context.Context) (V, error)) {
 	defer g.wg.Done()
+
 	if g.lifecycle != nil {
 		stop := context.AfterFunc(g.lifecycle, c.lifecycle.cancel) //nolint:contextcheck // Explicit group lifecycle supplements caller values.
 		defer stop()
 		defer c.lifecycle.cancel()
+
 		if g.lifecycle.Err() != nil {
 			c.lifecycle.cancel()
 		}
 	}
+
 	returned := false
+
 	defer func() {
 		p := recover()
 		if p != nil {
@@ -183,22 +200,29 @@ func (g *Group[K, V]) run(ctx context.Context, key K, c *call[V], fn func(contex
 				c.panicValue = p
 			}
 		}
+
 		if !returned && p == nil {
 			c.err = ErrAborted
 		}
+
 		g.mu.Lock()
 		if g.calls[key] == c {
 			delete(g.calls, key)
 		}
+
 		g.active--
+
 		close(c.done)
 		g.mu.Unlock()
 	}()
+
 	if g.timeout > 0 {
 		var cancel context.CancelFunc
+
 		ctx, cancel = context.WithTimeout(ctx, g.timeout)
 		defer cancel()
 	}
+
 	c.value, c.err = fn(ctx)
 	returned = true
 }

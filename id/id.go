@@ -51,6 +51,7 @@ func New(filePath string, env ...string) (*Service, error) {
 		if err == nil {
 			return NewWithProvider(envProvider)
 		}
+
 		if !errors.Is(err, ErrInvalidEnv) {
 			// Unexpected error from environment provider
 			return nil, coreerrs.WrapOperation(err, "initialize environment provider")
@@ -63,6 +64,7 @@ func New(filePath string, env ...string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return NewWithProvider(fileProvider)
 }
 
@@ -77,6 +79,7 @@ func MustNew(filePath string, env ...string) *Service {
 	if err != nil {
 		panic(err)
 	}
+
 	return s
 }
 
@@ -93,6 +96,7 @@ func NewWithProvider(provider Provider) (*Service, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("id: provider cannot be nil")
 	}
+
 	return &Service{provider: provider}, nil
 }
 
@@ -107,6 +111,7 @@ func MustNewWithProvider(provider Provider) *Service {
 	if err != nil {
 		panic(err)
 	}
+
 	return s
 }
 
@@ -123,6 +128,7 @@ func NewWithEnvProvider(envName string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return NewWithProvider(envProvider)
 }
 
@@ -141,6 +147,7 @@ func NewWithFileProvider(filePath string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return NewWithProvider(fileProvider)
 }
 
@@ -155,6 +162,7 @@ func MustNewWithFileProvider(filePath string) *Service {
 	if err != nil {
 		panic(err)
 	}
+
 	return s
 }
 
@@ -181,6 +189,7 @@ func MustNewStaticProvider(idVal string) *Service {
 	if err != nil {
 		panic(err)
 	}
+
 	return s
 }
 
@@ -197,5 +206,6 @@ func (s *Service) ID() string {
 		// This should not happen if constructors are used correctly
 		return ""
 	}
+
 	return s.provider.ID()
 }

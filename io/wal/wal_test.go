@@ -22,9 +22,11 @@ import (
 func (w *WAL) activeUnacked() int64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	if w.active == nil {
 		return 0
 	}
+
 	return w.active.unacked.Load()
 }
 
@@ -34,6 +36,7 @@ func newTestWAL(tb testing.TB, extraOpts ...Option) (*WAL, string) {
 	tb.Helper()
 	dir := tb.TempDir()
 	require.NoError(tb, os.Chmod(dir, 0o700))
+
 	opts := append([]Option{
 		WithMaxSegmentBytes(1 << 20),
 		WithFsyncInterval(2 * time.Millisecond),
@@ -42,6 +45,7 @@ func newTestWAL(tb testing.TB, extraOpts ...Option) (*WAL, string) {
 	require.NoError(tb, err)
 	require.Empty(tb, recovered)
 	tb.Cleanup(func() { _ = w.Close() })
+
 	return w, dir
 }
 
@@ -50,18 +54,23 @@ func TestWAL_Close_Concurrent_NoPanic(t *testing.T) {
 	w, _ := newTestWAL(t)
 
 	const goroutines = 16
+
 	start := make(chan struct{})
 	errs := make(chan error, goroutines)
+
 	var wg sync.WaitGroup
 	for range goroutines {
 		wg.Go(func() {
 			<-start
+
 			errs <- w.Close()
 		})
 	}
+
 	close(start)
 	wg.Wait()
 	close(errs)
+
 	for err := range errs {
 		require.NoError(t, err)
 	}
@@ -99,6 +108,7 @@ func TestWAL_Append_PayloadTooLarge_IsRejected(t *testing.T) {
 
 func TestOpen_EmptyDir_ReturnsError(t *testing.T) {
 	t.Parallel()
+
 	w, recovered, err := Open("")
 	require.Error(t, err)
 	require.Nil(t, w)
@@ -118,17 +128,20 @@ func TestWAL_AppendAckClose_LeavesEmptyDir(t *testing.T) {
 	w, dir := newTestWAL(t)
 
 	var offsets []Offset
+
 	for range 10 {
 		off, err := w.Append([]byte("hello"))
 		require.NoError(t, err)
 		require.False(t, off.IsZero())
 		offsets = append(offsets, off)
 	}
+
 	require.Equal(t, int64(10), w.activeUnacked())
 
 	for _, off := range offsets {
 		w.Ack(off)
 	}
+
 	require.Equal(t, int64(0), w.activeUnacked())
 
 	require.NoError(t, w.Close())
@@ -142,7 +155,9 @@ func TestWAL_AppendAckClose_LeavesEmptyDir(t *testing.T) {
 // its bytes against WithMaxBytes, and replay acked records on reopen.
 func TestWAL_SegmentRoll_DropsFullyAckedSegment(t *testing.T) {
 	t.Parallel()
+
 	const payloadLen = 100
+
 	w, dir := newTestWAL(t, WithMaxSegmentBytes(int64(recordHeaderSize+payloadLen)))
 
 	payload := make([]byte, payloadLen)
@@ -205,6 +220,7 @@ func TestWAL_SegmentRoll_CreatesMultipleSegments(t *testing.T) {
 	t.Parallel()
 	// Segment size chosen so three ~100-byte records fit before rolling.
 	const segBytes = int64(recordHeaderSize+100) * 3
+
 	w, dir := newTestWAL(t, WithMaxSegmentBytes(segBytes))
 
 	payload := make([]byte, 100)
@@ -240,12 +256,14 @@ func TestWAL_Recovery_ReplaysUnackedRecords(t *testing.T) {
 		_, err := w1.Append(p)
 		require.NoError(t, err)
 	}
+
 	require.NoError(t, w1.Close())
 
 	// Second session: recovery must hand back every record in order.
 	w2, recovered2, err := Open(dir, WithMaxSegmentBytes(128))
 	require.NoError(t, err)
 	require.Len(t, recovered2, len(payloads))
+
 	for i, r := range recovered2 {
 		require.Equal(t, payloads[i], r.Payload, "payload %d mismatch", i)
 		require.False(t, r.Offset.IsZero())
@@ -254,6 +272,7 @@ func TestWAL_Recovery_ReplaysUnackedRecords(t *testing.T) {
 	for _, r := range recovered2 {
 		w2.Ack(r.Offset)
 	}
+
 	require.NoError(t, w2.Close())
 
 	// Third session: dir must be empty again.
@@ -270,10 +289,12 @@ func TestWAL_Recovery_TruncatesTornWrite(t *testing.T) {
 
 	w, _, err := Open(dir, WithMaxSegmentBytes(1<<20))
 	require.NoError(t, err)
+
 	for _, p := range [][]byte{[]byte("first"), []byte("second"), []byte("third")} {
 		_, appendErr := w.Append(p)
 		require.NoError(t, appendErr)
 	}
+
 	require.NoError(t, w.Close())
 
 	// Corrupt the segment by appending half a header — simulates a torn write.
@@ -323,6 +344,7 @@ func TestWAL_Recovery_DropsCorruptPayload(t *testing.T) {
 	require.Len(t, matches, 1)
 	data, err := os.ReadFile(matches[0])
 	require.NoError(t, err)
+
 	data[len(data)-1] ^= 0xFF
 	require.NoError(t, os.WriteFile(matches[0], data, 0o644))
 
@@ -391,6 +413,7 @@ func TestWAL_ConcurrentAppendAck(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 
 	require.Equal(t, int64(workers*appendsPerWorker), seen.Load())
@@ -429,6 +452,7 @@ func TestWAL_AppendRacesClose(t *testing.T) {
 	// bubble: Append does file I/O and takes a sync.Mutex, neither of which
 	// is durably blocking, so the appenders never let a bubble go idle.
 	const appenders = 8
+
 	var (
 		wg            sync.WaitGroup
 		inFlight      sync.WaitGroup
@@ -437,6 +461,7 @@ func TestWAL_AppendRacesClose(t *testing.T) {
 		nonClosedErrs atomic.Int64
 	)
 	inFlight.Add(appenders)
+
 	for range appenders {
 		wg.Go(func() {
 			reportInFlight := sync.OnceFunc(inFlight.Done)
@@ -447,13 +472,17 @@ func TestWAL_AppendRacesClose(t *testing.T) {
 					t.Errorf("Append panicked: %v", r)
 				}
 			}()
+
 			payload := []byte("racer")
 			for !stop.Load() {
 				_, appendErr := w.Append(payload)
+
 				reportInFlight()
+
 				if appendErr != nil && !errors.Is(appendErr, ErrClosed) {
 					nonClosedErrs.Add(1)
 					t.Errorf("Append: unexpected error %v", appendErr)
+
 					return
 				}
 			}
@@ -478,10 +507,12 @@ func TestWAL_FsyncTicker(t *testing.T) {
 	t.Parallel()
 
 	ticks := make(chan time.Time) // unbuffered: a send returns once the loop took the tick
+
 	var (
 		interval atomic.Int64
 		stopped  atomic.Bool
 	)
+
 	w, _ := newTestWAL(t,
 		WithFsyncInterval(time.Minute),
 		WithFsyncTicker(func(d time.Duration) (<-chan time.Time, func()) {
@@ -497,7 +528,9 @@ func TestWAL_FsyncTicker(t *testing.T) {
 	require.ErrorIs(t, w.Faulted(), errStale, "no tick, no background fsync")
 
 	ticks <- time.Time{} // runs one background fsync
+
 	ticks <- time.Time{} // taken only after the previous fsync returned
+
 	require.Equal(t, time.Minute, time.Duration(interval.Load()))
 	require.NoError(t, w.Faulted(), "a successful tick-driven fsync clears the fault")
 
@@ -514,11 +547,14 @@ func TestWAL_GroupCommit_ConcurrentAppendsRecoverExactly(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o700))
+
 	const segBytes = 4 << 10
+
 	w, _, err := Open(dir, WithMaxSegmentBytes(segBytes), WithFsyncInterval(time.Hour))
 	require.NoError(t, err)
 
 	const producers, perProducer = 8, 400
+
 	var (
 		mu      sync.Mutex
 		written = make(map[Offset]string, producers*perProducer)
@@ -528,14 +564,17 @@ func TestWAL_GroupCommit_ConcurrentAppendsRecoverExactly(t *testing.T) {
 		wg.Go(func() {
 			for i := range perProducer {
 				payload := fmt.Sprintf("producer-%d-record-%d", p, i)
+
 				off, err := w.Append([]byte(payload))
 				if !assertNoErr(t, err) {
 					return
 				}
+
 				mu.Lock()
 				_, dup := written[off]
 				written[off] = payload
 				mu.Unlock()
+
 				if dup {
 					t.Errorf("offset %+v returned twice", off)
 					return
@@ -543,12 +582,14 @@ func TestWAL_GroupCommit_ConcurrentAppendsRecoverExactly(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 	require.NoError(t, w.Close())
 
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
 	require.Greater(t, len(entries), 1, "the test must exercise segment rolls")
+
 	for _, e := range entries {
 		info, err := e.Info()
 		require.NoError(t, err)
@@ -559,6 +600,7 @@ func TestWAL_GroupCommit_ConcurrentAppendsRecoverExactly(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = w2.Close() })
 	require.Len(t, recovered, producers*perProducer)
+
 	for _, r := range recovered {
 		require.Equal(t, written[r.Offset], string(r.Payload), "offset %+v", r.Offset)
 	}
@@ -568,9 +610,11 @@ func TestWAL_GroupCommit_ConcurrentAppendsRecoverExactly(t *testing.T) {
 // used, and returns whether it was nil.
 func assertNoErr(t *testing.T, err error) bool {
 	t.Helper()
+
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return false
 	}
+
 	return true
 }

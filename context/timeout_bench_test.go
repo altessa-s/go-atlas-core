@@ -16,9 +16,11 @@ func BenchmarkApplyTimeout(b *testing.B) {
 	ctx := b.Context() // no deadline => timer context is created
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		tctx, cancel := corecontext.ApplyTimeout(ctx, time.Second)
 		cancel()
+
 		_ = tctx
 	}
 }
@@ -28,9 +30,11 @@ func BenchmarkApplyTimeout_ExistingDeadline(b *testing.B) {
 	defer cancel()
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		tctx, tcancel := corecontext.ApplyTimeout(ctx, time.Second)
 		tcancel()
+
 		_ = tctx
 	}
 }
@@ -41,10 +45,13 @@ func BenchmarkWithMaxTimeout(b *testing.B) {
 	b.Run("SoonerDeadline", func(b *testing.B) {
 		ctx, cancel := context.WithTimeout(b.Context(), time.Second)
 		defer cancel()
+
 		b.ReportAllocs()
+
 		for b.Loop() {
 			tctx, tcancel := corecontext.WithMaxTimeout(ctx, time.Hour)
 			tcancel()
+
 			if tctx != ctx {
 				b.Fatal("context replaced despite sooner deadline")
 			}
@@ -53,10 +60,13 @@ func BenchmarkWithMaxTimeout(b *testing.B) {
 	b.Run("LaterDeadline", func(b *testing.B) {
 		ctx, cancel := context.WithTimeout(b.Context(), time.Hour)
 		defer cancel()
+
 		b.ReportAllocs()
+
 		for b.Loop() {
 			tctx, tcancel := corecontext.WithMaxTimeout(ctx, time.Second)
 			tcancel()
+
 			if tctx == ctx {
 				b.Fatal("deadline not capped")
 			}
@@ -68,9 +78,11 @@ func BenchmarkWithDefault(b *testing.B) {
 	ctx := b.Context() // no deadline => timer context is created
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		tctx, cancel := corecontext.WithDefault(ctx, time.Second)
 		cancel()
+
 		_ = tctx
 	}
 }

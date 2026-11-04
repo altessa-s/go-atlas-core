@@ -17,12 +17,14 @@ var benchSizes = []int{100, 1_000, 10_000, 100_000, 1_000_000}
 
 func buildStringMap(n int) (map[string]int, []string) {
 	src := make(map[string]int, n)
+
 	keys := make([]string, 0, n)
 	for i := range n {
 		k := fmt.Sprintf("key-%d", i)
 		src[k] = i
 		keys = append(keys, k)
 	}
+
 	return src, keys
 }
 
@@ -39,6 +41,7 @@ func TestImmutableMap_MemoryPerKey(t *testing.T) {
 			}
 
 			runtime.GC()
+
 			var before runtime.MemStats
 			runtime.ReadMemStats(&before)
 
@@ -57,6 +60,7 @@ func TestImmutableMap_MemoryPerKey(t *testing.T) {
 			for i := range size {
 				stdm[i] = i
 			}
+
 			runtime.KeepAlive(stdm)
 
 			runtime.ReadMemStats(&after)
@@ -81,6 +85,7 @@ func BenchmarkImmutableMap_Get(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			i := 0
 			for b.Loop() {
 				m.Get(keys[i%size])
@@ -96,6 +101,7 @@ func BenchmarkStdMap_Get(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			i := 0
 			for b.Loop() {
 				_ = src[keys[i%size]]
@@ -117,6 +123,7 @@ func BenchmarkImmutableMap_Get_Miss(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			i := 0
 			for b.Loop() {
 				m.Get(missKeys[i%size])
@@ -137,6 +144,7 @@ func BenchmarkStdMap_Get_Miss(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			i := 0
 			for b.Loop() {
 				_ = src[missKeys[i%size]]
@@ -154,6 +162,7 @@ func BenchmarkImmutableMap_Build(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				coremaps.NewImmutableMap(src)
 			}
@@ -170,6 +179,7 @@ func BenchmarkImmutableMap_All(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				for range m.All() {
 				}
@@ -181,26 +191,36 @@ func BenchmarkImmutableMap_All(b *testing.B) {
 // --- GC pressure benchmarks ---
 
 func BenchmarkGCPressure_ImmutableMap(b *testing.B) {
-	const numMaps = 10
-	const mapSize = 100_000
+	const (
+		numMaps = 10
+		mapSize = 100_000
+	)
+
 	maps := make([]*coremaps.ImmutableMap[int, int], numMaps)
 	for i := range maps {
 		src := make(map[int]int, mapSize)
 		for j := range mapSize {
 			src[j+i*mapSize] = j
 		}
+
 		maps[i] = coremaps.NewImmutableMap(src)
 	}
+
 	b.ResetTimer()
+
 	for b.Loop() {
 		runtime.GC()
 	}
+
 	runtime.KeepAlive(maps)
 }
 
 func BenchmarkGCPressure_StdMap(b *testing.B) {
-	const numMaps = 10
-	const mapSize = 100_000
+	const (
+		numMaps = 10
+		mapSize = 100_000
+	)
+
 	maps := make([]map[int]int, numMaps)
 	for i := range maps {
 		maps[i] = make(map[int]int, mapSize)
@@ -208,10 +228,13 @@ func BenchmarkGCPressure_StdMap(b *testing.B) {
 			maps[i][j+i*mapSize] = j
 		}
 	}
+
 	b.ResetTimer()
+
 	for b.Loop() {
 		runtime.GC()
 	}
+
 	runtime.KeepAlive(maps)
 }
 
@@ -220,15 +243,18 @@ func BenchmarkGCPressure_StdMap(b *testing.B) {
 func BenchmarkImmutableMap_Get_IntKeys(b *testing.B) {
 	for _, size := range benchSizes {
 		src := make(map[int]int, size)
+
 		keys := make([]int, 0, size)
 		for i := range size {
 			src[i] = i
 			keys = append(keys, i)
 		}
+
 		m := coremaps.NewImmutableMap(src)
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			i := 0
 			for b.Loop() {
 				m.Get(keys[i%size])
@@ -241,6 +267,7 @@ func BenchmarkImmutableMap_Get_IntKeys(b *testing.B) {
 func BenchmarkStdMap_Get_IntKeys(b *testing.B) {
 	for _, size := range benchSizes {
 		src := make(map[int]int, size)
+
 		keys := make([]int, 0, size)
 		for i := range size {
 			src[i] = i
@@ -249,6 +276,7 @@ func BenchmarkStdMap_Get_IntKeys(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			i := 0
 			for b.Loop() {
 				_ = src[keys[i%size]]

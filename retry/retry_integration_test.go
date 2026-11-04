@@ -37,7 +37,9 @@ func (l *attemptLog) fn(err error) func(context.Context) error {
 	return func(context.Context) error {
 		l.mu.Lock()
 		defer l.mu.Unlock()
+
 		l.times = append(l.times, time.Now())
+
 		return err
 	}
 }
@@ -45,6 +47,7 @@ func (l *attemptLog) fn(err error) func(context.Context) error {
 func (l *attemptLog) snapshot() []time.Time {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
 	return append([]time.Time(nil), l.times...)
 }
 
@@ -55,9 +58,13 @@ func TestDo_ExponentialBackoffWaitsRealDelays(t *testing.T) {
 		base    = 5 * time.Millisecond
 		retries = 4
 	)
+
 	next := retry.Exponential(base, retry.WithExponentialFactor(2))
-	var log attemptLog
-	var delays []time.Duration
+
+	var (
+		log    attemptLog
+		delays []time.Duration
+	)
 
 	start := time.Now()
 	err := retry.Do(t.Context(), log.fn(errTransient),
@@ -69,15 +76,19 @@ func TestDo_ExponentialBackoffWaitsRealDelays(t *testing.T) {
 	elapsed := time.Since(start)
 
 	require.ErrorIs(t, err, errTransient)
+
 	times := log.snapshot()
 	require.Len(t, times, retries+1)
 	require.Equal(t, []time.Duration{base, 2 * base, 4 * base, 8 * base}, delays)
+
 	var total time.Duration
+
 	for i, d := range delays {
 		gap := times[i+1].Sub(times[i])
 		require.GreaterOrEqual(t, gap, d, "attempt %d started before its backoff elapsed", i+1)
 		total += d
 	}
+
 	require.GreaterOrEqual(t, elapsed, total)
 	require.Less(t, elapsed, total+slack)
 }
@@ -86,7 +97,9 @@ func TestDo_CancelInterruptsLongWait(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
+
 	var log attemptLog
+
 	time.AfterFunc(20*time.Millisecond, cancel)
 
 	start := time.Now()
@@ -105,8 +118,10 @@ func TestDo_JoinLastErrorOnRealDeadline(t *testing.T) {
 	t.Parallel()
 
 	const timeout = 50 * time.Millisecond
+
 	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
+
 	var log attemptLog
 
 	start := time.Now()
@@ -129,6 +144,7 @@ func TestDo_StopBeforeDeadlineSkipsDoomedWait(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
+
 	var log attemptLog
 
 	start := time.Now()
@@ -150,6 +166,7 @@ func TestDo_MaxElapsedTimeStopsOnRealClock(t *testing.T) {
 	t.Parallel()
 
 	const budget = 60 * time.Millisecond
+
 	var log attemptLog
 
 	start := time.Now()
@@ -171,8 +188,11 @@ func TestDo_ConcurrentLoopsShareNothing(t *testing.T) {
 	// Many loops on real timers at once: each must make exactly its own
 	// number of attempts, which a timer shared between calls would break.
 	const loops = 32
+
 	var wg sync.WaitGroup
+
 	errs := make([]error, loops)
+
 	counts := make([]int, loops)
 	for i := range loops {
 		wg.Go(func() {
@@ -181,6 +201,7 @@ func TestDo_ConcurrentLoopsShareNothing(t *testing.T) {
 				if counts[i] <= i%4 {
 					return errTransient
 				}
+
 				return nil
 			},
 				retry.WithMaxAttempts(5),
@@ -188,7 +209,9 @@ func TestDo_ConcurrentLoopsShareNothing(t *testing.T) {
 			)
 		})
 	}
+
 	wg.Wait()
+
 	for i := range loops {
 		require.NoError(t, errs[i], "loop %d", i)
 		require.Equal(t, i%4+1, counts[i], "loop %d", i)

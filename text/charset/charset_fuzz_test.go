@@ -25,11 +25,13 @@ func FuzzDecode(f *testing.F) {
 		original := bytes.Clone(raw)
 		got, err := charset.Decode(raw, contentType, nil)
 		require.Equal(t, original, raw)
+
 		if err == nil {
 			require.True(t, utf8.Valid(got))
 		} else {
 			require.Nil(t, got)
 		}
+
 		plain, err := charset.Decode(raw, "", nil)
 		if utf8.Valid(raw) {
 			require.NoError(t, err)

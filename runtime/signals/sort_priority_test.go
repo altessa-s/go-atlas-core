@@ -32,6 +32,7 @@ func makeHandlersWithPriorities(priorities []Priority) []handlerEntry {
 			timeout:        time.Duration(i+1) * time.Microsecond, // unique per entry
 		}
 	}
+
 	return out
 }
 
@@ -39,6 +40,7 @@ func makeHandlersWithPriorities(priorities []Priority) []handlerEntry {
 // priority order.
 func assertSortedDescending(t *testing.T, handlers []handlerEntry) {
 	t.Helper()
+
 	for i := 1; i < len(handlers); i++ {
 		require.GreaterOrEqual(t, handlers[i-1].priority, handlers[i].priority,
 			"not descending at i=%d", i)
@@ -50,6 +52,7 @@ func assertSortedDescending(t *testing.T, handlers []handlerEntry) {
 // order is not preserved).
 func assertStable(t *testing.T, handlers []handlerEntry) {
 	t.Helper()
+
 	for i := 1; i < len(handlers); i++ {
 		if handlers[i-1].priority == handlers[i].priority {
 			require.LessOrEqual(t, handlers[i-1].timeout, handlers[i].timeout,
@@ -69,10 +72,12 @@ func TestSortHandlers_DescendingAcrossAlgorithms(t *testing.T) {
 	for _, n := range []int{0, 1, 2, 5, insertionSortThreshold, insertionSortThreshold + 1, 50, 100, 200} {
 		t.Run("n="+strconv.Itoa(n), func(t *testing.T) {
 			rng := rand.New(rand.NewPCG(uint64(n), 0xC0FFEE))
+
 			priorities := make([]Priority, n)
 			for i := range priorities {
 				priorities[i] = Priority(rng.IntN(200) - 50) // includes <1 and >100
 			}
+
 			handlers := makeHandlersWithPriorities(priorities)
 
 			s.sortHandlers(handlers)
@@ -103,6 +108,7 @@ func TestSortHandlers_Stable(t *testing.T) {
 					priorities[i] = PriorityLow
 				}
 			}
+
 			handlers := makeHandlersWithPriorities(priorities)
 
 			s.sortHandlers(handlers)
@@ -120,10 +126,12 @@ func TestSortHandlersByPriorityCounting_HandlesAllSamePriority(t *testing.T) {
 	s := &Signal{}
 
 	const n = 50
+
 	priorities := make([]Priority, n)
 	for i := range priorities {
 		priorities[i] = PriorityNormal
 	}
+
 	handlers := makeHandlersWithPriorities(priorities)
 
 	ok := s.sortHandlersByPriorityCounting(handlers)
@@ -199,6 +207,7 @@ func BenchmarkSortHandlers_Dispatch(b *testing.B) {
 			buf := make([]handlerEntry, n)
 
 			b.ReportAllocs()
+
 			for b.Loop() {
 				fillHandlers(buf, base)
 				s.sortHandlers(buf)
@@ -218,6 +227,7 @@ func BenchmarkSortHandlersByPriority_Insertion(b *testing.B) {
 			buf := make([]handlerEntry, n)
 
 			b.ReportAllocs()
+
 			for b.Loop() {
 				fillHandlers(buf, base)
 				s.sortHandlersByPriority(buf)
@@ -243,11 +253,13 @@ func BenchmarkSortHandlersByPriority_Counting(b *testing.B) {
 			// Probe once: if the guardrail refuses this size+distribution,
 			// counting sort is by-design not applicable here.
 			fillHandlers(buf, base)
+
 			if !s.sortHandlersByPriorityCounting(buf) {
 				b.Skipf("counting sort declines n=%d with [1..100] priorities (density guard)", n)
 			}
 
 			b.ReportAllocs()
+
 			for b.Loop() {
 				fillHandlers(buf, base)
 				_ = s.sortHandlersByPriorityCounting(buf)
@@ -260,10 +272,12 @@ func BenchmarkSortHandlersByPriority_Counting(b *testing.B) {
 // range using a fixed seed so runs are reproducible.
 func seededPriorities(n int, seed uint64) []Priority {
 	rng := rand.New(rand.NewPCG(seed, 0xABCD))
+
 	out := make([]Priority, n)
 	for i := range out {
 		out[i] = Priority(rng.IntN(100) + 1)
 	}
+
 	return out
 }
 

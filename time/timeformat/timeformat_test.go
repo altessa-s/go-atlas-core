@@ -21,6 +21,7 @@ func TestFormatParse_RoundTripInstant(t *testing.T) {
 	for _, f := range formats {
 		t.Run(f.String(), func(t *testing.T) {
 			t.Parallel()
+
 			out := f.Format(in)
 			parsed, err := f.Parse(out)
 			require.NoError(t, err, "Parse (out=%q)", out)
@@ -73,6 +74,7 @@ func TestFormatTime_Values(t *testing.T) {
 	t.Parallel()
 
 	in := time.Date(2023, 11, 14, 22, 13, 20, 123456789, time.UTC)
+
 	tests := []struct {
 		format Format
 		want   any
@@ -98,6 +100,7 @@ func TestFormatDuration_AllFormats(t *testing.T) {
 	t.Parallel()
 
 	d := 90*time.Second + 250*time.Millisecond
+
 	tests := []struct {
 		format Format
 		want   any

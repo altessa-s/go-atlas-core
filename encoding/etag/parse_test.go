@@ -41,11 +41,13 @@ func TestParse(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, err := etag.Parse(tc.input)
 			if tc.wantErr {
 				require.ErrorIs(t, err, etag.ErrInvalidTag)
 				return
 			}
+
 			require.NoError(t, err)
 			require.Equal(t, tc.want, got)
 			require.Equal(t, tc.want.String(), got.String())
@@ -82,11 +84,13 @@ func TestParseList(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			tags, star, err := etag.ParseList(tc.input)
 			if tc.wantErr {
 				require.ErrorIs(t, err, etag.ErrInvalidTag)
 				return
 			}
+
 			require.NoError(t, err)
 			require.Equal(t, tc.wantStar, star)
 			require.Equal(t, tc.wantTags, tags)
@@ -96,6 +100,7 @@ func TestParseList(t *testing.T) {
 
 func TestParseErrorIsInvalidTag(t *testing.T) {
 	t.Parallel()
+
 	_, err := etag.Parse("nope")
 	require.True(t, errors.Is(err, etag.ErrInvalidTag))
 }

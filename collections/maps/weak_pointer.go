@@ -23,6 +23,7 @@ func MakeWeakRef[T any](obj *T) WeakRef[T] {
 	if obj == nil {
 		return WeakRef[T]{}
 	}
+
 	return WeakRef[T]{
 		inner: weak.Make(obj),
 	}

@@ -23,6 +23,7 @@ func IsContextDeadlineExceeded(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	return errors.Is(err, context.DeadlineExceeded)
 }
 
@@ -39,6 +40,7 @@ func IsContextCanceled(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	return errors.Is(err, context.Canceled)
 }
 
@@ -56,6 +58,7 @@ func IsContextCanceledOrDeadlineExceeded(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	return IsContextCanceled(err) || IsContextDeadlineExceeded(err)
 }
 
@@ -82,6 +85,7 @@ func Wrapf(err error, format string, args ...any) error {
 	allArgs := make([]any, len(args)+1)
 	copy(allArgs, args)
 	allArgs[len(args)] = err
+
 	return fmt.Errorf(format+": %w", allArgs...)
 }
 
@@ -103,6 +107,7 @@ func WrapOperation(err error, operation string) error {
 	if err == nil {
 		return nil
 	}
+
 	return fmt.Errorf("failed to %s: %w", operation, err)
 }
 
@@ -123,6 +128,7 @@ func WrapField(err error, fieldName string) error {
 	if err == nil {
 		return nil
 	}
+
 	return fmt.Errorf("field '%s': %w", fieldName, err)
 }
 
@@ -143,6 +149,7 @@ func WrapOperationWithContext(err error, operation, scope string) error {
 	if err == nil {
 		return nil
 	}
+
 	return fmt.Errorf("failed to %s on %s: %w", operation, scope, err)
 }
 
@@ -163,6 +170,7 @@ func Wrap(err error, msg string) error {
 	if err == nil {
 		return nil
 	}
+
 	return fmt.Errorf("%s: %w", msg, err)
 }
 
@@ -195,9 +203,11 @@ func JoinWrap(sentinel, cause error) error {
 	if cause == nil {
 		return nil
 	}
+
 	if sentinel == nil {
 		return cause
 	}
+
 	return fmt.Errorf("%w: %w", sentinel, cause)
 }
 
@@ -233,5 +243,6 @@ func Provider(providerType string, err error) error {
 	if err == nil {
 		return nil
 	}
+
 	return fmt.Errorf("failed to create %s provider: %w", providerType, err)
 }

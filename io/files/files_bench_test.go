@@ -16,10 +16,12 @@ import (
 // writeBenchFile writes size bytes to name under dir and returns its path.
 func writeBenchFile(b *testing.B, dir, name string, size int) string {
 	b.Helper()
+
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, make([]byte, size), 0o600); err != nil {
 		b.Fatal(err)
 	}
+
 	return path
 }
 
@@ -32,11 +34,13 @@ func BenchmarkReadRegular(b *testing.B) {
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.SetBytes(int64(size))
 			b.ReportAllocs()
+
 			for b.Loop() {
 				data, err := files.ReadRegular(path)
 				if err != nil {
 					b.Fatal(err)
 				}
+
 				if len(data) != size {
 					b.Fatalf("read %d bytes, want %d", len(data), size)
 				}
@@ -50,18 +54,22 @@ func BenchmarkReadRegular(b *testing.B) {
 func BenchmarkOpenRegularIn(b *testing.B) {
 	dir := b.TempDir()
 	writeBenchFile(b, dir, "payload.json", 128)
+
 	root, err := files.OpenRootDir(dir)
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	b.Cleanup(func() { _ = root.Close() })
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		f, err := files.OpenRegularIn(root, "payload.json")
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		_ = f.Close()
 	}
 }
@@ -75,6 +83,7 @@ func BenchmarkExists(b *testing.B) {
 
 	b.Run("FileExists/Hit", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if !files.FileExists(file) {
 				b.Fatal("file not found")
@@ -83,6 +92,7 @@ func BenchmarkExists(b *testing.B) {
 	})
 	b.Run("FileExists/Miss", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if files.FileExists(missing) {
 				b.Fatal("missing file reported")
@@ -91,6 +101,7 @@ func BenchmarkExists(b *testing.B) {
 	})
 	b.Run("DirExists/Hit", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if !files.DirExists(dir) {
 				b.Fatal("dir not found")
@@ -106,9 +117,11 @@ func BenchmarkFindFile(b *testing.B) {
 	for i := range bases {
 		bases[i] = b.TempDir()
 	}
+
 	writeBenchFile(b, bases[len(bases)-1], "config.yaml", 16)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if files.FindFile("config.yaml", bases) == "" {
 			b.Fatal("file not found")

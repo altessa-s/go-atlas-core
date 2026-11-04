@@ -40,20 +40,24 @@ const landlockDirEnv = "GO_ATLAS_LANDLOCK_ITEST_DIR"
 // t.Setenv.
 func landlockTree(t *testing.T) (rw, ro, out string) {
 	t.Helper()
+
 	root := os.Getenv(landlockDirEnv)
 	if root == "" {
 		root = t.TempDir()
 		t.Setenv(landlockDirEnv, root)
+
 		for _, name := range []string{"rw", "ro", "out"} {
 			dir := filepath.Join(root, name)
 			if err := os.Mkdir(dir, 0o750); err != nil {
 				t.Fatalf("Mkdir(%s): %v", dir, err)
 			}
+
 			if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte(name), 0o600); err != nil {
 				t.Fatalf("WriteFile in %s: %v", dir, err)
 			}
 		}
 	}
+
 	return filepath.Join(root, "rw"), filepath.Join(root, "ro"), filepath.Join(root, "out")
 }
 
@@ -61,11 +65,13 @@ func landlockTree(t *testing.T) (rw, ro, out string) {
 // program needs to load, keeping only those that exist on this host.
 func systemReadPaths() []string {
 	var paths []string
+
 	for _, p := range []string{"/bin", "/usr", "/lib", "/lib64", "/etc", "/dev", "/proc"} {
 		if _, err := os.Stat(p); err == nil {
 			paths = append(paths, p)
 		}
 	}
+
 	return paths
 }
 
@@ -73,6 +79,7 @@ func requireDenied(op string, err error) {
 	if err == nil {
 		exectest.Failf("%s succeeded outside the Landlock allowlist", op)
 	}
+
 	if !errors.Is(err, os.ErrPermission) {
 		exectest.Failf("%s returned %v, want a permission error", op, err)
 	}
@@ -82,11 +89,13 @@ func TestApply_EnforcesReadAndWriteRights(t *testing.T) {
 	rw, ro, out := landlockTree(t)
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
 
 		if !landlock.Supported() {
 			return
 		}
+
 		if err := landlock.Apply(
 			landlock.WithReadPaths(ro),
 			landlock.WithReadPaths(systemReadPaths()...),
@@ -100,12 +109,15 @@ func TestApply_EnforcesReadAndWriteRights(t *testing.T) {
 		if err := os.WriteFile(created, []byte("data"), 0o600); err != nil {
 			exectest.Failf("create in read-write path: %v", err)
 		}
+
 		if got, err := os.ReadFile(created); err != nil || string(got) != "data" {
 			exectest.Failf("read back in read-write path = (%q, %v)", got, err)
 		}
+
 		if err := os.Mkdir(filepath.Join(rw, "sub"), 0o750); err != nil {
 			exectest.Failf("mkdir in read-write path: %v", err)
 		}
+
 		if err := os.Remove(created); err != nil {
 			exectest.Failf("remove in read-write path: %v", err)
 		}
@@ -114,9 +126,11 @@ func TestApply_EnforcesReadAndWriteRights(t *testing.T) {
 		if got, err := os.ReadFile(filepath.Join(ro, "file.txt")); err != nil || string(got) != "ro" {
 			exectest.Failf("read in read-only path = (%q, %v)", got, err)
 		}
+
 		if _, err := os.ReadDir(ro); err != nil {
 			exectest.Failf("list read-only path: %v", err)
 		}
+
 		requireDenied("write in read-only path",
 			os.WriteFile(filepath.Join(ro, "file.txt"), []byte("x"), 0o600))
 		requireDenied("create in read-only path",
@@ -138,16 +152,19 @@ func TestApply_ExecInheritsDomain(t *testing.T) {
 	rw, _, out := landlockTree(t)
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
 
 		if !landlock.Supported() {
 			return
 		}
+
 		cat, err := exec.LookPath("cat")
 		if err != nil {
 			// No cat in the image: nothing to exec into.
 			return
 		}
+
 		if err := landlock.Apply(
 			landlock.WithReadPaths(systemReadPaths()...),
 			landlock.WithReadWritePaths(rw),
@@ -166,6 +183,7 @@ func TestApply_ExecInheritsDomain(t *testing.T) {
 		if err == nil {
 			exectest.Failf("exec'd cat read %q outside the allowlist: the domain was not inherited", got)
 		}
+
 		if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 			exectest.Failf("exec'd cat outside the allowlist: %v, want a non-zero exit", err)
 		}

@@ -31,8 +31,10 @@ func (realClock) Sleep(ctx context.Context, d time.Duration) error {
 	if d <= 0 {
 		return ctx.Err()
 	}
+
 	t := time.NewTimer(d)
 	defer t.Stop()
+
 	select {
 	case <-t.C:
 		return nil
@@ -57,6 +59,7 @@ func NewFake(now time.Time) *Fake { return &Fake{now: now} }
 func (f *Fake) Now() time.Time {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	return f.now
 }
 
@@ -64,6 +67,7 @@ func (f *Fake) Now() time.Time {
 func (f *Fake) Advance(d time.Duration) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	f.now = f.now.Add(d)
 }
 
@@ -71,6 +75,7 @@ func (f *Fake) Advance(d time.Duration) {
 func (f *Fake) Set(now time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	f.now = now
 }
 
@@ -80,5 +85,6 @@ func (f *Fake) Sleep(ctx context.Context, d time.Duration) error {
 	if d > 0 {
 		f.Advance(d)
 	}
+
 	return ctx.Err()
 }

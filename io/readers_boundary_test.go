@@ -17,8 +17,10 @@ import (
 
 func TestLimitedReadCloser_MaxLimit(t *testing.T) {
 	t.Parallel()
+
 	r := coreio.NewLimitedReadCloser(io.NopCloser(strings.NewReader("payload")), math.MaxInt64)
 	defer r.Close()
+
 	data, err := io.ReadAll(r)
 	require.NoError(t, err)
 	require.Equal(t, "payload", string(data))

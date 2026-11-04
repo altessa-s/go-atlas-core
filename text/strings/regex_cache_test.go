@@ -51,10 +51,13 @@ func TestSplit_RegexCache_BoundHoldsUnderContention(t *testing.T) {
 		"test precondition: totalDistinctSep must exceed maxRegexCacheSize")
 
 	var wg sync.WaitGroup
+
 	start := make(chan struct{})
+
 	for gid := range goroutines {
 		wg.Go(func() {
 			<-start
+
 			for i := range separatorsPerG {
 				// "ẞ" forces the slow path (lowercased length differs).
 				sep := fmt.Sprintf("ẞ-g%d-i%d", gid, i)
@@ -65,6 +68,7 @@ func TestSplit_RegexCache_BoundHoldsUnderContention(t *testing.T) {
 			}
 		})
 	}
+
 	close(start)
 	wg.Wait()
 
@@ -74,6 +78,7 @@ func TestSplit_RegexCache_BoundHoldsUnderContention(t *testing.T) {
 
 	// Invariant 2: the counter matches the actual number of map entries.
 	var actual int64
+
 	caseInsensitiveRegexCache.Range(func(_, _ any) bool {
 		actual++
 		return true
@@ -92,12 +97,14 @@ func BenchmarkSplit_CaseInsensitive_CacheHit(b *testing.B) {
 	b.Cleanup(func() { resetRegexCache(b) })
 
 	const sep = "ẞ-cache-hit"
+
 	input := "alpha" + sep + "beta" + sep + "gamma"
 	opts := SplitOptions{Separator: sep, CaseSensitive: false}
 	// Warm the cache.
 	_ = Split(input, opts)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = Split(input, opts)
 	}

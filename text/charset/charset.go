@@ -51,16 +51,20 @@ func Decode(raw []byte, contentType string, fallback encoding.Encoding) ([]byte,
 		if err != nil {
 			return nil, coreerrs.Wrapf(ErrUnknownCharset, "label %q", label)
 		}
+
 		if !isUTF8(enc) {
 			return decode(raw, enc, label)
 		}
 	}
+
 	if utf8.Valid(raw) {
 		return bytes.TrimPrefix(raw, utf8BOM), nil
 	}
+
 	if fallback == nil {
 		return nil, ErrInvalidUTF8
 	}
+
 	return decode(raw, fallback, "fallback")
 }
 
@@ -69,6 +73,7 @@ func decode(raw []byte, enc encoding.Encoding, name string) ([]byte, error) {
 	if err != nil {
 		return nil, coreerrs.Wrapf(err, "charset: decode %q", name)
 	}
+
 	return out, nil
 }
 
@@ -77,10 +82,12 @@ func declaredLabel(contentType string) string {
 	if contentType == "" {
 		return ""
 	}
+
 	_, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return ""
 	}
+
 	return strings.TrimSpace(params["charset"])
 }
 

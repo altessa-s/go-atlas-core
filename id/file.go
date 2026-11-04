@@ -51,6 +51,7 @@ func NewFile(filePath string) (*File, error) {
 	s := &File{
 		filePath: filePath,
 	}
+
 	return s, nil
 }
 
@@ -62,6 +63,7 @@ func MustNewFile(filePath string) *File {
 	if err != nil {
 		panic(err)
 	}
+
 	return f
 }
 
@@ -78,11 +80,13 @@ func (s *File) ID() string {
 	s.once.Do(func() {
 		s.initializeID()
 	})
+
 	if s.initErr != nil {
 		// Return empty string on error instead of panicking
 		// Callers can check for empty ID or use Error() method
 		return ""
 	}
+
 	return s.id
 }
 
@@ -97,6 +101,7 @@ func (s *File) Error() error {
 	s.once.Do(func() {
 		s.initializeID()
 	})
+
 	return s.initErr
 }
 
@@ -113,6 +118,7 @@ func (s *File) PersistenceError() error {
 	s.once.Do(func() {
 		s.initializeID()
 	})
+
 	return s.persistErr
 }
 
@@ -129,6 +135,7 @@ func (s *File) initializeID() {
 			s.initErr = coreerrs.WrapOperation(err, "read ID file "+s.filePath)
 			return
 		}
+
 		if trimmed := strings.TrimSpace(existingID); trimmed != "" {
 			id = trimmed
 		}
@@ -144,6 +151,7 @@ func (s *File) initializeID() {
 			s.initErr = coreerrs.WrapOperation(err, "generate random ID")
 			return
 		}
+
 		id = strings.ToUpper(hex.EncodeToString(b))
 
 		// Write the new ID to the file for future use.
@@ -172,6 +180,7 @@ func writeLine(filepath string, id string) error {
 	if err != nil {
 		return coreerrs.WrapOperation(err, "write to file")
 	}
+
 	return nil
 }
 

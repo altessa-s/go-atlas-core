@@ -25,6 +25,7 @@ func SplitSeq(s string, opts SplitOptions) iter.Seq[string] {
 			if !opts.SkipEmpty {
 				yield("")
 			}
+
 			return
 		}
 
@@ -40,6 +41,7 @@ func SplitSeq(s string, opts SplitOptions) iter.Seq[string] {
 		} else {
 			sp = caseInsensitiveSplitter(s, separator, opts.MaxSplits)
 		}
+
 		for part, ok := sp.next(); ok; part, ok = sp.next() {
 			if !yieldPart(part, opts, yield) {
 				return
@@ -52,8 +54,10 @@ func yieldPart(part string, opts SplitOptions, yield func(string) bool) bool {
 	if opts.TrimSpace {
 		part = strings.TrimSpace(part)
 	}
+
 	if opts.SkipEmpty && part == "" {
 		return true
 	}
+
 	return yield(part)
 }

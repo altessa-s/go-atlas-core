@@ -14,7 +14,9 @@ import (
 func BenchmarkMapFieldPath(b *testing.B) {
 	err := fmt.Errorf("create: %w", errors.NewFieldError("base_url", "required"))
 	mapPath := func(f string) string { return "provider." + f }
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = errors.MapFieldPath(err, mapPath)
 	}

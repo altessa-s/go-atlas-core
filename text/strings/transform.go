@@ -49,6 +49,7 @@ func ToScreamingSnakeCase(s string) string {
 				b.WriteByte('_')
 			}
 		}
+
 		b.WriteRune(unicode.ToUpper(r))
 	}
 
@@ -69,18 +70,22 @@ func pluralSuffixRunes(rest []rune) bool {
 
 func toScreamingSnakeCaseComplex(s string) string {
 	var b strings.Builder
+
 	runes := []rune(s)
 	for i := range len(runes) {
 		r := runes[i]
 		if i > 0 && unicode.IsUpper(r) {
 			prevIsLower := unicode.IsLower(runes[i-1])
+
 			nextIsLower := i+1 < len(runes) && unicode.IsLower(runes[i+1]) && !pluralSuffixRunes(runes[i+1:])
 			if prevIsLower || nextIsLower {
 				b.WriteByte('_')
 			}
 		}
+
 		b.WriteRune(unicode.ToUpper(r))
 	}
+
 	return b.String()
 }
 
@@ -91,6 +96,7 @@ func ToSnakeCase(s string) string {
 	if s == "" {
 		return ""
 	}
+
 	return strings.ToLower(ToScreamingSnakeCase(s))
 }
 
@@ -125,6 +131,7 @@ func toCamelCase(s string, lowerRest bool) string {
 	if s == "" {
 		return ""
 	}
+
 	if !isASCII(s) {
 		return toCamelCaseUnicode(s, lowerRest)
 	}
@@ -134,12 +141,14 @@ func toCamelCase(s string, lowerRest bool) string {
 
 	upperNext := false
 	first := true
+
 	for i := range len(s) {
 		c := s[i]
 		if c == '_' || IsASCIISpace(c) {
 			upperNext = true
 			continue
 		}
+
 		switch {
 		case first:
 			c = asciiToLower(c)
@@ -148,7 +157,9 @@ func toCamelCase(s string, lowerRest bool) string {
 		case lowerRest:
 			c = asciiToLower(c)
 		}
+
 		first, upperNext = false, false
+
 		b.WriteByte(c)
 	}
 
@@ -161,6 +172,7 @@ func toCamelCaseUnicode(s string, lowerRest bool) string {
 
 	upperNext := false
 	first := true
+
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])
 		raw := s[i : i+size]
@@ -170,12 +182,16 @@ func toCamelCaseUnicode(s string, lowerRest bool) string {
 			upperNext = true
 			continue
 		}
+
 		if r == utf8.RuneError && size == 1 {
 			// Invalid UTF-8: keep the byte as-is instead of writing U+FFFD.
 			first, upperNext = false, false
+
 			b.WriteString(raw)
+
 			continue
 		}
+
 		switch {
 		case first:
 			r = unicode.ToLower(r)
@@ -184,7 +200,9 @@ func toCamelCaseUnicode(s string, lowerRest bool) string {
 		case lowerRest:
 			r = unicode.ToLower(r)
 		}
+
 		first, upperNext = false, false
+
 		b.WriteRune(r)
 	}
 
@@ -195,6 +213,7 @@ func asciiToLower(c byte) byte {
 	if 'A' <= c && c <= 'Z' {
 		return c + 'a' - 'A'
 	}
+
 	return c
 }
 
@@ -202,5 +221,6 @@ func asciiToUpper(c byte) byte {
 	if 'a' <= c && c <= 'z' {
 		return c - ('a' - 'A')
 	}
+
 	return c
 }

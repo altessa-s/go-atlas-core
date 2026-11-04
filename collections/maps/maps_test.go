@@ -59,6 +59,7 @@ func TestMerge(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := coremaps.Merge(tt.src, tt.dst)
 			require.True(t, maps.Equal(got, tt.expected), "Merge() = %v, want %v", got, tt.expected)
 			// Verify immutability
@@ -97,6 +98,7 @@ func TestSwap(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := coremaps.Swap(tt.input)
 			require.True(t, maps.Equal(got, tt.expected), "Swap() = %v, want %v", got, tt.expected)
 		})
@@ -225,6 +227,7 @@ func TestMergeWith(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := coremaps.MergeWith(tt.src, tt.dst, tt.resolve)
 			require.True(t, maps.Equal(got, tt.expected), "MergeWith() = %v, want %v", got, tt.expected)
 		})
@@ -269,6 +272,7 @@ func TestMergeAll(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := coremaps.MergeAll(tt.layers...)
 			require.True(t, maps.Equal(got, tt.expected), "MergeAll() = %v, want %v", got, tt.expected)
 		})
@@ -280,6 +284,7 @@ func TestFlatMap(t *testing.T) {
 
 	t.Run("ToFlatMap", func(t *testing.T) {
 		t.Parallel()
+
 		nested := map[string]any{
 			"a": map[string]any{
 				"b": 1,
@@ -292,6 +297,7 @@ func TestFlatMap(t *testing.T) {
 
 	t.Run("FromFlatMap", func(t *testing.T) {
 		t.Parallel()
+
 		flat := map[string]any{"a.b": 1, "a.c.d": 2, "e": 3}
 		got := coremaps.FromFlatMap(flat)
 
@@ -304,6 +310,7 @@ func TestFlatMap(t *testing.T) {
 					return nil
 				}
 			}
+
 			return curr
 		}
 

@@ -62,6 +62,7 @@ func EnvOr(key, defaultValue string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
+
 	return defaultValue
 }
 
@@ -74,10 +75,12 @@ func EnvOr(key, defaultValue string) string {
 // all cached entries (e.g., in tests or after modifying the environment).
 func EnvCached(key string) string {
 	envCacheMu.RLock()
+
 	if v, ok := envCache[key]; ok {
 		envCacheMu.RUnlock()
 		return v
 	}
+
 	envCacheMu.RUnlock()
 
 	envCacheMu.Lock()
@@ -90,6 +93,7 @@ func EnvCached(key string) string {
 
 	v := os.Getenv(key)
 	envCache[key] = v
+
 	return v
 }
 
@@ -98,6 +102,7 @@ func EnvCached(key string) string {
 func ClearEnvCache() {
 	envCacheMu.Lock()
 	defer envCacheMu.Unlock()
+
 	clear(envCache)
 }
 
@@ -110,6 +115,7 @@ func HomeDir() string {
 	if home := os.Getenv(EnvUserProfile); home != "" {
 		return home
 	}
+
 	if drive := os.Getenv(EnvHomeDrive); drive != "" {
 		if path := os.Getenv(EnvHomePath); path != "" {
 			return drive + path
@@ -126,6 +132,7 @@ func ExpandPath(path string) string {
 	if len(path) > 0 && path[0] == '~' {
 		return filepath.Join(HomeDir(), path[1:])
 	}
+
 	return path
 }
 
@@ -151,6 +158,7 @@ func NormalizeEnvKeyPrefix(prefix string) string {
 	if p == "" {
 		return ""
 	}
+
 	return strings.ToUpper(p) + "_"
 }
 
@@ -165,5 +173,6 @@ func GetEnvVar(key string) string {
 	if len(p) > 0 && p[0] == '~' {
 		p = filepath.Join(HomeDir(), p[1:])
 	}
+
 	return p
 }

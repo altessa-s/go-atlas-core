@@ -28,6 +28,7 @@ func TestOnShutdownRegistersHook(t *testing.T) {
 	resetShutdownStateForTest(t)
 
 	var calls []int
+
 	OnShutdown(func(_ context.Context) error {
 		calls = append(calls, 1)
 		return nil
@@ -50,6 +51,7 @@ func TestRunShutdownHooksJoinsErrors(t *testing.T) {
 	errB := errors.New("hook b failed")
 
 	var order []string
+
 	OnShutdown(func(_ context.Context) error {
 		order = append(order, "a")
 		return errA
@@ -78,6 +80,7 @@ func TestRunShutdownHooksRunsAtMostOnce(t *testing.T) {
 	resetShutdownStateForTest(t)
 
 	var count int
+
 	OnShutdown(func(_ context.Context) error {
 		count++
 		return nil

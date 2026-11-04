@@ -16,6 +16,8 @@ import (
 type Option func(o *options)
 
 // WithClock sets the clock option.
+//
+// clock drives the parallel-mode grace period after a shutdown request.
 func WithClock(v clock.Clock) Option {
 	return func(o *options) {
 		switch rv := reflect.ValueOf(v); rv.Kind() {
@@ -55,6 +57,11 @@ func WithHandlerTimeout(v time.Duration) Option {
 }
 
 // WithShutdownHooks sets the shutdownHooks option.
+//
+// shutdownHooks runs after in-flight handlers finish (or the shutdown
+// deadline expires) in [Signal.Shutdown]. It defaults to the process-wide
+// [runtime.RunShutdownHooks]; pass a [runtime.HookGroup.Shutdown] method
+// value to scope the hooks to a component.
 func WithShutdownHooks(v runtime.ShutdownHook) Option {
 	return func(o *options) {
 		if v == nil {

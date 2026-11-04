@@ -19,6 +19,7 @@ import (
 
 func TestProcess_Success(t *testing.T) {
 	var count atomic.Int32
+
 	items := []int{1, 2, 3, 4, 5}
 
 	err := concurrency.Process(t.Context(), items, func(ctx context.Context, item int) error {
@@ -37,6 +38,7 @@ func TestProcess_StopOnError(t *testing.T) {
 		if item == 2 {
 			return wantErr
 		}
+
 		return nil
 	}, concurrency.WithConcurrency[int](1), concurrency.WithStopOnError[int]())
 
@@ -50,6 +52,7 @@ func TestProcess_OnSuccessOnError(t *testing.T) {
 		if item == 2 {
 			return errors.New("fail")
 		}
+
 		return nil
 	},
 		concurrency.WithConcurrency[int](1),
@@ -63,13 +66,16 @@ func TestProcess_OnSuccessOnError(t *testing.T) {
 
 func TestProcess_Sequential_ContinueOnError_ProcessesAllItems(t *testing.T) {
 	wantErr := errors.New("fail")
+
 	var processed atomic.Int32
 
 	err := concurrency.Process(t.Context(), []int{1, 2, 3}, func(_ context.Context, item int) error {
 		processed.Add(1)
+
 		if item == 2 {
 			return wantErr
 		}
+
 		return nil
 	}, concurrency.WithConcurrency[int](1))
 
@@ -80,13 +86,16 @@ func TestProcess_Sequential_ContinueOnError_ProcessesAllItems(t *testing.T) {
 
 func TestProcess_Sequential_StopOnError_StopsAtFirstError(t *testing.T) {
 	wantErr := errors.New("fail")
+
 	var processed atomic.Int32
 
 	err := concurrency.Process(t.Context(), []int{1, 2, 3}, func(_ context.Context, item int) error {
 		processed.Add(1)
+
 		if item == 1 {
 			return wantErr
 		}
+
 		return nil
 	}, concurrency.WithConcurrency[int](1), concurrency.WithStopOnError[int]())
 
@@ -120,9 +129,11 @@ func TestProcess_ContextCanceled(t *testing.T) {
 // returns no zero values for items it never processed.
 func TestProcess_PreCanceledContext_ReportsCancellation(t *testing.T) {
 	t.Parallel()
+
 	for _, workers := range []int{1, 2} {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
+
 		var calls atomic.Int32
 
 		err := concurrency.Process(ctx, []int{1, 2}, func(context.Context, int) error {
@@ -150,11 +161,14 @@ func TestProcess_Sequential_CancellationSemantics(t *testing.T) {
 	t.Run("mid_batch", func(t *testing.T) {
 		t.Parallel()
 		ctx, cancel := context.WithCancel(t.Context())
+
 		var calls atomic.Int32
+
 		err := concurrency.Process(ctx, []int{1, 2, 3}, func(context.Context, int) error {
 			if calls.Add(1) == 1 {
 				cancel()
 			}
+
 			return nil
 		}, concurrency.WithConcurrency[int](1))
 		require.ErrorIs(t, err, context.Canceled)
@@ -164,11 +178,14 @@ func TestProcess_Sequential_CancellationSemantics(t *testing.T) {
 	t.Run("during_last_item", func(t *testing.T) {
 		t.Parallel()
 		ctx, cancel := context.WithCancel(t.Context())
+
 		var calls atomic.Int32
+
 		err := concurrency.Process(ctx, []int{1, 2}, func(context.Context, int) error {
 			if calls.Add(1) == 2 {
 				cancel()
 			}
+
 			return nil
 		}, concurrency.WithConcurrency[int](1))
 		require.NoError(t, err, "every item was processed")
@@ -205,9 +222,11 @@ func (m *midBatch) run(ctx context.Context, item int) error {
 		close(m.started2)
 		<-ctx.Done()
 	}
+
 	m.mu.Lock()
 	m.order = append(m.order, item)
 	m.mu.Unlock()
+
 	return nil
 }
 
@@ -217,6 +236,7 @@ func (m *midBatch) run(ctx context.Context, item int) error {
 // they completed out of order, with no zero values standing in for the rest.
 func TestProcess_Parallel_MidBatchCancellation(t *testing.T) {
 	t.Parallel()
+
 	items := make([]int, 64)
 	for i := range items {
 		items[i] = i
@@ -240,6 +260,7 @@ func TestProcess_Parallel_MidBatchCancellation(t *testing.T) {
 			if err := script.run(ctx, item); err != nil {
 				return 0, err
 			}
+
 			return item + 1, nil // never zero, so a fabricated result shows
 		}, concurrency.WithConcurrency[int](2))
 		require.ErrorIs(t, err, context.Canceled, "undispatched items must not read as success")
@@ -258,6 +279,7 @@ func TestProcessCollect_Error(t *testing.T) {
 		if item == 2 {
 			return "", wantErr
 		}
+
 		return "ok", nil
 	}, concurrency.WithConcurrency[int](1), concurrency.WithStopOnError[int]())
 
@@ -269,6 +291,7 @@ func TestProcessCollect_Error(t *testing.T) {
 // successful results in input order alongside the failure.
 func TestProcessCollect_Parallel_ErrorsKeepGoing(t *testing.T) {
 	t.Parallel()
+
 	errOdd := errors.New("odd")
 	items := []string{"a0", "b1", "c2", "d3", "e4", "f5", "g6", "h7"}
 
@@ -277,20 +300,24 @@ func TestProcessCollect_Parallel_ErrorsKeepGoing(t *testing.T) {
 		succeeded []string
 		failed    []string
 	)
+
 	results, err := concurrency.ProcessCollect(t.Context(), items, func(_ context.Context, item string) (string, error) {
 		if (item[1]-'0')%2 == 1 {
 			return "", errOdd
 		}
+
 		return item + "!", nil
 	},
 		concurrency.WithConcurrency[string](4),
 		concurrency.WithOnSuccess(func(item string) {
 			mu.Lock()
+
 			succeeded = append(succeeded, item)
 			mu.Unlock()
 		}),
 		concurrency.WithOnError(func(item string, err error) {
 			mu.Lock()
+
 			failed = append(failed, item)
 			mu.Unlock()
 			require.ErrorIs(t, err, errOdd)

@@ -31,6 +31,7 @@ var ErrInvalidArgument = errors.New("invalid argument")
 // its %#v form, as for other non-string values.
 func panicMsg[M interface{ ~string | ~*string }](msg M) {
 	var ptr *string
+
 	switch t := any(msg).(type) {
 	case string:
 		panic(t)
@@ -41,11 +42,14 @@ func panicMsg[M interface{ ~string | ~*string }](msg M) {
 		if rv.Kind() == reflect.String {
 			panic(rv.String())
 		}
+
 		ptr, _ = reflect.TypeAssert[*string](rv.Convert(reflect.TypeFor[*string]()))
 	}
+
 	if ptr == nil {
 		panic(fmt.Sprintf("%#v", msg))
 	}
+
 	panic(*ptr)
 }
 
@@ -68,6 +72,7 @@ func MustNonZero[M interface{ ~string | ~*string }](v any, msg M) {
 		panicMsg(msg)
 		return
 	}
+
 	if reflect.ValueOf(v).IsZero() {
 		panicMsg(msg)
 	}
@@ -94,6 +99,7 @@ func MustResult[T any](val T, err error) T {
 	if err != nil {
 		panic(err)
 	}
+
 	return val
 }
 
@@ -257,6 +263,7 @@ func processRecovery(ctx context.Context, r any, opts *HandleOpts, handler ...Pa
 		if opts != nil && opts.Shutdown != nil {
 			shutdown = opts.Shutdown
 		}
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), panicShutdownTimeout)
 		shutdown(shutdownCtx) //nolint:errcheck,contextcheck // best-effort during panic, original ctx may be invalid
 		cancel()
@@ -366,6 +373,7 @@ func SetLoggerFromContext(fn LoggerFromContextFunc) {
 func panicLoggerHandler(ctx context.Context, r any) {
 	// Manually allocate stack trace buffer size to prevent excessively large logs.
 	const size = 64 << 10
+
 	stacktrace := make([]byte, size)
 	stacktrace = stacktrace[:runtime.Stack(stacktrace, false)]
 

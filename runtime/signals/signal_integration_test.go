@@ -54,6 +54,7 @@ func startSignalChild(t *testing.T, scenario string) *signalChild {
 	t.Helper()
 	// #nosec G204 -- re-executes the test binary (os.Args[0]) for subprocess testing
 	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestSignalChild$")
+
 	cmd.Env = append(os.Environ(), signalScenarioEnv+"="+scenario)
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
@@ -63,21 +64,26 @@ func startSignalChild(t *testing.T, scenario string) *signalChild {
 	c := &signalChild{cmd: cmd, lines: make(chan string, 64)}
 	go func() {
 		defer close(c.lines)
+
 		sc := bufio.NewScanner(stdout)
 		for sc.Scan() {
 			if line, ok := strings.CutPrefix(sc.Text(), "event: "); ok {
 				c.lines <- line
 			}
 		}
+
 		_, _ = io.Copy(io.Discard, stdout)
 	}()
+
 	c.expect(t, "ready")
+
 	return c
 }
 
 // expect requires the next events from the child to be want, in order.
 func (c *signalChild) expect(t *testing.T, want ...string) {
 	t.Helper()
+
 	for _, w := range want {
 		select {
 		case got, ok := <-c.lines:
@@ -92,6 +98,7 @@ func (c *signalChild) expect(t *testing.T, want ...string) {
 // expectSet requires the next len(want) events to be want in any order.
 func (c *signalChild) expectSet(t *testing.T, want ...string) {
 	t.Helper()
+
 	got := make([]string, 0, len(want))
 	for range want {
 		select {
@@ -102,6 +109,7 @@ func (c *signalChild) expectSet(t *testing.T, want ...string) {
 			require.FailNow(t, "timed out waiting for child events", "got %v, want %v", got, want)
 		}
 	}
+
 	require.ElementsMatch(t, want, got)
 }
 
@@ -114,16 +122,20 @@ func (c *signalChild) kill(t *testing.T, sig syscall.Signal) {
 // wait reaps the child and returns its wait status.
 func (c *signalChild) wait(t *testing.T) syscall.WaitStatus {
 	t.Helper()
+
 	for range c.lines {
 		// Drain so the reader goroutine finishes before Wait closes the pipe.
 	}
+
 	err := c.cmd.Wait()
 	if err != nil {
 		_, ok := errors.AsType[*exec.ExitError](err)
 		require.True(t, ok, "wait: %v", err)
 	}
+
 	ws, ok := c.cmd.ProcessState.Sys().(syscall.WaitStatus)
 	require.True(t, ok)
+
 	return ws
 }
 
@@ -219,6 +231,7 @@ func TestSignalChild(t *testing.T) {
 	if scenario == "" {
 		t.Skip("child entry point of the signal integration tests")
 	}
+
 	run, ok := childScenarios[scenario]
 	require.True(t, ok, "unknown scenario %q", scenario)
 	run(t)
@@ -237,9 +250,10 @@ var childScenarios = map[string]func(t *testing.T){
 // interleave partial lines on stdout.
 var eventWriter sync.Mutex
 
-func emit(format string, args ...any) {
+func emitf(format string, args ...any) {
 	eventWriter.Lock()
 	defer eventWriter.Unlock()
+
 	fmt.Fprintf(os.Stdout, "event: "+format+"\n", args...)
 }
 
@@ -254,13 +268,14 @@ func childPriority(t *testing.T) {
 		signals.WithShutdownTimeout(lineTimeout),
 		signals.WithShutdownHooks(func(ctx context.Context) error {
 			_, ok := ctx.Deadline()
-			emit("hook deadline=%t", ok)
+			emitf("hook deadline=%t", ok)
+
 			return nil
 		}),
 	)
 	record := func(name string) signals.ContextHandler {
 		return func(context.Context, os.Signal) error {
-			emit("%s", name)
+			emitf("%s", name)
 			return nil
 		}
 	}
@@ -268,20 +283,21 @@ func childPriority(t *testing.T) {
 	s.AddHandler(record("usr1-normal"), syscall.SIGUSR1)
 	s.AddHandlerWithPriority(record("usr1-highest"), signals.PriorityHighest, syscall.SIGUSR1)
 	s.AddBroadcastHandlerWithPriority(func(_ context.Context, sig os.Signal) error {
-		emit("broadcast-high:%v", sig)
+		emitf("broadcast-high:%v", sig)
 		return nil
 	}, signals.PriorityHigh)
 	s.AddHandler(record("hup"), syscall.SIGHUP)
 	s.AddHandlerWithPriority(func(context.Context, os.Signal) error {
-		emit("term")
+		emitf("term")
 		close(quit)
+
 		return nil
 	}, signals.PriorityHighest, syscall.SIGTERM)
 
 	s.Start()
-	emit("ready")
+	emitf("ready")
 	<-quit
-	emit("shutdown err=%v", s.Shutdown(t.Context()))
+	emitf("shutdown err=%v", s.Shutdown(t.Context()))
 }
 
 func childTimeouts(*testing.T) {
@@ -289,6 +305,7 @@ func childTimeouts(*testing.T) {
 		handlerTimeout  = 100 * time.Millisecond
 		shutdownTimeout = 300 * time.Millisecond
 	)
+
 	started := make(chan struct{})
 	reported := make(chan struct{})
 	s := signals.New(
@@ -296,32 +313,34 @@ func childTimeouts(*testing.T) {
 		signals.WithHandlerTimeout(handlerTimeout),
 		signals.WithShutdownTimeout(shutdownTimeout),
 		signals.WithErrorHandler(func(_ os.Signal, err error) {
-			emit("error timeout=%t", signals.IsTimeout(err))
+			emitf("error timeout=%t", signals.IsTimeout(err))
 			close(reported)
 		}),
 		signals.WithShutdownHooks(func(ctx context.Context) error {
-			emit("hook ctxerr=%v", ctx.Err())
+			emitf("hook ctxerr=%v", ctx.Err())
 			return nil
 		}),
 	)
 	// The handler ignores its context, so it outlives both its own
 	// timeout and the shutdown deadline.
 	s.AddHandler(func(context.Context, os.Signal) error {
-		emit("stuck started")
+		emitf("stuck started")
 		close(started)
+
 		select {}
 	}, syscall.SIGUSR1)
 
 	s.Start()
-	emit("ready")
+	emitf("ready")
 	<-started
 	<-reported
 
 	begin := time.Now()
 	err := s.Shutdown(context.Background())
 	elapsed := time.Since(begin)
-	emit("shutdown deadline=%t", errors.Is(err, context.DeadlineExceeded))
-	emit("shutdown bounded=%t", elapsed >= shutdownTimeout/2 && elapsed < lineTimeout)
+
+	emitf("shutdown deadline=%t", errors.Is(err, context.DeadlineExceeded))
+	emitf("shutdown bounded=%t", elapsed >= shutdownTimeout/2 && elapsed < lineTimeout)
 	// The stuck handler goroutine never returns; leave without waiting
 	// for it so the child does not hang in the testing framework.
 	os.Exit(0)
@@ -329,6 +348,7 @@ func childTimeouts(*testing.T) {
 
 func childConcurrent(t *testing.T) {
 	var running atomic.Int32
+
 	both := make(chan struct{})
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR1),
@@ -336,29 +356,34 @@ func childConcurrent(t *testing.T) {
 	)
 	s.AddHandler(func(context.Context, os.Signal) error {
 		n := running.Add(1)
-		emit("start %d", n)
+		emitf("start %d", n)
+
 		if n == 2 {
 			close(both)
 		}
+
 		select {
 		case <-both:
-			emit("overlap")
+			emitf("overlap")
 		case <-time.After(lineTimeout):
-			emit("alone")
+			emitf("alone")
 		}
+
 		return nil
 	}, syscall.SIGUSR1)
 
 	s.Start()
-	emit("ready")
+	emitf("ready")
 	<-both
-	emit("shutdown err=%v", s.Shutdown(t.Context()))
+	emitf("shutdown err=%v", s.Shutdown(t.Context()))
 }
 
 func childParallel(t *testing.T) {
 	aIn, bIn := make(chan struct{}), make(chan struct{})
+
 	var done sync.WaitGroup
 	done.Add(2)
+
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR2),
 		signals.WithExecutionMode(signals.ParallelMode),
@@ -369,13 +394,16 @@ func childParallel(t *testing.T) {
 	meet := func(self string, mine, other chan struct{}, peer string) signals.ContextHandler {
 		return func(context.Context, os.Signal) error {
 			defer done.Done()
+
 			close(mine)
+
 			select {
 			case <-other:
-				emit("%s met %s", self, peer)
+				emitf("%s met %s", self, peer)
 			case <-time.After(lineTimeout):
-				emit("%s alone", self)
+				emitf("%s alone", self)
 			}
+
 			return nil
 		}
 	}
@@ -383,9 +411,9 @@ func childParallel(t *testing.T) {
 	s.AddHandlerWithPriority(meet("b", bIn, aIn, "a"), signals.PriorityLow, syscall.SIGUSR2)
 
 	s.Start()
-	emit("ready")
+	emitf("ready")
 	done.Wait()
-	emit("shutdown err=%v", s.Shutdown(t.Context()))
+	emitf("shutdown err=%v", s.Shutdown(t.Context()))
 }
 
 func childAfterShutdown(t *testing.T) {
@@ -395,19 +423,20 @@ func childAfterShutdown(t *testing.T) {
 		signals.WithShutdownHooks(noHooks),
 	)
 	s.AddHandler(func(context.Context, os.Signal) error {
-		emit("term")
+		emitf("term")
 		close(quit)
+
 		return nil
 	}, syscall.SIGTERM)
 
 	s.Start()
-	emit("ready")
+	emitf("ready")
 	<-quit
-	emit("shutdown err=%v", s.Shutdown(t.Context()))
-	emit("stopped")
+	emitf("shutdown err=%v", s.Shutdown(t.Context()))
+	emitf("stopped")
 	// Wait for the parent's second SIGTERM to terminate the process; the
 	// bound turns a dispatcher that kept the subscription into a failure.
 	time.Sleep(lineTimeout)
-	emit("survived")
+	emitf("survived")
 	os.Exit(1)
 }

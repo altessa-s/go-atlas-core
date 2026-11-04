@@ -32,6 +32,7 @@ func NewGenerator(opts ...Option) *Generator {
 func (g *Generator) Hash(data []byte) Tag {
 	h := g.opts.newHash()
 	h.Write(data)
+
 	return Strong(corehash.HexSum(h))
 }
 
@@ -45,6 +46,7 @@ func (g *Generator) HashString(s string) Tag {
 		// #nosec G103 -- zero-copy read-only hashing, bytes never escape.
 		h.Write(unsafe.Slice(unsafe.StringData(s), len(s)))
 	}
+
 	return Strong(corehash.HexSum(h))
 }
 
@@ -56,5 +58,6 @@ func (g *Generator) HashReader(r io.Reader) (Tag, error) {
 	if _, err := io.Copy(h, r); err != nil {
 		return Tag{}, coreerrs.Wrap(err, "etag: hash reader")
 	}
+
 	return Strong(corehash.HexSum(h)), nil
 }

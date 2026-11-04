@@ -40,6 +40,7 @@ body:
         - encoding/keys
         - encoding/serializer
         - errors
+        - errors/network
         - id
         - io
         - io/files
@@ -53,6 +54,7 @@ body:
         - runtime/concurrency
         - runtime/cycle
         - runtime/helpers
+        - runtime/internal/exectest
         - runtime/landlock
         - runtime/leakcheck
         - runtime/nonewprivs
@@ -64,6 +66,8 @@ body:
         - text
         - text/charset
         - text/strings
+        - text/strings/intern
+        - text/strings/secure
         - time
         - time/civil
         - time/clock

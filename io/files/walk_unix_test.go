@@ -27,15 +27,20 @@ func TestWalk_FileTypeOther(t *testing.T) {
 	fifoPath := filepath.Join(root, "pipe")
 	require.NoError(t, syscall.Mkfifo(fifoPath, 0o600))
 
-	var gotType files.FileType
-	var found bool
+	var (
+		gotType files.FileType
+		found   bool
+	)
+
 	for entry, err := range files.Walk(root) {
 		require.NoError(t, err)
+
 		if entry.Name() == "pipe" {
 			found = true
 			gotType = entry.Type()
 		}
 	}
+
 	require.True(t, found, "expected to see the FIFO entry")
 	require.Equal(t, files.FileTypeOther, gotType)
 

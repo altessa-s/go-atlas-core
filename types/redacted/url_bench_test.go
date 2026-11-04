@@ -32,12 +32,15 @@ func BenchmarkURL_MarshalJSON(b *testing.B) {
 	cfg := struct {
 		Proxy redacted.URL `json:"proxy"`
 	}{Proxy: redacted.URL("http://svc:secret@proxy.internal:3128")}
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		out, err := json.Marshal(cfg)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if bytes.Contains(out, []byte("secret")) {
 			b.Fatal("password leaked")
 		}
@@ -48,7 +51,9 @@ func BenchmarkURL_MarshalJSON(b *testing.B) {
 // that carries the URL.
 func BenchmarkURL_LogValue(b *testing.B) {
 	u := redacted.URL("http://svc:secret@proxy.internal:3128")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if u.LogValue().String() == "" {
 			b.Fatal("empty log value")

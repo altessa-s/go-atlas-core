@@ -19,6 +19,7 @@ func TestSetGlobalPanicHandlers_StoresCopy(t *testing.T) {
 	h := func(context.Context, any) {}
 
 	SetGlobalPanicHandlers(h)
+
 	gotAny := globalPanicHandlers.Load()
 	got, ok := gotAny.(PanicHandlers)
 	require.True(t, ok, "unexpected type in globalPanicHandlers: %T", gotAny)
@@ -37,7 +38,9 @@ func TestSetGlobalPanicHandlers_StoresCopy(t *testing.T) {
 func TestAddGlobalPanicHandler_NilIsIgnored(t *testing.T) {
 	// Ensure no panic and no change to state beyond what's already there.
 	before := globalPanicHandlers.Load().(PanicHandlers)
+
 	AddGlobalPanicHandler(nil)
+
 	after := globalPanicHandlers.Load().(PanicHandlers)
 	require.Len(t, after, len(before))
 }
@@ -52,6 +55,7 @@ func TestMustNonNil(t *testing.T) {
 			t.Fatal("expected panic for nil")
 		}
 	}()
+
 	MustNonNil(nil, "nil value")
 }
 
@@ -63,6 +67,7 @@ func TestMustNonZero(t *testing.T) {
 			t.Fatal("expected panic for zero")
 		}
 	}()
+
 	MustNonZero(0, "zero value")
 }
 
@@ -76,6 +81,7 @@ func TestMustNonZero_NilAny(t *testing.T) {
 			t.Fatal("expected panic for nil")
 		}
 	}()
+
 	MustNonZero(nil, "nil value")
 }
 
@@ -96,6 +102,7 @@ func TestMust_NamedStringType_HitsDefaultCase(t *testing.T) {
 		require.True(t, ok, "expected string, got %T", r)
 		require.Contains(t, s, "boom")
 	}()
+
 	Must(false, namedString("boom"))
 }
 
@@ -104,16 +111,19 @@ func TestMust_NamedStringType_HitsDefaultCase(t *testing.T) {
 func TestPanicLoggerHandler_StringPanicUsesContextLogger(t *testing.T) {
 	savedLogger := panicLogger.Load()
 	savedCtxFn := loggerFromContext.Load()
+
 	t.Cleanup(func() {
 		if savedLogger != nil {
 			panicLogger.Store(savedLogger)
 		}
+
 		if savedCtxFn != nil {
 			loggerFromContext.Store(savedCtxFn)
 		}
 	})
 
 	var ctxBuf, globalBuf bytes.Buffer
+
 	ctxLogger := slog.New(slog.NewTextHandler(&ctxBuf, nil))
 	panicLogger.Store(slog.New(slog.NewTextHandler(&globalBuf, nil)))
 	loggerFromContext.Store(LoggerFromContextFunc(func(context.Context) *slog.Logger { return ctxLogger }))
@@ -131,10 +141,12 @@ func TestPanicLoggerHandler_StringPanicUsesContextLogger(t *testing.T) {
 func TestPanicLoggerHandler_NonStringPanicUsesGlobalLogger(t *testing.T) {
 	savedLogger := panicLogger.Load()
 	savedCtxFn := loggerFromContext.Load()
+
 	t.Cleanup(func() {
 		if savedLogger != nil {
 			panicLogger.Store(savedLogger)
 		}
+
 		if savedCtxFn != nil {
 			loggerFromContext.Store(savedCtxFn)
 		}
@@ -158,6 +170,7 @@ func TestMustError(t *testing.T) {
 			t.Fatal("expected panic for non-nil error")
 		}
 	}()
+
 	MustError(fmt.Errorf("bad"))
 }
 
@@ -170,6 +183,7 @@ func TestMustResult(t *testing.T) {
 			t.Fatal("expected panic")
 		}
 	}()
+
 	MustResult(0, fmt.Errorf("error"))
 }
 
@@ -181,6 +195,7 @@ func TestMust(t *testing.T) {
 			t.Fatal("expected panic for false")
 		}
 	}()
+
 	Must(false, "condition failed")
 }
 
@@ -195,15 +210,18 @@ func TestInvalidArgument(t *testing.T) {
 		require.True(t, ok, "expected error, got %T", r)
 		require.ErrorIs(t, err, ErrInvalidArgument)
 	}()
+
 	InvalidArgument(true, "bad arg")
 }
 
 func TestHandle(t *testing.T) {
 	var captured any
+
 	func() {
 		defer Handle(t.Context(), func(_ context.Context, r any) {
 			captured = r
 		})
+
 		panic("test panic")
 	}()
 	require.Equal(t, "test panic", captured)
@@ -211,11 +229,13 @@ func TestHandle(t *testing.T) {
 
 func TestHandleWithOpts(t *testing.T) {
 	var captured any
+
 	func() {
 		opts := NewHandleOpts().SetReallyPanic(false)
 		defer HandleWithOpts(t.Context(), opts, func(_ context.Context, r any) {
 			captured = r
 		})
+
 		panic("opts panic")
 	}()
 	require.Equal(t, "opts panic", captured)

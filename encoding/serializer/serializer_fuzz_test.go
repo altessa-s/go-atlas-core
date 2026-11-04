@@ -18,6 +18,7 @@ func FuzzJSONRoundTrip(f *testing.F) {
 	f.Add(`{}`)
 
 	s := &JSON{}
+
 	f.Fuzz(func(t *testing.T, input string) {
 		// Try to deserialize
 		var data any
@@ -46,6 +47,7 @@ func FuzzJSONAgreesWithV1(f *testing.F) {
 	f.Add(`"\ud800"`)
 
 	v2 := &JSON{}
+
 	f.Fuzz(func(t *testing.T, input string) {
 		var got2 any
 		if err := v2.Deserialize([]byte(input), &got2); err != nil {

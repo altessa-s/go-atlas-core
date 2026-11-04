@@ -16,6 +16,7 @@ import (
 
 func TestNewString(t *testing.T) {
 	ss := secure.NewString("secret")
+
 	require.NotNil(t, ss)
 	defer ss.Clear()
 
@@ -55,6 +56,7 @@ func TestString_Equal(t *testing.T) {
 	a := secure.NewString("same")
 	b := secure.NewString("same")
 	c := secure.NewString("diff")
+
 	defer a.Clear()
 	defer b.Clear()
 	defer c.Clear()
@@ -92,6 +94,7 @@ func TestString_Empty(t *testing.T) {
 func TestZeroBytes(t *testing.T) {
 	b := []byte("secret")
 	secure.ZeroBytes(b)
+
 	for i, v := range b {
 		require.Equal(t, byte(0), v, "ZeroBytes: byte[%d] should be 0", i)
 	}
@@ -124,6 +127,7 @@ func TestZeroString_ConcurrentReadOnly(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 }
 
@@ -137,6 +141,7 @@ func TestNewString_HeapStorage(t *testing.T) {
 	t.Parallel()
 
 	long := strings.Repeat("x", secure.DefaultSmallStringOptimizationThreshold+1)
+
 	ss := secure.NewString(long)
 	defer ss.Clear()
 
@@ -177,6 +182,7 @@ func TestString_Equal_EmptyBoth(t *testing.T) {
 
 	a := secure.NewString("")
 	b := secure.NewString("")
+
 	defer a.Clear()
 	defer b.Clear()
 
@@ -188,6 +194,7 @@ func TestString_Equal_DifferentLengths(t *testing.T) {
 
 	a := secure.NewString("short")
 	b := secure.NewString("a-much-longer-value")
+
 	defer a.Clear()
 	defer b.Clear()
 
@@ -201,6 +208,7 @@ func TestString_Equal_HeapStorage(t *testing.T) {
 	a := secure.NewString(long)
 	b := secure.NewString(long)
 	c := secure.NewString(strings.Repeat("w", secure.DefaultSmallStringOptimizationThreshold+1))
+
 	defer a.Clear()
 	defer b.Clear()
 	defer c.Clear()
@@ -230,6 +238,7 @@ func TestZeroBytes_LargeSlice(t *testing.T) {
 
 	data := []byte(strings.Repeat("a", secure.OptimizedMemoryZeroingThreshold+1))
 	secure.ZeroBytes(data)
+
 	for i, v := range data {
 		require.Equal(t, byte(0), v, "byte[%d] should be 0", i)
 	}

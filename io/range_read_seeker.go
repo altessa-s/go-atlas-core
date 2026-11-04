@@ -80,28 +80,37 @@ func (r *RangeReadSeeker) Read(p []byte) (int, error) {
 	if r.pos >= r.size {
 		return 0, io.EOF
 	}
+
 	if r.body == nil {
 		body, err := r.open(r.ctx, r.pos, r.size-r.pos)
 		if err != nil {
 			return 0, fmt.Errorf("open ranged read at offset %d: %w", r.pos, err)
 		}
+
 		r.body = body
 	}
+
 	if remaining := r.size - r.pos; int64(len(p)) > remaining {
 		p = p[:remaining]
 	}
+
 	n, err := r.body.Read(p)
+
 	r.pos += int64(n)
 	if errors.Is(err, io.EOF) {
 		r.closeBody()
+
 		if r.pos < r.size {
 			return n, io.ErrUnexpectedEOF
 		}
+
 		return n, err
 	}
+
 	if err == nil && r.pos == r.size {
 		err = r.finishRange()
 	}
+
 	return n, err
 }
 
@@ -110,6 +119,7 @@ func (r *RangeReadSeeker) Read(p []byte) (int, error) {
 // [ErrRangeOverrun] if the body continues past the range end, and closes it.
 func (r *RangeReadSeeker) finishRange() error {
 	defer r.closeBody()
+
 	var probe [1]byte
 	for range maxEmptyReads {
 		n, err := r.body.Read(probe[:])
@@ -122,6 +132,7 @@ func (r *RangeReadSeeker) finishRange() error {
 			return fmt.Errorf("read ranged body end at offset %d: %w", r.size, err)
 		}
 	}
+
 	return io.ErrNoProgress
 }
 
@@ -129,6 +140,7 @@ func (r *RangeReadSeeker) finishRange() error {
 // the open body so the next Read reopens at the new offset.
 func (r *RangeReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	var pos int64
+
 	switch whence {
 	case io.SeekStart:
 		pos = offset
@@ -139,13 +151,16 @@ func (r *RangeReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	default:
 		return 0, fmt.Errorf("%w: %d", ErrInvalidWhence, whence)
 	}
+
 	if pos < 0 {
 		return 0, fmt.Errorf("%w: %d", ErrNegativePosition, pos)
 	}
+
 	if pos != r.pos {
 		r.closeBody()
 		r.pos = pos
 	}
+
 	return pos, nil
 }
 
@@ -154,8 +169,10 @@ func (r *RangeReadSeeker) Close() error {
 	if r.body == nil {
 		return nil
 	}
+
 	body := r.body
 	r.body = nil
+
 	return body.Close()
 }
 

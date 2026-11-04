@@ -29,6 +29,7 @@ func TestSets_WithThenHasPerKind(t *testing.T) {
 		for _, other := range allKinds {
 			require.Equal(t, other == kind, s.Has(c, other), "set %d, query %d", kind, other)
 		}
+
 		require.False(t, s.Has(c+1, kind), "only the requested bit is set")
 		require.Equal(t, kind == capabilities.Effective, s.Has(c), "zero-kind Has queries Effective")
 	}

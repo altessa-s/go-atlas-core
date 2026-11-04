@@ -99,12 +99,14 @@ func (m *WeakMap[K, V]) Set(key K, val *V) {
 	wp := weak.Make(val)
 
 	m.mu.Lock()
+
 	prev, existed := m.data[key]
 	if existed && prev.wp == wp {
 		// val is live (the caller holds it), so its cleanup is still pending.
 		m.mu.Unlock()
 		return
 	}
+
 	m.gen++
 	gen := m.gen
 	m.data[key] = weakEntry[V]{
@@ -147,6 +149,7 @@ func (m *WeakMap[K, V]) Range(f func(key K, value *V) bool) {
 	}
 
 	m.mu.Lock()
+
 	entries := make([]entry, 0, len(m.data))
 	for k, e := range m.data {
 		val := e.wp.Value()
@@ -154,6 +157,7 @@ func (m *WeakMap[K, V]) Range(f func(key K, value *V) bool) {
 			delete(m.data, k)
 			continue
 		}
+
 		entries = append(entries, entry{key: k, val: val})
 	}
 	m.mu.Unlock()
@@ -171,6 +175,7 @@ func (m *WeakMap[K, V]) Range(f func(key K, value *V) bool) {
 func (m *WeakMap[K, V]) Len() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return len(m.data)
 }
 

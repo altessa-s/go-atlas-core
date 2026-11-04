@@ -54,9 +54,11 @@ func WithExtensions(exts ...string) WalkOption {
 			if ext == "" {
 				continue
 			}
+
 			if !strings.HasPrefix(ext, ".") {
 				ext = "." + ext
 			}
+
 			o.extensions[ext] = struct{}{}
 		}
 	}

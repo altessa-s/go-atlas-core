@@ -5,6 +5,7 @@
 // Internal test package: these tests access the unexported set/enabled
 // dispatch functions to exercise the platform split without requiring
 // CGO or syscall interception.
+
 package nonewprivs
 
 import (
@@ -22,6 +23,7 @@ func TestSet_NonLinuxReturnsUnsupported(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		t.Skip("Set is irreversible on Linux; skipping to avoid poisoning the test binary")
 	}
+
 	err := Set()
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -35,9 +37,12 @@ func TestEnabled_NonLinuxReturnsUnsupported(t *testing.T) {
 	v, err := Enabled()
 	if runtime.GOOS == "linux" {
 		require.NoError(t, err, "Enabled on Linux")
+
 		_ = v // value depends on ambient process state
+
 		return
 	}
+
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, v, "Enabled: got true, want false on non-Linux")
 }

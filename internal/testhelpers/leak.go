@@ -45,6 +45,7 @@ type GoroutineTracker struct {
 func TrackGoroutines() *GoroutineTracker {
 	label := strconv.FormatUint(leakTrackerSeq.Add(1), 10)
 	pprof.SetGoroutineLabels(pprof.WithLabels(context.Background(), pprof.Labels(leakLabelKey, label)))
+
 	return &GoroutineTracker{label: label}
 }
 
@@ -67,12 +68,15 @@ func (g *GoroutineTracker) Leaked() ([]string, error) {
 	// line followed by blank-line separated records.
 	_, records, _ := strings.Cut(buf.String(), "\n")
 	needle := strconv.Quote(leakLabelKey) + ":" + strconv.Quote(g.label)
+
 	var leaked []string
+
 	for record := range strings.SplitSeq(records, "\n\n") {
 		if strings.Contains(record, needle) {
 			leaked = append(leaked, strings.TrimSpace(record))
 		}
 	}
+
 	return leaked, nil
 }
 
@@ -88,13 +92,16 @@ func (g *GoroutineTracker) Leaked() ([]string, error) {
 // reachable, such as one stored in a package variable.
 func VerifyNoLeaks(tb testing.TB) {
 	tb.Helper()
+
 	tracker := TrackGoroutines()
+
 	tb.Cleanup(func() {
 		leaked, err := tracker.Leaked()
 		if err != nil {
 			tb.Errorf("goroutine leak check: %v", err)
 			return
 		}
+
 		if len(leaked) > 0 {
 			tb.Errorf("%d leaked goroutine stack(s):\n\n%s", len(leaked), strings.Join(leaked, "\n\n"))
 		}

@@ -19,6 +19,7 @@ func BinDir() string {
 	if dir := GetEnvVar("BIN_DIR"); dir != "" {
 		return filepath.Clean(strings.TrimRight(dir, "/"))
 	}
+
 	return "/opt/bin"
 }
 
@@ -30,6 +31,7 @@ func VarDir() string {
 	if dir := GetEnvVar("VAR_DIR"); dir != "" {
 		return filepath.Clean(strings.TrimRight(dir, "/"))
 	}
+
 	return "/var"
 }
 
@@ -47,6 +49,7 @@ func EtcDir() string {
 	if Project != "" {
 		pathComps = append(pathComps, strings.ToLower(Project))
 	}
+
 	pathComps = append(pathComps, strings.ToLower(Name))
 
 	return filepath.Join(pathComps...)
@@ -66,9 +69,11 @@ func LibDir() string {
 	if Project != "" {
 		pathComps = append(pathComps, strings.ToLower(Project))
 	}
+
 	pathComps = append(pathComps, strings.ToLower(Name))
 
 	p := filepath.Join(pathComps...)
+
 	return p
 }
 
@@ -89,5 +94,6 @@ func MakeAllDirs() error {
 			return fmt.Errorf("mkdir %s: %w", dir, err)
 		}
 	}
+
 	return nil
 }

@@ -23,6 +23,7 @@ func TestProcessCollect_Ordering(t *testing.T) {
 
 	// Create a list of integers
 	count := 100
+
 	input := make([]int, count)
 	for i := range count {
 		input[i] = i

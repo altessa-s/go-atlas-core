@@ -56,11 +56,13 @@ func TestParseSemVer(t *testing.T) {
 				require.Error(t, err, "expected error for input %q", tt.in)
 				return
 			}
+
 			require.NoError(t, err)
 			require.Equal(t, tt.wantMajor, got.Major)
 			require.Equal(t, tt.wantMinor, got.Minor)
 			require.Equal(t, tt.wantPatch, got.Patch)
 			require.Len(t, got.Prerelease, len(tt.wantPre))
+
 			for i := range tt.wantPre {
 				require.Equal(t, tt.wantPre[i], got.Prerelease[i], "prerelease[%d]", i)
 			}

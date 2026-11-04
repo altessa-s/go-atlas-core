@@ -38,6 +38,7 @@ func Join(elements []string, opts JoinOptions) string {
 	}
 
 	var filteredElements []string
+
 	if opts.SkipEmpty {
 		for _, elem := range elements {
 			if elem != "" {
@@ -97,10 +98,12 @@ func Split(s string, opts SplitOptions) []string {
 		if opts.SkipEmpty {
 			return nil
 		}
+
 		return []string{""}
 	}
 
 	var parts []string
+
 	separator := opts.Separator
 
 	if !opts.CaseSensitive && separator != "" {
@@ -123,9 +126,11 @@ func Split(s string, opts SplitOptions) []string {
 		if opts.TrimSpace {
 			part = strings.TrimSpace(part)
 		}
+
 		if opts.SkipEmpty && part == "" {
 			continue
 		}
+
 		result = append(result, part)
 	}
 
@@ -180,6 +185,7 @@ func caseInsensitiveSplitter(s, sep string, maxSplits int) splitter {
 	if err != nil {
 		return exactSplitter(s, sep, maxSplits)
 	}
+
 	return splitter{s: s, re: re, maxSplits: maxSplits}
 }
 
@@ -189,8 +195,10 @@ func (sp *splitter) next() (string, bool) {
 	if sp.done {
 		return "", false
 	}
+
 	if sp.maxSplits <= 0 || sp.splits < sp.maxSplits {
 		lo, hi := -1, -1
+
 		if sp.re == nil {
 			if idx := strings.Index(sp.hay[sp.start:], sp.sep); idx >= 0 {
 				lo = sp.start + idx
@@ -200,14 +208,18 @@ func (sp *splitter) next() (string, bool) {
 			lo = sp.start + loc[0]
 			hi = sp.start + loc[1]
 		}
+
 		if lo >= 0 {
 			part := sp.s[sp.start:lo]
 			sp.start = hi
 			sp.splits++
+
 			return part, true
 		}
 	}
+
 	sp.done = true
+
 	return sp.s[sp.start:], true
 }
 
@@ -231,6 +243,7 @@ func caseInsensitiveRegex(sep string) (*regexp.Regexp, error) {
 			regexCacheSize.Add(-1)
 		}
 	}
+
 	return re, nil
 }
 
@@ -244,10 +257,12 @@ func splitRunes(s string, maxSplits int, emit func(string) bool) {
 			emit(s)
 			return
 		}
+
 		_, size := utf8.DecodeRuneInString(s)
 		if !emit(s[:size]) {
 			return
 		}
+
 		s = s[size:]
 	}
 }
@@ -258,13 +273,16 @@ func splitRunes(s string, maxSplits int, emit func(string) bool) {
 // allocating when it has no uppercase letters.
 func lowerASCII(s string) (string, bool) {
 	hasUpper := false
+
 	for i := range len(s) {
 		c := s[i]
 		if c >= utf8.RuneSelf {
 			return "", false
 		}
+
 		hasUpper = hasUpper || ('A' <= c && c <= 'Z')
 	}
+
 	if !hasUpper {
 		return s, true
 	}
@@ -284,5 +302,6 @@ func isASCII(s string) bool {
 			return false
 		}
 	}
+
 	return true
 }

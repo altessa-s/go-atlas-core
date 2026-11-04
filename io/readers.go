@@ -70,6 +70,7 @@ func NewLimitedReadCloser(rc io.ReadCloser, limit int64) *LimitedReadCloser {
 	if limit < math.MaxInt64 {
 		reader = io.LimitReader(rc, limit+1)
 	}
+
 	return &LimitedReadCloser{
 		reader: reader,
 		closer: rc,
@@ -93,6 +94,7 @@ func (l *LimitedReadCloser) Read(p []byte) (n int, err error) {
 	// remaining is what may still be delivered before this read; it is negative
 	// only once an earlier read already detected the overflow.
 	remaining := l.limit - l.read
+
 	l.read += int64(n)
 	if l.read > l.limit {
 		n = int(max(min(remaining, int64(n)), 0))
@@ -108,5 +110,6 @@ func (l *LimitedReadCloser) Close() error {
 	if l.closer != nil {
 		return l.closer.Close()
 	}
+
 	return nil
 }

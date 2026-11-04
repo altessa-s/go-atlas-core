@@ -74,6 +74,7 @@ func (pq *priorityQueue) addHandler(entry handlerEntry) {
 			handlers: make([]handlerEntry, 0, 4), // Same initial capacity as the predefined buckets
 		})
 	}
+
 	pq.custom[i].handlers = append(pq.custom[i].handlers, entry)
 }
 
@@ -83,11 +84,13 @@ func (pq *priorityQueue) getHandlersInOrder() []handlerEntry {
 	defer pq.mutex.RUnlock()
 
 	totalHandlers := 0
+
 	for _, bucket := range pq.buckets {
 		if bucket != nil {
 			totalHandlers += len(bucket.handlers)
 		}
 	}
+
 	for _, bucket := range pq.custom {
 		totalHandlers += len(bucket.handlers)
 	}
@@ -106,12 +109,15 @@ func (pq *priorityQueue) getHandlersInOrder() []handlerEntry {
 		if bucket == nil {
 			continue
 		}
+
 		for len(custom) > 0 && custom[0].priority > bucket.priority {
 			result = append(result, custom[0].handlers...)
 			custom = custom[1:]
 		}
+
 		result = append(result, bucket.handlers...)
 	}
+
 	for _, bucket := range custom {
 		result = append(result, bucket.handlers...)
 	}
@@ -162,6 +168,7 @@ func (s *Signal) sortHandlers(handlers []handlerEntry) {
 		s.sortHandlersByPriority(handlers)
 		return
 	}
+
 	if !s.sortHandlersByPriorityCounting(handlers) {
 		s.sortHandlersByPriority(handlers)
 	}
@@ -181,6 +188,7 @@ func (s *Signal) sortHandlersByPriority(handlers []handlerEntry) {
 			handlers[j+1] = handlers[j]
 			j--
 		}
+
 		handlers[j+1] = current
 	}
 }
@@ -214,6 +222,7 @@ func (s *Signal) sortHandlersByPriorityCounting(handlers []handlerEntry) bool {
 		if h.priority < minP {
 			minP = h.priority
 		}
+
 		if h.priority > maxP {
 			maxP = h.priority
 		}
@@ -241,6 +250,7 @@ func (s *Signal) sortHandlersByPriorityCounting(handlers []handlerEntry) bool {
 	// the priority axis from high to low places the highest priorities
 	// at the front.
 	var total int
+
 	for i := rng - 1; i >= 0; i-- {
 		c := counts[i]
 		counts[i] = total
@@ -250,6 +260,7 @@ func (s *Signal) sortHandlersByPriorityCounting(handlers []handlerEntry) bool {
 	// Scatter into a fresh output buffer, preserving input order for
 	// equal priorities (stability).
 	out := make([]handlerEntry, n)
+
 	for _, h := range handlers {
 		idx := int(h.priority - minP)
 		out[counts[idx]] = h
@@ -257,5 +268,6 @@ func (s *Signal) sortHandlersByPriorityCounting(handlers []handlerEntry) bool {
 	}
 
 	copy(handlers, out)
+
 	return true
 }

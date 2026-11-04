@@ -18,10 +18,10 @@ import (
 	"errors"
 	"testing"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/altessa-s/go-atlas-core/runtime/internal/exectest"
 	"github.com/altessa-s/go-atlas-core/runtime/seccomp"
-
-	"golang.org/x/sys/unix"
 )
 
 // TestBlockDangerousSyscalls_DeniesMountInSubprocess is the headline
@@ -50,6 +50,7 @@ func TestBlockDangerousSyscalls_DeniesMountInSubprocess(t *testing.T) {
 			exectest.Failf("mount(2) unexpectedly succeeded after BlockDangerousSyscalls — " +
 				"the seccomp filter did not intercept it")
 		}
+
 		if !errors.Is(err, unix.EPERM) {
 			exectest.Failf("mount(2) returned %v, want EPERM "+
 				"(seccomp filter should rewrite return to EPERM via SECCOMP_RET_ERRNO)",
@@ -82,6 +83,7 @@ func TestBlockDangerousSyscalls_DeniesPtraceInSubprocess(t *testing.T) {
 			exectest.Failf("ptrace(PTRACE_TRACEME) unexpectedly succeeded after " +
 				"BlockDangerousSyscalls — the seccomp filter did not intercept it")
 		}
+
 		if errno != unix.EPERM {
 			exectest.Failf("ptrace(2) returned errno=%v, want EPERM "+
 				"(seccomp filter should rewrite return via SECCOMP_RET_ERRNO|EPERM)",

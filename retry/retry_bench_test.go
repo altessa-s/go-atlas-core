@@ -41,6 +41,7 @@ func BenchmarkDo(b *testing.B) {
 
 	b.Run("ExponentialCalc", func(b *testing.B) {
 		exp := retry.Exponential(time.Second)
+
 		i := 0
 		for b.Loop() {
 			exp(i%10, nil)
@@ -52,7 +53,9 @@ func BenchmarkDo(b *testing.B) {
 	// materialized once instead of on every call.
 	b.Run("PolicySuccess", func(b *testing.B) {
 		p := retry.NewPolicy()
+
 		b.ReportAllocs()
+
 		for b.Loop() {
 			_ = p.Do(ctx, func(ctx context.Context) error {
 				return nil
@@ -65,7 +68,9 @@ func BenchmarkDo(b *testing.B) {
 			retry.WithMaxAttempts(10),
 			retry.WithNextDelay(func(int, error) time.Duration { return 0 }),
 		)
+
 		b.ReportAllocs()
+
 		for b.Loop() {
 			_ = p.Do(ctx, func(ctx context.Context) error {
 				return failErr
@@ -80,12 +85,14 @@ func BenchmarkDo_JoinLastError(b *testing.B) {
 	failErr := errors.New("fail")
 	ctx, cancel := context.WithCancel(b.Context())
 	cancel()
+
 	policy := retry.NewPolicy(
 		retry.WithAttemptOnDoneContext(),
 		retry.WithJoinLastError(),
 		retry.WithMaxAttempts(3),
 		retry.WithNextDelay(func(int, error) time.Duration { return time.Second }),
 	)
+
 	fn := func(context.Context) error { return failErr }
 	for b.Loop() {
 		_ = policy.Do(ctx, fn)
@@ -101,14 +108,18 @@ func BenchmarkExponential(b *testing.B) {
 		retry.WithExponentialMaxDelay(30*time.Second),
 		retry.WithExponentialJitter(0.2),
 	)
+
 	b.Run("JitterCapped", func(b *testing.B) {
 		b.ReportAllocs()
+
 		var sink time.Duration
+
 		i := 0
 		for b.Loop() {
 			sink += next(i%16, nil)
 			i++
 		}
+
 		if sink <= 0 {
 			b.Fatal("non-positive delays")
 		}
@@ -122,6 +133,7 @@ func BenchmarkExponential(b *testing.B) {
 					b.Error("non-positive delay")
 					return
 				}
+
 				i++
 			}
 		})
@@ -137,14 +149,18 @@ func BenchmarkDo_RealTimerWait(b *testing.B) {
 		retry.WithMaxAttempts(3),
 		retry.WithNextDelay(func(int, error) time.Duration { return time.Microsecond }),
 	)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		calls := 0
+
 		err := policy.Do(ctx, func(context.Context) error {
 			calls++
 			if calls < 4 {
 				return failErr
 			}
+
 			return nil
 		})
 		if err != nil {

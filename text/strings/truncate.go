@@ -22,10 +22,12 @@ func TruncateRunes(s string, n int, suffix string) string {
 	if n <= 0 {
 		return ""
 	}
+
 	if len(s) <= n {
 		// A string never has more runes than bytes.
 		return s
 	}
+
 	keep, mark := n-utf8.RuneCountInString(suffix), suffix
 	if keep < 0 {
 		keep, mark = n, ""
@@ -37,11 +39,14 @@ func TruncateRunes(s string, n int, suffix string) string {
 		if i == keep {
 			cut = off
 		}
+
 		if i == n {
 			return s[:cut] + mark
 		}
+
 		i++
 	}
+
 	return s
 }
 
@@ -63,12 +68,15 @@ func TruncateBytes(s string, n int, suffix string) string {
 	if n <= 0 {
 		return ""
 	}
+
 	if len(s) <= n {
 		return s
 	}
+
 	if n < len(suffix) {
 		return s[:runeBoundary(s, n)]
 	}
+
 	return s[:runeBoundary(s, n-len(suffix))] + suffix
 }
 
@@ -84,10 +92,13 @@ func runeBoundary(s string, cut int) int {
 		if !utf8.RuneStart(s[j]) {
 			continue
 		}
+
 		if r, size := utf8.DecodeRuneInString(s[j:]); (r != utf8.RuneError || size > 1) && j+size > cut {
 			return j
 		}
+
 		return cut
 	}
+
 	return cut
 }

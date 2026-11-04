@@ -23,6 +23,7 @@ func TestGeneratorDefaultSHA256(t *testing.T) {
 	t.Parallel()
 
 	const body = "hello world"
+
 	sum := sha256.Sum256([]byte(body))
 	want := etag.Strong(hex.EncodeToString(sum[:]))
 
@@ -51,6 +52,7 @@ func TestGeneratorWithNewHash(t *testing.T) {
 	t.Parallel()
 
 	const body = "hello world"
+
 	g := etag.NewGenerator(etag.WithNewHash(sha1.New))
 
 	sum := sha1.Sum([]byte(body)) //nolint:gosec // test-only.
@@ -64,6 +66,7 @@ func TestGeneratorWithNilNewHashKeepsDefault(t *testing.T) {
 	t.Parallel()
 
 	const body = "hello world"
+
 	g := etag.NewGenerator(etag.WithNewHash(nil))
 
 	require.Equal(t, etag.NewGenerator().Hash([]byte(body)), g.Hash([]byte(body)))

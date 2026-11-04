@@ -24,12 +24,16 @@ func TestReadPendingLimitSkipAndDuplicateAck(t *testing.T) {
 	w, _, err := wal.Open(filepath.Join(t.TempDir(), "wal"), wal.WithMaxSegmentBytes(20))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, w.Close()) })
+
 	var offsets []wal.Offset
+
 	for _, value := range []string{"a", "b", "c", "d"} {
 		off, err := w.Append([]byte(value))
 		require.NoError(t, err)
+
 		offsets = append(offsets, off)
 	}
+
 	w.Ack(offsets[1])
 	w.Ack(offsets[1])
 	require.Equal(t, int64(3), w.Stats().Pending)
@@ -43,9 +47,11 @@ func TestReadPendingLimitSkipAndDuplicateAck(t *testing.T) {
 	require.Len(t, records, 2)
 	require.Equal(t, []byte("c"), records[0].Payload)
 	require.Equal(t, []byte("d"), records[1].Payload)
+
 	for _, record := range records {
 		w.Ack(record.Offset)
 	}
+
 	require.Zero(t, w.Stats().Pending)
 	off, err := w.Append([]byte("e"))
 	require.NoError(t, err)
@@ -67,6 +73,7 @@ func TestPendingReadAfterReopen(t *testing.T) {
 	w, recovered, err := wal.Open(dir)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, w.Close()) })
+
 	got, err := w.ReadPending(1, nil)
 	require.NoError(t, err)
 	require.Equal(t, recovered, got)
@@ -81,14 +88,19 @@ func TestReadPendingSkippedRecordsRemainRetryable(t *testing.T) {
 	w, _, err := wal.Open(filepath.Join(t.TempDir(), "wal"))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, w.Close()) })
+
 	var offsets []wal.Offset
+
 	for i := range 6 {
 		off, err := w.Append([]byte{byte('a' + i)})
 		require.NoError(t, err)
+
 		offsets = append(offsets, off)
 	}
+
 	inFlight := map[wal.Offset]struct{}{offsets[0]: {}, offsets[1]: {}, offsets[3]: {}}
 	skip := func(off wal.Offset) bool { _, ok := inFlight[off]; return ok }
+
 	w.Ack(offsets[4])
 	records, err := w.ReadPending(10, skip)
 	require.NoError(t, err)
@@ -113,13 +125,17 @@ func TestReadPendingAcrossReadWindows(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, w.Close()) })
 	// Sizes straddle and exceed the 64 KiB internal read window.
 	sizes := []int{100, 40 << 10, 30 << 10, 200 << 10, 1, 64<<10 - 8, 5, 70 << 10}
+
 	var want []wal.Record
+
 	for i, size := range sizes {
 		payload := bytes.Repeat([]byte{byte(i + 1)}, size)
 		off, err := w.Append(payload)
 		require.NoError(t, err)
+
 		want = append(want, wal.Record{Offset: off, Payload: payload})
 	}
+
 	got, err := w.ReadPending(len(sizes), nil)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
@@ -135,6 +151,7 @@ func TestReadPendingDetectsCorruptionAndTruncation(t *testing.T) {
 	w, _, err := wal.Open(dir, wal.WithMaxSegmentBytes(32))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, w.Close()) })
+
 	_, err = w.Append([]byte("first-record"))
 	require.NoError(t, err)
 	_, err = w.Append([]byte("second-record"))
@@ -147,9 +164,11 @@ func TestReadPendingDetectsCorruptionAndTruncation(t *testing.T) {
 	_, err = f.WriteAt([]byte{'X'}, 8)
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
+
 	_, err = w.ReadPending(1, nil)
 	require.ErrorIs(t, err, wal.ErrCorruptRecord)
 	require.NoError(t, os.Truncate(segments[0], 4))
+
 	_, err = w.ReadPending(1, nil)
 	require.ErrorIs(t, err, io.EOF)
 }
@@ -159,6 +178,7 @@ func recordOffsets(records []wal.Record) []wal.Offset {
 	for _, record := range records {
 		offsets = append(offsets, record.Offset)
 	}
+
 	return offsets
 }
 
@@ -171,8 +191,11 @@ func TestReadPending_ConcurrentWithGroupCommit(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = w.Close() })
 
-	const producers, perProducer = 6, 300
-	const total = producers * perProducer
+	const (
+		producers, perProducer = 6, 300
+		total                  = producers * perProducer
+	)
+
 	var wg sync.WaitGroup
 	for p := range producers {
 		wg.Go(func() {
@@ -186,21 +209,26 @@ func TestReadPending_ConcurrentWithGroupCommit(t *testing.T) {
 	}
 
 	seen := make(map[string]int, total)
+
 	deadline := time.Now().Add(30 * time.Second)
 	for len(seen) < total && time.Now().Before(deadline) {
 		records, err := w.ReadPending(64, nil)
 		require.NoError(t, err)
+
 		for _, r := range records {
 			seen[string(r.Payload)]++
 			w.Ack(r.Offset)
 		}
 	}
+
 	wg.Wait()
 
 	require.Len(t, seen, total)
+
 	for payload, n := range seen {
 		require.Equal(t, 1, n, "record %q delivered %d times", payload, n)
 	}
+
 	rest, err := w.ReadPending(64, nil)
 	require.NoError(t, err)
 	require.Empty(t, rest)

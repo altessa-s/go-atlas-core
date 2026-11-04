@@ -22,26 +22,32 @@ var ErrCorruptRecord = errors.New("wal: corrupt pending record")
 func (w *WAL) ReadPending(limit int, skip func(Offset) bool) ([]Record, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	if w.closed.Load() {
 		return nil, ErrClosed
 	}
+
 	if limit <= 0 {
 		return nil, nil
 	}
+
 	var records []Record
 	for _, seg := range w.sealed {
 		if err := w.readPendingSegment(seg, limit, skip, &records); err != nil {
 			return nil, err
 		}
+
 		if len(records) == limit {
 			return records, nil
 		}
 	}
+
 	if w.active != nil {
 		if err := w.readPendingSegment(w.active, limit, skip, &records); err != nil {
 			return nil, err
 		}
 	}
+
 	return records, nil
 }
 
@@ -57,38 +63,48 @@ func (w *WAL) readPendingSegment(seg *segmentRef, limit int, skip func(Offset) b
 	// The group-commit leader publishes size without w.mu; read it once so
 	// this pass sees one consistent prefix of fully written records.
 	size := seg.size.Load()
+
 	f, err := os.Open(seg.path)
 	if err != nil {
 		return err
 	}
 	defer f.Close() //nolint:errcheck // read-only descriptor
+
 	if w.readBuf == nil {
 		w.readBuf = make([]byte, pendingReadWindow)
 	}
+
 	win := pendingWindow{f: f, buf: w.readBuf}
 	for pos := seg.pendingPosition; pos < size && len(*out) < limit; {
 		header, err := win.header(pos, size)
 		if err != nil {
 			return err
 		}
+
 		n := int64(binary.LittleEndian.Uint32(header[:4]))
+
 		next := pos + recordHeaderSize + n
 		if n == 0 || n > maxRecordBytes || next > size {
 			return ErrCorruptRecord
 		}
+
 		offset := Offset{SegmentID: seg.id, Position: pos}
 		if !seg.skipAcked(pos, next) && (skip == nil || !skip(offset)) {
 			payload, err := win.payload(pos, n)
 			if err != nil {
 				return err
 			}
+
 			if crc32.ChecksumIEEE(payload) != binary.LittleEndian.Uint32(header[4:]) {
 				return ErrCorruptRecord
 			}
+
 			*out = append(*out, Record{Offset: offset, Payload: payload})
 		}
+
 		pos = next
 	}
+
 	return nil
 }
 
@@ -110,8 +126,10 @@ func (pw *pendingWindow) header(pos, size int64) ([]byte, error) {
 		if _, err := pw.f.ReadAt(pw.buf[:n], pos); err != nil {
 			return nil, err
 		}
+
 		pw.data, pw.start, rel = pw.buf[:n], pos, 0
 	}
+
 	return pw.data[rel : rel+recordHeaderSize], nil
 }
 
@@ -123,9 +141,11 @@ func (pw *pendingWindow) payload(pos, n int64) ([]byte, error) {
 		copy(payload, pw.data[start:start+n])
 		return payload, nil
 	}
+
 	if _, err := pw.f.ReadAt(payload, pos+recordHeaderSize); err != nil {
 		return nil, err
 	}
+
 	return payload, nil
 }
 
@@ -137,6 +157,7 @@ func (s *segmentRef) skipAcked(pos, next int64) bool {
 		delete(s.acked, pos)
 		s.pendingPosition = next
 	}
+
 	return acked
 }
 
@@ -144,12 +165,15 @@ func (s *segmentRef) ack(position int64) {
 	if position < s.pendingPosition || position < 0 || position >= s.size.Load() || s.unacked.Load() == 0 {
 		return
 	}
+
 	if _, ok := s.acked[position]; ok {
 		return
 	}
+
 	if s.acked == nil {
 		s.acked = make(map[int64]struct{})
 	}
+
 	s.acked[position] = struct{}{}
 	s.unacked.Add(-1)
 }

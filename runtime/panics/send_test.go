@@ -35,8 +35,10 @@ func TestTrySend(t *testing.T) {
 			name: "closed channel",
 			setup: func(t *testing.T) (chan int, context.Context) {
 				t.Helper()
+
 				ch := make(chan int, 1)
 				close(ch)
+
 				return ch, t.Context()
 			},
 			wantSent:   false,
@@ -46,10 +48,13 @@ func TestTrySend(t *testing.T) {
 			name: "full buffer with canceled context",
 			setup: func(t *testing.T) (chan int, context.Context) {
 				t.Helper()
+
 				ch := make(chan int, 1)
 				ch <- 1 // fill the buffer so the send blocks
+
 				ctx, cancel := context.WithCancel(t.Context())
 				cancel()
+
 				return ch, ctx
 			},
 			wantSent:   false,
@@ -65,6 +70,7 @@ func TestTrySend(t *testing.T) {
 			sent, closed := panics.TrySend(ctx, ch, 42)
 			require.Equal(t, tc.wantSent, sent)
 			require.Equal(t, tc.wantClosed, closed)
+
 			if sent {
 				require.Equal(t, 42, <-ch)
 			}
@@ -76,6 +82,7 @@ func TestTrySend_BlocksUntilReceiverReady(t *testing.T) {
 	t.Parallel()
 
 	ch := make(chan int) // unbuffered: the send must block until the receive
+
 	got := make(chan int, 1)
 	go func() { got <- <-ch }()
 
@@ -107,8 +114,10 @@ func TestTrySendNonBlocking(t *testing.T) {
 			name: "closed channel",
 			setup: func(t *testing.T) chan int {
 				t.Helper()
+
 				ch := make(chan int, 1)
 				close(ch)
+
 				return ch
 			},
 			wantSent:   false,
@@ -118,8 +127,10 @@ func TestTrySendNonBlocking(t *testing.T) {
 			name: "full buffer drops the value",
 			setup: func(t *testing.T) chan int {
 				t.Helper()
+
 				ch := make(chan int, 1)
 				ch <- 1
+
 				return ch
 			},
 			wantSent:   false,
@@ -144,6 +155,7 @@ func TestTrySendNonBlocking(t *testing.T) {
 			sent, closed := panics.TrySendNonBlocking(ch, 42)
 			require.Equal(t, tc.wantSent, sent)
 			require.Equal(t, tc.wantClosed, closed)
+
 			if sent {
 				require.Equal(t, 42, <-ch)
 			}

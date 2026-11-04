@@ -30,9 +30,11 @@ func IsOptionalType(t reflect.Type) bool {
 	if t == nil || t.Kind() != reflect.Struct {
 		return false
 	}
+
 	if t.PkgPath() != reflectionPackagePath {
 		return false
 	}
+
 	return strings.HasPrefix(t.Name(), reflectionNamePrefix)
 }
 
@@ -43,6 +45,7 @@ func InnerType(optType reflect.Type) reflect.Type {
 	if !IsOptionalType(optType) {
 		panic("optional.InnerType: not an Optional[T] type: " + describeType(optType))
 	}
+
 	return optType.Field(0).Type
 }
 
@@ -59,6 +62,7 @@ func GetReflect(opt reflect.Value) (reflect.Value, bool) {
 	if !IsOptionalType(opt.Type()) {
 		panic("optional.GetReflect: not an Optional[T] value: " + describeType(opt.Type()))
 	}
+
 	if !opt.CanAddr() {
 		// Copy into an addressable temporary so callers don't have to
 		// pre-allocate when they only have a value (e.g. extracted from
@@ -67,8 +71,10 @@ func GetReflect(opt reflect.Value) (reflect.Value, bool) {
 		addr.Set(opt)
 		opt = addr
 	}
+
 	present := opt.Field(1).Bool()
 	value := readUnexportedField(opt.Field(0))
+
 	return value, present
 }
 
@@ -79,17 +85,22 @@ func SomeReflect(optType reflect.Type, value reflect.Value) reflect.Value {
 	if !IsOptionalType(optType) {
 		panic("optional.SomeReflect: not an Optional[T] type: " + describeType(optType))
 	}
+
 	inner := optType.Field(0).Type
+
 	if !value.IsValid() {
 		panic("optional.SomeReflect: invalid value")
 	}
+
 	if !value.Type().AssignableTo(inner) {
 		panic("optional.SomeReflect: value of type " + describeType(value.Type()) +
 			" not assignable to inner type " + describeType(inner))
 	}
+
 	out := reflect.New(optType).Elem()
 	writeUnexportedField(out.Field(0), value)
 	writeUnexportedField(out.Field(1), reflect.ValueOf(true))
+
 	return out
 }
 
@@ -99,6 +110,7 @@ func NoneReflect(optType reflect.Type) reflect.Value {
 	if !IsOptionalType(optType) {
 		panic("optional.NoneReflect: not an Optional[T] type: " + describeType(optType))
 	}
+
 	return reflect.New(optType).Elem()
 }
 
@@ -124,5 +136,6 @@ func describeType(t reflect.Type) string {
 	if t == nil {
 		return "<nil>"
 	}
+
 	return t.String()
 }

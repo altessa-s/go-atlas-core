@@ -33,6 +33,7 @@ func (e *SourceError) Error() string {
 	if e == nil {
 		return ""
 	}
+
 	return fmt.Sprintf("source %s: %v", e.Source, e.Err)
 }
 
@@ -41,6 +42,7 @@ func (e *SourceError) Unwrap() error {
 	if e == nil {
 		return nil
 	}
+
 	return e.Err
 }
 
@@ -76,36 +78,48 @@ func First[T any](ctx context.Context, sources []Source[T], accept func(source s
 	if len(sources) == 0 {
 		return res, ErrAllFailed
 	}
+
 	for _, src := range sources {
 		if ctx.Err() != nil {
 			return res, ctx.Err()
 		}
+
 		value, err := src.Fetch(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return res, ctx.Err()
 			}
+
 			res.Skipped = append(res.Skipped, &SourceError{Source: src.Name, Err: err})
+
 			continue
 		}
+
 		if accept != nil {
 			if err := accept(src.Name, value); err != nil {
 				if ctx.Err() != nil {
 					return res, ctx.Err()
 				}
+
 				res.Skipped = append(res.Skipped, &SourceError{Source: src.Name, Err: err})
+
 				continue
 			}
 		}
+
 		res.Value = value
 		res.Source = src.Name
+
 		return res, nil
 	}
+
 	joined := make([]error, 0, 1+len(res.Skipped))
+
 	joined = append(joined, ErrAllFailed)
 	for _, se := range res.Skipped {
 		joined = append(joined, se)
 	}
+
 	return res, errors.Join(joined...)
 }
 
@@ -120,5 +134,6 @@ func Canceled(ctx context.Context, err error) bool {
 	if err == nil || ctx.Err() == nil || errors.Is(err, ErrAllFailed) {
 		return false
 	}
+
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

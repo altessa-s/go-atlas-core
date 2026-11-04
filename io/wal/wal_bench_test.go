@@ -15,15 +15,19 @@ import (
 // Caller is responsible for Close via b.Cleanup.
 func newBenchWAL(b *testing.B, opts ...Option) *WAL {
 	b.Helper()
+
 	base := []Option{
 		WithMaxSegmentBytes(DefaultMaxSegmentBytes),
 		WithFsyncInterval(time.Hour),
 	}
+
 	w, _, err := Open(filepath.Join(b.TempDir(), "wal"), append(base, opts...)...)
 	if err != nil {
 		b.Fatalf("Open: %v", err)
 	}
+
 	b.Cleanup(func() { _ = w.Close() })
+
 	return w
 }
 
@@ -33,6 +37,7 @@ func BenchmarkWAL_Append_Small(b *testing.B) {
 
 	b.ReportAllocs()
 	b.SetBytes(int64(len(payload)))
+
 	for b.Loop() {
 		if _, err := w.Append(payload); err != nil {
 			b.Fatalf("Append: %v", err)
@@ -46,6 +51,7 @@ func BenchmarkWAL_Append_Large(b *testing.B) {
 
 	b.ReportAllocs()
 	b.SetBytes(int64(len(payload)))
+
 	for b.Loop() {
 		if _, err := w.Append(payload); err != nil {
 			b.Fatalf("Append: %v", err)
@@ -66,6 +72,7 @@ func BenchmarkWAL_AppendWithSegmentRoll(b *testing.B) {
 
 	b.ReportAllocs()
 	b.SetBytes(int64(len(payload)))
+
 	for b.Loop() {
 		if _, err := w.Append(payload); err != nil {
 			b.Fatalf("Append: %v", err)
@@ -85,6 +92,7 @@ func BenchmarkWAL_Ack(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Append setup: %v", err)
 		}
+
 		offsets = append(offsets, off)
 	}
 
@@ -103,10 +111,13 @@ func BenchmarkWAL_Ack(b *testing.B) {
 // segment files (tb.TempDir for the seed, reused dir for the Open loop),
 // so the benchmark reflects the readSegment + CRC verification path.
 func BenchmarkWAL_OpenRecover(b *testing.B) {
-	const records = 1024
-	const payloadSize = 128
+	const (
+		records     = 1024
+		payloadSize = 128
+	)
 
 	dir := filepath.Join(b.TempDir(), "wal")
+
 	w, _, err := Open(dir,
 		WithMaxSegmentBytes(DefaultMaxSegmentBytes),
 		WithFsyncInterval(time.Hour),
@@ -114,12 +125,14 @@ func BenchmarkWAL_OpenRecover(b *testing.B) {
 	if err != nil {
 		b.Fatalf("seed Open: %v", err)
 	}
+
 	payload := make([]byte, payloadSize)
 	for range records {
 		if _, err := w.Append(payload); err != nil {
 			b.Fatalf("seed Append: %v", err)
 		}
 	}
+
 	if err := w.Close(); err != nil {
 		b.Fatalf("seed Close: %v", err)
 	}
@@ -127,14 +140,17 @@ func BenchmarkWAL_OpenRecover(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
+
 	for b.Loop() {
 		w2, recovered, err := Open(dir, WithFsyncInterval(time.Hour))
 		if err != nil {
 			b.Fatalf("Open: %v", err)
 		}
+
 		if len(recovered) != records {
 			b.Fatalf("recovered %d, want %d", len(recovered), records)
 		}
+
 		if err := w2.Close(); err != nil {
 			b.Fatalf("Close: %v", err)
 		}
@@ -167,10 +183,12 @@ func BenchmarkWAL_AppendSync(b *testing.B) {
 
 	b.ReportAllocs()
 	b.SetBytes(int64(len(payload)))
+
 	for b.Loop() {
 		if _, err := w.Append(payload); err != nil {
 			b.Fatalf("Append: %v", err)
 		}
+
 		if err := w.Sync(); err != nil {
 			b.Fatalf("Sync: %v", err)
 		}
@@ -182,19 +200,23 @@ func BenchmarkWAL_AppendSync(b *testing.B) {
 // so fully acknowledged sealed segments keep getting deleted.
 func BenchmarkWAL_AppendAckCycle(b *testing.B) {
 	const payloadSize = 128
+
 	segBytes := int64(recordHeaderSize+payloadSize) * 64
 	w := newBenchWAL(b, WithMaxSegmentBytes(segBytes))
 	payload := make([]byte, payloadSize)
 
 	b.ReportAllocs()
 	b.SetBytes(payloadSize)
+
 	for b.Loop() {
 		off, err := w.Append(payload)
 		if err != nil {
 			b.Fatalf("Append: %v", err)
 		}
+
 		w.Ack(off)
 	}
+
 	if st := w.Stats(); st.Pending != 0 {
 		b.Fatalf("pending = %d, want 0", st.Pending)
 	}
@@ -203,6 +225,7 @@ func BenchmarkWAL_AppendAckCycle(b *testing.B) {
 // BenchmarkWAL_Stats measures the metrics snapshot polled by exporters.
 func BenchmarkWAL_Stats(b *testing.B) {
 	w := newBenchWAL(b)
+
 	payload := make([]byte, 64)
 	for range 1024 {
 		if _, err := w.Append(payload); err != nil {
@@ -211,6 +234,7 @@ func BenchmarkWAL_Stats(b *testing.B) {
 	}
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if w.Stats().Pending == 0 {
 			b.Fatal("no pending records")

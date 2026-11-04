@@ -25,10 +25,12 @@ func TestNewHex(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, raw, n)
 	}
+
 	require.Empty(t, id.NewHex(0))
 	require.Panics(t, func() { id.NewHex(-1) })
 
 	seen := make(map[string]struct{}, 1000)
+
 	for range 1000 {
 		v := id.NewHex(16)
 		_, dup := seen[v]

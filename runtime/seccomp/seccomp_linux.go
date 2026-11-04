@@ -11,9 +11,9 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/altessa-s/go-atlas-core/runtime/nonewprivs"
-
 	"golang.org/x/sys/unix"
+
+	"github.com/altessa-s/go-atlas-core/runtime/nonewprivs"
 )
 
 // dangerousSyscalls is the fixed denylist installed by
@@ -150,10 +150,12 @@ const (
 // layout and offset arithmetic.
 func buildFilter() []unix.SockFilter {
 	n := uint8(len(dangerousSyscalls))
+
 	var x uint8
 	if rejectX32 {
 		x = x32GuardLen
 	}
+
 	prog := make([]unix.SockFilter, 0, int(n)+6+int(x))
 
 	// pos 0: LD [arch]
@@ -268,6 +270,7 @@ func install() (retErr error) {
 	// sequence. nonewprivs.Set and seccomp(SET_MODE_FILTER) must execute
 	// on the same thread or the kernel rejects the filter.
 	runtime.LockOSThread()
+
 	defer func() {
 		// On success the filter is TSYNC'd to every thread, so the
 		// pin is no longer needed and we release it. On failure we
@@ -299,6 +302,7 @@ func install() (retErr error) {
 	if errno != 0 {
 		return fmt.Errorf("%w: seccomp(SET_MODE_FILTER): %w", ErrFailed, errno)
 	}
+
 	if r1 != 0 {
 		// TSYNC failure: the kernel returns the TID of the peer
 		// thread that could not be synchronized. No errno is set.
@@ -307,5 +311,6 @@ func install() (retErr error) {
 			ErrFailed, r1,
 		)
 	}
+
 	return nil
 }

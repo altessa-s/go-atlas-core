@@ -25,6 +25,7 @@ func TestSharedAndForget(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		g := singleflight.New[string, int]()
 		release := make(chan struct{})
+
 		var wg sync.WaitGroup
 		for range 2 {
 			wg.Go(func() {
@@ -35,8 +36,11 @@ func TestSharedAndForget(t *testing.T) {
 			})
 			synctest.Wait()
 		}
+
 		g.Forget("k")
+
 		nextRelease := make(chan struct{})
+
 		wg.Go(func() {
 			_, _ = g.Do(t.Context(), "k", func(context.Context) (int, error) { <-nextRelease; return 2, nil })
 		})
@@ -67,12 +71,18 @@ func TestLifecycleWaiters(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		parent, stop := context.WithCancel(t.Context())
 		defer stop()
+
 		g := singleflight.New[string, int](singleflight.WithLifecycle(parent))
 		first, cancelFirst := context.WithCancel(t.Context())
 		second, cancelSecond := context.WithCancel(t.Context())
-		var work context.Context
-		var wg sync.WaitGroup
+
+		var (
+			work context.Context
+			wg   sync.WaitGroup
+		)
+
 		fn := func(ctx context.Context) (int, error) { work = ctx; <-ctx.Done(); return 0, ctx.Err() }
+
 		wg.Go(func() { _, _ = g.Do(first, "k", fn) })
 		synctest.Wait()
 		wg.Go(func() { _, _ = g.Do(second, "k", fn) })
@@ -84,11 +94,13 @@ func TestLifecycleWaiters(t *testing.T) {
 		synctest.Wait()
 		require.ErrorIs(t, work.Err(), context.Canceled)
 		wg.Wait()
+
 		v, shared, err := g.DoShared(t.Context(), "k", func(context.Context) (int, error) { return 9, nil })
 		require.NoError(t, err)
 		require.False(t, shared)
 		require.Equal(t, 9, v)
 		stop()
+
 		_, err = g.Do(t.Context(), "parent", fn)
 		require.ErrorIs(t, err, context.Canceled)
 		g.Close()
@@ -99,6 +111,7 @@ func TestLifecycleWaiters(t *testing.T) {
 func TestPanicAsError(t *testing.T) {
 	t.Parallel()
 	testhelpers.VerifyNoLeaks(t)
+
 	want := errors.New("redacted panic")
 	g := singleflight.New[string, int](singleflight.WithPanicAsError(want))
 	v, shared, err := g.DoShared(t.Context(), "k", func(context.Context) (int, error) { panic("secret") })
@@ -115,20 +128,27 @@ func TestForgottenWorkHoldsCapacity(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		g := singleflight.New[string, int](singleflight.WithMaxConcurrent(1))
 		release := make(chan struct{})
+
 		go func() { _, _ = g.Do(t.Context(), "k", func(context.Context) (int, error) { <-release; return 0, nil }) }()
+
 		synctest.Wait()
 		g.Forget("k")
 		_, err := g.Do(t.Context(), "k", func(context.Context) (int, error) { panic("over capacity") })
 		require.ErrorIs(t, err, singleflight.ErrOverloaded)
 		g.Close()
+
 		waited := make(chan struct{})
+
 		go func() { g.Wait(); close(waited) }()
+
 		synctest.Wait()
+
 		select {
 		case <-waited:
 			t.Fatal("Wait ignored forgotten work")
 		default:
 		}
+
 		close(release)
 		<-waited
 	})
@@ -140,8 +160,10 @@ func TestLifecycleParentCancelsActiveWork(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		parent, cancel := context.WithCancel(t.Context())
 		defer cancel()
+
 		g := singleflight.New[string, int](singleflight.WithLifecycle(parent))
 		result := make(chan error, 1)
+
 		go func() {
 			_, err := g.Do(t.Context(), "k", func(work context.Context) (int, error) {
 				<-work.Done()
@@ -149,6 +171,7 @@ func TestLifecycleParentCancelsActiveWork(t *testing.T) {
 			})
 			result <- err
 		}()
+
 		synctest.Wait()
 		g.Close()
 		cancel()
@@ -159,6 +182,7 @@ func TestLifecycleParentCancelsActiveWork(t *testing.T) {
 
 func TestPanicPolicyWithJoinedWaiters(t *testing.T) {
 	t.Parallel()
+
 	want := errors.New("redacted panic")
 	for _, tc := range []struct {
 		name      string
@@ -178,40 +202,53 @@ func TestPanicPolicyWithJoinedWaiters(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				g := singleflight.New[string, int](singleflight.WithPanicAsError(tc.option))
 				release := make(chan struct{})
+
 				type result struct {
 					value      int
 					shared     bool
 					err        error
 					panicValue any
 				}
+
 				results := make(chan result, 2)
+
 				var executions atomic.Int64
+
 				fn := func(context.Context) (int, error) {
 					executions.Add(1)
 					<-release
+
 					if tc.goexit {
 						runtime.Goexit()
 					}
+
 					panic("secret")
 				}
+
 				for range 2 {
 					go func() {
 						var r result
 						defer func() { r.panicValue = recover(); results <- r }()
+
 						r.value, r.shared, r.err = g.DoShared(t.Context(), "k", fn)
 					}()
+
 					synctest.Wait()
 				}
+
 				close(release)
+
 				for range 2 {
 					r := <-results
 					require.Zero(t, r.value)
 					require.Equal(t, tc.wantPanic, r.panicValue)
+
 					if tc.wantPanic == nil {
 						require.True(t, r.shared)
 						require.Same(t, tc.wantErr, r.err)
 					}
 				}
+
 				g.Close()
 				g.Wait()
 				require.Equal(t, int64(1), executions.Load())
@@ -222,49 +259,64 @@ func TestPanicPolicyWithJoinedWaiters(t *testing.T) {
 
 func TestConcurrentForgetAndClose(t *testing.T) {
 	t.Parallel()
+
 	for _, lifecycle := range []bool{false, true} {
 		name := "default"
 		if lifecycle {
 			name = "lifecycle"
 		}
+
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			testhelpers.VerifyNoLeaks(t)
+
 			for range 20 {
 				var opts []singleflight.Option
 				if lifecycle {
 					opts = append(opts, singleflight.WithLifecycle(t.Context()))
 				}
+
 				g := singleflight.New[int, int](opts...)
+
 				var started, finished atomic.Int64
+
 				fn := func(context.Context) (int, error) {
 					started.Add(1)
 					runtime.Gosched()
 					finished.Add(1)
+
 					return 7, nil
 				}
 				// Keep one forgotten execution alive across Close to exercise Wait's drain.
 				entered, release, firstDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
 				go func() {
 					defer close(firstDone)
+
 					_, _, _ = g.DoShared(t.Context(), -1, func(ctx context.Context) (int, error) {
 						close(entered)
 						<-release
+
 						return fn(ctx)
 					})
 				}()
+
 				<-entered
 				g.Forget(-1)
+
 				var wg sync.WaitGroup
+
 				start := make(chan struct{})
+
 				for worker := range 12 {
 					wg.Go(func() {
 						<-start
+
 						for i := range 100 {
 							key := (worker + i) % 4
 							if i%3 == 0 {
 								g.Forget(key)
 							}
+
 							v, _, err := g.DoShared(t.Context(), key, fn)
 							if err == nil {
 								if v != 7 {
@@ -273,12 +325,14 @@ func TestConcurrentForgetAndClose(t *testing.T) {
 							} else if !errors.Is(err, singleflight.ErrClosed) {
 								t.Errorf("DoShared = %v", err)
 							}
+
 							if worker == 0 && i == 50 {
 								g.Close()
 							}
 						}
 					})
 				}
+
 				close(start)
 				wg.Wait()
 				g.Close()
@@ -298,46 +352,60 @@ func TestConcurrentForgetAndClose(t *testing.T) {
 // concurrent callers: Wait must close admission before touching the WaitGroup.
 func TestWaitClosesWhileCallsArrive(t *testing.T) {
 	t.Parallel()
+
 	for _, active := range []bool{false, true} {
 		name := "empty"
 		if active {
 			name = "active"
 		}
+
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			testhelpers.VerifyNoLeaks(t)
+
 			for range 20 {
 				g := singleflight.New[int, int]()
+
 				var started, finished, rejected atomic.Int64
+
 				fn := func(context.Context) (int, error) {
 					started.Add(1)
 					runtime.Gosched()
 					finished.Add(1)
+
 					return 1, nil
 				}
 				entered, release, firstDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
+
 				if active {
 					go func() {
 						defer close(firstDone)
+
 						_, _ = g.Do(t.Context(), -1, func(ctx context.Context) (int, error) {
 							close(entered)
 							<-release
+
 							return fn(ctx)
 						})
 					}()
+
 					<-entered
 				}
+
 				start := make(chan struct{})
+
 				var callers sync.WaitGroup
 				for key := range 16 {
 					callers.Go(func() {
 						<-start
+
 						for {
 							v, err := g.Do(t.Context(), key, fn)
 							if errors.Is(err, singleflight.ErrClosed) {
 								rejected.Add(1)
 								return
 							}
+
 							if err != nil || v != 1 {
 								t.Errorf("Do = (%d, %v)", v, err)
 								return
@@ -345,24 +413,32 @@ func TestWaitClosesWhileCallsArrive(t *testing.T) {
 						}
 					})
 				}
+
 				var waiters sync.WaitGroup
+
 				waited := make(chan struct{})
+
 				for range 2 {
 					waiters.Go(func() { <-start; g.Wait() })
 				}
+
 				go func() { waiters.Wait(); close(waited) }()
+
 				close(start)
 				callers.Wait()
 				require.Equal(t, int64(16), rejected.Load())
+
 				if active {
 					select {
 					case <-waited:
 						t.Fatal("Wait returned before active work finished")
 					default:
 					}
+
 					close(release)
 					<-firstDone
 				}
+
 				<-waited
 				require.Equal(t, started.Load(), finished.Load())
 				_, err := g.Do(t.Context(), 0, fn)

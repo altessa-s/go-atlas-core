@@ -14,6 +14,7 @@ import (
 
 func TestRequireNotNil(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		value     any
@@ -67,6 +68,7 @@ func TestRequireNotNil(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			err := RequireNotNil(tt.value, tt.fieldName)
 
 			if tt.wantErr {
@@ -129,6 +131,7 @@ func TestChecker(t *testing.T) {
 
 	t.Run("handles nil interface with nil underlying value", func(t *testing.T) {
 		var nilPtr *string
+
 		nc := NewChecker("TestFactory").
 			Check(nilPtr, "pointer")
 

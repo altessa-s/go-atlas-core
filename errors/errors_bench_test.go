@@ -19,7 +19,9 @@ import (
 // path.
 func BenchmarkProvider(b *testing.B) {
 	cause := std_errors.New("connection refused")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = errors.Provider("Redis", cause)
 	}
@@ -29,6 +31,7 @@ func BenchmarkProvider(b *testing.B) {
 // near-zero cost and allocation-free.
 func BenchmarkProvider_NilFastPath(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = errors.Provider("Redis", nil)
 	}
@@ -38,7 +41,9 @@ func BenchmarkProvider_NilFastPath(b *testing.B) {
 // path.
 func BenchmarkWrap(b *testing.B) {
 	cause := std_errors.New("connection refused")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = errors.Wrap(cause, "dial upstream")
 	}
@@ -47,7 +52,9 @@ func BenchmarkWrap(b *testing.B) {
 // BenchmarkWrapf measures the formatted wrap, which goes through fmt.
 func BenchmarkWrapf(b *testing.B) {
 	cause := std_errors.New("connection refused")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = errors.Wrapf(cause, "dial %s:%d", "db.internal", 5432)
 	}
@@ -56,7 +63,9 @@ func BenchmarkWrapf(b *testing.B) {
 // BenchmarkWrapOperation measures the structured "failed to X" wrap.
 func BenchmarkWrapOperation(b *testing.B) {
 	cause := std_errors.New("connection refused")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = errors.WrapOperation(cause, "load config")
 	}
@@ -65,7 +74,9 @@ func BenchmarkWrapOperation(b *testing.B) {
 // BenchmarkWrapField measures wrapping a validation error with a field name.
 func BenchmarkWrapField(b *testing.B) {
 	cause := std_errors.New("must not be empty")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = errors.WrapField(cause, "base_url")
 	}
@@ -75,7 +86,9 @@ func BenchmarkWrapField(b *testing.B) {
 // matching the sentinel, the pattern callers use to classify errors.
 func BenchmarkJoinWrap(b *testing.B) {
 	cause := std_errors.New("no rows")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		err := errors.JoinWrap(errors.ErrNotFound, cause)
 		if !std_errors.Is(err, errors.ErrNotFound) {
@@ -92,9 +105,12 @@ func BenchmarkIsContextCanceledOrDeadlineExceeded(b *testing.B) {
 		for i := range depth {
 			err = errors.Wrapf(err, "layer %d", i)
 		}
+
 		miss := errors.Wrap(std_errors.New("boom"), "layer")
+
 		b.Run(fmt.Sprintf("hit/depth=%d", depth), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if !errors.IsContextCanceledOrDeadlineExceeded(err) {
 					b.Fatal("context error not matched")
@@ -103,6 +119,7 @@ func BenchmarkIsContextCanceledOrDeadlineExceeded(b *testing.B) {
 		})
 		b.Run(fmt.Sprintf("miss/depth=%d", depth), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if errors.IsContextCanceledOrDeadlineExceeded(miss) {
 					b.Fatal("unexpected match")

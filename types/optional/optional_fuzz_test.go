@@ -96,6 +96,7 @@ func FuzzJSONCodecsMatchLegacy(f *testing.F) {
 		require.Equal(t, string(ref1), string(got1), "v1 output changed")
 
 		got2, err2 := jsonv2.Marshal(o)
+
 		ref2, refErr2 := jsonv2.Marshal(legacy[string]{o})
 		if utf8.ValidString(v) || !present {
 			require.Equal(t, refErr2 == nil, err2 == nil)

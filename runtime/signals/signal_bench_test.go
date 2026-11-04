@@ -20,6 +20,7 @@ func BenchmarkNew(b *testing.B) {
 	for b.Loop() {
 		sink = signals.New()
 	}
+
 	_ = sink
 }
 

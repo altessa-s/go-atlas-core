@@ -7,6 +7,9 @@ package rlimits
 type Option func(o *options)
 
 // WithDisableCoreDumps enables the disableCoreDumps option.
+//
+// disableCoreDumps pins RLIMIT_CORE to 0 so the process cannot leak
+// memory contents (including secrets) via a post-crash core dump.
 func WithDisableCoreDumps() Option {
 	return func(o *options) {
 		value := true
@@ -15,6 +18,8 @@ func WithDisableCoreDumps() Option {
 }
 
 // WithMaxFileSizeBytes sets the maxFileSizeBytes option.
+//
+// maxFileSizeBytes caps RLIMIT_FSIZE. 0 = unset.
 func WithMaxFileSizeBytes(v int64) Option {
 	return func(o *options) {
 		o.maxFileSizeBytes = v
@@ -22,6 +27,8 @@ func WithMaxFileSizeBytes(v int64) Option {
 }
 
 // WithMaxOpenFiles sets the maxOpenFiles option.
+//
+// maxOpenFiles caps RLIMIT_NOFILE. 0 = unset.
 func WithMaxOpenFiles(v int64) Option {
 	return func(o *options) {
 		o.maxOpenFiles = v
@@ -29,6 +36,8 @@ func WithMaxOpenFiles(v int64) Option {
 }
 
 // WithMaxProcesses sets the maxProcesses option.
+//
+// maxProcesses caps RLIMIT_NPROC (processes per real UID). 0 = unset.
 func WithMaxProcesses(v int64) Option {
 	return func(o *options) {
 		o.maxProcesses = v
@@ -36,6 +45,8 @@ func WithMaxProcesses(v int64) Option {
 }
 
 // WithMemoryBytes sets the memoryBytes option.
+//
+// memoryBytes caps RLIMIT_AS (virtual address space). 0 = unset.
 func WithMemoryBytes(v int64) Option {
 	return func(o *options) {
 		o.memoryBytes = v

@@ -66,10 +66,12 @@ func FromFlatMapWithHandler(in map[string]any, onConflict ConflictHandler) map[s
 	}
 
 	out := make(map[string]any)
+
 nextKey:
 	for _, key := range slices.Sorted(maps.Keys(in)) {
 		value := in[key]
 		current := out
+
 		remaining := key
 		for {
 			dotIdx := strings.IndexByte(remaining, '.')
@@ -78,7 +80,9 @@ nextKey:
 				if nested, ok := value.(map[string]any); ok {
 					value = deepCopyMap(nested)
 				}
+
 				current[remaining] = value
+
 				break
 			}
 
@@ -86,8 +90,10 @@ nextKey:
 			remaining = remaining[dotIdx+1:]
 
 			var next map[string]any
+
 			if existing, exists := current[segment]; exists {
 				var ok bool
+
 				next, ok = existing.(map[string]any)
 				if !ok {
 					// Type conflict
@@ -101,6 +107,7 @@ nextKey:
 				next = make(map[string]any)
 				current[segment] = next
 			}
+
 			current = next
 		}
 	}
@@ -137,6 +144,7 @@ func ToFlatMap(in map[string]any, keyMapper func(key string) string) map[string]
 
 	out := make(map[string]any)
 	flattenNested(in, out, "", keyMapper)
+
 	return out
 }
 

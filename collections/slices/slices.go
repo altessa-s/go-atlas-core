@@ -55,6 +55,7 @@ func Delete[T comparable](collection []T, el T) []T {
 	if idx > -1 {
 		return slices.Delete(collection, idx, idx+1)
 	}
+
 	return collection
 }
 
@@ -74,6 +75,7 @@ func ToList[T any](collection []T) *list.List {
 	for _, value := range collection {
 		l.PushBack(value)
 	}
+
 	return l
 }
 
@@ -99,6 +101,7 @@ func FromList[T any](l *list.List) []T {
 			collection = append(collection, v)
 		}
 	}
+
 	return collection
 }
 
@@ -119,6 +122,7 @@ func ToAny[T ~[]E, E any](collection T) []any {
 	for i, value := range collection {
 		result[i] = value
 	}
+
 	return result
 }
 
@@ -139,6 +143,7 @@ func To[T ~[]E, E any, V any](collection T, fn func(E) V) []V {
 	for i, value := range collection {
 		result[i] = fn(value)
 	}
+
 	return result
 }
 
@@ -165,6 +170,7 @@ func ToStrings(collection []any) []string {
 	if len(result) == 0 {
 		return nil
 	}
+
 	return result
 }
 
@@ -181,6 +187,7 @@ func FilterParallel[T any](collection []T, predicate func(T) bool) []T {
 	}
 
 	const batchSize = 32
+
 	cores := runtime.NumCPU()
 
 	if len(collection) < batchSize*cores*2 {
@@ -195,18 +202,23 @@ func FilterParallel[T any](collection []T, predicate func(T) bool) []T {
 	parts := make([][]T, (len(collection)+chunkLen-1)/chunkLen)
 
 	var wg sync.WaitGroup
+
 	for i := range parts {
 		chunk := collection[i*chunkLen : min((i+1)*chunkLen, len(collection))]
+
 		wg.Go(func() {
 			var kept []T
+
 			for _, v := range chunk {
 				if predicate(v) {
 					kept = append(kept, v)
 				}
 			}
+
 			parts[i] = kept
 		})
 	}
+
 	wg.Wait()
 
 	return slices.Concat(parts...)
@@ -230,6 +242,7 @@ func FilterFirst[T any](collection []T, predicate func(T) bool) (T, bool) {
 	}
 
 	var t T
+
 	return t, false
 }
 
@@ -251,6 +264,7 @@ func FilterLast[T any](collection []T, predicate func(T) bool) (T, bool) {
 	}
 
 	var t T
+
 	return t, false
 }
 
@@ -268,6 +282,7 @@ func Reduce[T ~[]E, E any, R any](collection T, initial R, fn func(accum R, idx 
 	for i, value := range collection {
 		accum = fn(accum, i, value)
 	}
+
 	return accum
 }
 
@@ -293,6 +308,7 @@ func MapParallel[T ~[]E, E any, O []OE, OE any](collection T, fn func(val E) OE)
 
 	// Process in batches for better performance
 	const batchSize = 32
+
 	cores := runtime.NumCPU()
 
 	if len(collection) < batchSize*cores*2 {
@@ -300,6 +316,7 @@ func MapParallel[T ~[]E, E any, O []OE, OE any](collection T, fn func(val E) OE)
 		for i := range len(collection) {
 			out[i] = fn(collection[i])
 		}
+
 		return out
 	}
 
@@ -309,10 +326,12 @@ func MapParallel[T ~[]E, E any, O []OE, OE any](collection T, fn func(val E) OE)
 	// channel is used — routing the chunks through one measured 13-95% slower
 	// (sizes 1e5 down to 1e3) with 8 more allocations per call.
 	var wg sync.WaitGroup
+
 	chunkSize := len(collection) / cores
 
 	for i := range cores {
 		start := i * chunkSize
+
 		end := start + chunkSize
 		if i == cores-1 {
 			end = len(collection)
@@ -326,6 +345,7 @@ func MapParallel[T ~[]E, E any, O []OE, OE any](collection T, fn func(val E) OE)
 	}
 
 	wg.Wait()
+
 	return out
 }
 
@@ -349,6 +369,7 @@ func ToWithFilter[T ~[]E, E any, O []OE, OE any](collection T, predicate func(E)
 	}
 
 	var out O
+
 	for _, value := range collection {
 		if predicate(value) {
 			out = append(out, fn(value))
@@ -358,6 +379,7 @@ func ToWithFilter[T ~[]E, E any, O []OE, OE any](collection T, predicate func(E)
 	if len(out) == 0 {
 		return nil
 	}
+
 	return out
 }
 
@@ -383,6 +405,7 @@ func GroupBy[T any, K comparable](collection []T, keyFn func(T) K) map[K][]T {
 
 	// Use load factor for initial map size
 	const loadFactor = 0.75
+
 	initialSize := max(int(float64(len(collection))*loadFactor), minMapCapacity)
 
 	groups := make(map[K][]T, initialSize)
@@ -414,6 +437,7 @@ func All[T any](collection []T, predicate func(T) bool) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -451,11 +475,14 @@ func DeduplicateBy[T any, K comparable](collection []T, keyFn func(T) K) []T {
 
 	// Copy-on-write optimization
 	var result []T
+
 	foundDuplicate := false
 
 	// Cache for last seen key to optimize consecutive duplicates
-	var lastKey K
-	var hasLastKey bool
+	var (
+		lastKey    K
+		hasLastKey bool
+	)
 
 	for i := range collection {
 		key := keyFn(collection[i])
@@ -471,6 +498,7 @@ func DeduplicateBy[T any, K comparable](collection []T, keyFn func(T) K) []T {
 					result = append(result, collection[j])
 				}
 			}
+
 			continue
 		}
 
@@ -486,6 +514,7 @@ func DeduplicateBy[T any, K comparable](collection []T, keyFn func(T) K) []T {
 			}
 		} else {
 			seen[key] = struct{}{}
+
 			if foundDuplicate {
 				result = append(result, collection[i])
 			}
@@ -522,6 +551,7 @@ func IsStrictlyIncreasing[T cmp.Ordered](collection []T) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -541,6 +571,7 @@ func IsStrictlyDecreasing[T cmp.Ordered](collection []T) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -561,6 +592,7 @@ func IsNonDecreasing[T cmp.Ordered](collection []T) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -581,6 +613,7 @@ func IsNonIncreasing[T cmp.Ordered](collection []T) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -597,6 +630,7 @@ func AppendIf[T any](slice []T, cond bool, values ...T) []T {
 	if !cond {
 		return slice
 	}
+
 	return append(slice, values...)
 }
 
@@ -614,6 +648,7 @@ func AppendIfFunc[T any](slice []T, cond bool, fn func() []T) []T {
 	if !cond {
 		return slice
 	}
+
 	return append(slice, fn()...)
 }
 
@@ -632,6 +667,7 @@ func AppendNonEmpty(slice []any, key, value string) []any {
 	if value == "" {
 		return slice
 	}
+
 	return append(slice, key, value)
 }
 
@@ -642,6 +678,7 @@ func AppendNonNil[T any](slice []T, value T) []T {
 	if nilcheck.IsNil(value) {
 		return slice
 	}
+
 	return append(slice, value)
 }
 

@@ -22,6 +22,7 @@ func FileExists(name string) bool {
 	if err != nil {
 		return false
 	}
+
 	return !info.IsDir()
 }
 
@@ -63,6 +64,7 @@ func DirIsEmpty(name string) (bool, error) {
 	if errors.Is(err, io.EOF) {
 		return true, nil
 	}
+
 	return false, err // Either not empty or error, suits both cases
 }
 
@@ -83,10 +85,12 @@ func FindFile(filePath string, baseSearchPaths []string) string {
 		if err == nil {
 			return filePath
 		}
+
 		return ""
 	}
 
 	var searchPaths []string
+
 	if dir := CurrentExecutableDir(); dir != "" {
 		for _, baseSearchPath := range baseSearchPaths {
 			if !filepath.IsAbs(baseSearchPath) {
@@ -94,21 +98,26 @@ func FindFile(filePath string, baseSearchPaths []string) string {
 					searchPaths,
 					filepath.Join(dir, baseSearchPath),
 				)
+
 				continue
 			}
+
 			searchPaths = append(searchPaths, baseSearchPath)
 		}
 	}
+
 	for _, parent := range searchPaths {
 		found, err := filepath.Abs(filepath.Join(parent, filePath))
 		if err != nil {
 			continue
 		}
+
 		fileInfo, err := os.Stat(found)
 		if err == nil && !fileInfo.IsDir() {
 			return found
 		}
 	}
+
 	return ""
 }
 

@@ -46,10 +46,12 @@ func TestTrimPrefixFast(t *testing.T) {
 
 func TestSplitSeq(t *testing.T) {
 	opts := corestrings.SplitOptions{Separator: ",", TrimSpace: true, SkipEmpty: true}
+
 	var result []string
 	for v := range corestrings.SplitSeq("a, b, , c", opts) {
 		result = append(result, v)
 	}
+
 	want := []string{"a", "b", "c"}
 	require.Equal(t, want, result)
 }

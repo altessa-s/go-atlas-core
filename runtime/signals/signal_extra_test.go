@@ -34,6 +34,7 @@ const pollInterval = 5 * time.Millisecond
 
 func TestSignal_AddHandler_Start_Stop(t *testing.T) {
 	testhelpers.VerifyNoLeaks(t)
+
 	var called atomic.Bool
 
 	s := signals.New(
@@ -61,8 +62,11 @@ func TestSignal_AddHandlerWithPriority(t *testing.T) {
 	testhelpers.VerifyNoLeaks(t)
 	// order is written by the handlers and read only after Stop, which waits
 	// for them; ran tells the test when both have run.
-	var order []int
-	var ran atomic.Int32
+	var (
+		order []int
+		ran   atomic.Int32
+	)
+
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR2),
 		signals.WithExecutionMode(signals.SequentialMode),
@@ -71,13 +75,17 @@ func TestSignal_AddHandlerWithPriority(t *testing.T) {
 
 	s.AddHandlerWithPriority(func(_ context.Context, _ os.Signal) error {
 		order = append(order, 2)
+
 		ran.Add(1)
+
 		return nil
 	}, signals.PriorityLow, syscall.SIGUSR2)
 
 	s.AddHandlerWithPriority(func(_ context.Context, _ os.Signal) error {
 		order = append(order, 1)
+
 		ran.Add(1)
+
 		return nil
 	}, signals.PriorityHigh, syscall.SIGUSR2)
 
@@ -96,7 +104,9 @@ func TestSignal_AddHandlerWithPriority(t *testing.T) {
 
 func TestSignal_BroadcastHandler(t *testing.T) {
 	testhelpers.VerifyNoLeaks(t)
+
 	var called atomic.Bool
+
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR1),
 		signals.WithHandlerTimeout(2*time.Second),
@@ -146,13 +156,16 @@ func TestSignal_ShutdownNilContext_KeepsHandlerStoppable(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
+
 	require.NoError(t, s.Shutdown(ctx))
 
 	waited := make(chan struct{})
+
 	go func() {
 		s.Wait()
 		close(waited)
 	}()
+
 	require.Eventually(t, func() bool {
 		select {
 		case <-waited:
@@ -165,6 +178,7 @@ func TestSignal_ShutdownNilContext_KeepsHandlerStoppable(t *testing.T) {
 
 func TestSignal_ParallelMode(t *testing.T) {
 	testhelpers.VerifyNoLeaks(t)
+
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR1),
 		signals.WithExecutionMode(signals.ParallelMode),
@@ -173,6 +187,7 @@ func TestSignal_ParallelMode(t *testing.T) {
 	)
 
 	var count atomic.Int32
+
 	for range 3 {
 		s.AddHandler(func(_ context.Context, _ os.Signal) error {
 			count.Add(1)
@@ -192,7 +207,9 @@ func TestSignal_ParallelMode(t *testing.T) {
 
 func TestSignal_ErrorHandler(t *testing.T) {
 	testhelpers.VerifyNoLeaks(t)
+
 	var errCalled atomic.Bool
+
 	s := signals.New(
 		signals.WithSignals(syscall.SIGUSR1),
 		signals.WithHandlerTimeout(50*time.Millisecond),

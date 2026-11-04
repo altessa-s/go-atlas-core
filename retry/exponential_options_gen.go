@@ -11,6 +11,9 @@ import (
 type ExponentialOption func(o *exponentialOptions)
 
 // WithExponentialFactor sets the factor option.
+//
+// factor is the multiplier applied per attempt
+// (delay = baseDelay * factor^attempt). Zero means [DefaultExponentialFactor].
 func WithExponentialFactor(v float64) ExponentialOption {
 	return func(o *exponentialOptions) {
 		o.factor = v
@@ -18,6 +21,10 @@ func WithExponentialFactor(v float64) ExponentialOption {
 }
 
 // WithExponentialJitter sets the jitter option.
+//
+// jitter is the maximum fraction of the computed delay added as random
+// jitter (0.0–1.0); values above 1.0 are clamped to 1.0. Zero (the
+// default) gives deterministic delays.
 func WithExponentialJitter(v float64) ExponentialOption {
 	return func(o *exponentialOptions) {
 		o.jitter = v
@@ -25,6 +32,9 @@ func WithExponentialJitter(v float64) ExponentialOption {
 }
 
 // WithExponentialMaxDelay sets the maxDelay option.
+//
+// maxDelay caps the computed delay. A zero or negative value leaves the
+// delay unbounded.
 func WithExponentialMaxDelay(v time.Duration) ExponentialOption {
 	return func(o *exponentialOptions) {
 		if v <= 0 {

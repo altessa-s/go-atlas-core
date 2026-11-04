@@ -32,6 +32,7 @@ func BenchmarkHash(b *testing.B) {
 
 func BenchmarkHashString(b *testing.B) {
 	g := etag.NewGenerator()
+
 	s := strings.Repeat("a", 1024)
 	for b.Loop() {
 		_ = g.HashString(s)
@@ -41,6 +42,7 @@ func BenchmarkHashString(b *testing.B) {
 func BenchmarkHashReader(b *testing.B) {
 	g := etag.NewGenerator()
 	data := bytes.Repeat([]byte("a"), 64<<10)
+
 	r := bytes.NewReader(data)
 	for b.Loop() {
 		r.Reset(data)
@@ -69,7 +71,9 @@ func BenchmarkParseList(b *testing.B) {
 
 func BenchmarkVersion(b *testing.B) {
 	tag := etag.FromVersion(1234567)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_, _ = tag.Version()
 	}
@@ -77,6 +81,7 @@ func BenchmarkVersion(b *testing.B) {
 
 func BenchmarkParseVersion(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_, _ = etag.ParseVersion(`W/"1234567"`)
 	}
@@ -86,7 +91,9 @@ func BenchmarkParseVersion(b *testing.B) {
 // handler runs on its If-Match value.
 func BenchmarkCheckVersion(b *testing.B) {
 	header := etag.FromVersion(1234567).String()
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if err := etag.CheckVersion(header, 1234567); err != nil {
 			b.Fatal(err)
@@ -98,6 +105,7 @@ func BenchmarkCheckVersion(b *testing.B) {
 // parsed If-None-Match list.
 func BenchmarkMatch(b *testing.B) {
 	current := etag.Strong("686d6f3e2c")
+
 	tags, _, err := etag.ParseList(`"aaaa", W/"bbbb", "cccc", W/"686d6f3e2c"`)
 	if err != nil {
 		b.Fatal(err)
@@ -105,11 +113,13 @@ func BenchmarkMatch(b *testing.B) {
 
 	b.Run("Weak", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			matched := false
 			for _, t := range tags {
 				matched = matched || t.WeakMatch(current)
 			}
+
 			if !matched {
 				b.Fatal("weak match not found")
 			}
@@ -117,6 +127,7 @@ func BenchmarkMatch(b *testing.B) {
 	})
 	b.Run("Strong", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			for _, t := range tags {
 				if t.StrongMatch(current) {
@@ -138,6 +149,7 @@ func BenchmarkTagString(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if tc.tag.String() == "" {
 					b.Fatal("empty header value")
@@ -150,6 +162,7 @@ func BenchmarkTagString(b *testing.B) {
 // BenchmarkRandom measures minting a random strong tag.
 func BenchmarkRandom(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if etag.Random().IsZero() {
 			b.Fatal("zero tag")

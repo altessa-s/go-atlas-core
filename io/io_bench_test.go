@@ -37,6 +37,7 @@ func BenchmarkLimitedReadCloser_Read(b *testing.B) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
+
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -49,8 +50,10 @@ func BenchmarkReadAllLimited(b *testing.B) {
 	r := strings.NewReader(payload)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		r.Reset(payload)
+
 		if _, err := coreio.ReadAllLimited(r, int64(len(payload))); err != nil {
 			b.Fatal(err)
 		}
@@ -72,10 +75,12 @@ func BenchmarkRangeReadSeeker_Read(b *testing.B) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
+
 			if err != nil {
 				b.Fatal(err)
 			}
 		}
+
 		rs.Close()
 	}
 }

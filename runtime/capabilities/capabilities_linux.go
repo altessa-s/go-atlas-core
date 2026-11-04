@@ -49,12 +49,14 @@ func setBit(mask uint64, c Cap) uint64 {
 // two-word representation.
 func toData(eff, perm, inh uint64) [capDataLen]unix.CapUserData {
 	var d [capDataLen]unix.CapUserData
+
 	d[0].Effective = uint32(eff)
 	d[1].Effective = uint32(eff >> halfWord)
 	d[0].Permitted = uint32(perm)
 	d[1].Permitted = uint32(perm >> halfWord)
 	d[0].Inheritable = uint32(inh)
 	d[1].Inheritable = uint32(inh >> halfWord)
+
 	return d
 }
 
@@ -64,6 +66,7 @@ func fromData(d [capDataLen]unix.CapUserData) (eff, perm, inh uint64) {
 	eff = uint64(d[0].Effective) | uint64(d[1].Effective)<<halfWord
 	perm = uint64(d[0].Permitted) | uint64(d[1].Permitted)<<halfWord
 	inh = uint64(d[0].Inheritable) | uint64(d[1].Inheritable)<<halfWord
+
 	return eff, perm, inh
 }
 
@@ -72,11 +75,14 @@ func fromData(d [capDataLen]unix.CapUserData) (eff, perm, inh uint64) {
 // separately via prctl — see [readBounding] and [readAmbient].
 func capget() (eff, perm, inh uint64, err error) {
 	hdr := capHeader()
+
 	var data [capDataLen]unix.CapUserData
 	if e := unix.Capget(hdr, &data[0]); e != nil {
 		return 0, 0, 0, fmt.Errorf("%w: capget: %w", ErrFailed, e)
 	}
+
 	eff, perm, inh = fromData(data)
+
 	return eff, perm, inh, nil
 }
 
@@ -84,10 +90,12 @@ func capget() (eff, perm, inh uint64, err error) {
 // three thread-local masks.
 func capset(eff, perm, inh uint64) error {
 	hdr := capHeader()
+
 	data := toData(eff, perm, inh)
 	if err := unix.Capset(hdr, &data[0]); err != nil {
 		return fmt.Errorf("%w: capset: %w", ErrFailed, err)
 	}
+
 	return nil
 }
 
@@ -96,15 +104,18 @@ func capset(eff, perm, inh uint64) error {
 // — there is no syscall that returns it as a mask.
 func readBounding() (uint64, error) {
 	var mask uint64
+
 	for c := Cap(0); c <= capLastCap; c++ {
 		v, err := unix.PrctlRetInt(unix.PR_CAPBSET_READ, uintptr(c), 0, 0, 0)
 		if err != nil {
 			return 0, fmt.Errorf("%w: prctl(PR_CAPBSET_READ, %s): %w", ErrFailed, c, err)
 		}
+
 		if v == 1 {
 			mask = setBit(mask, c)
 		}
 	}
+
 	return mask, nil
 }
 
@@ -112,6 +123,7 @@ func readBounding() (uint64, error) {
 // PR_CAP_AMBIENT_IS_SET. Same rationale as readBounding.
 func readAmbient() (uint64, error) {
 	var mask uint64
+
 	for c := Cap(0); c <= capLastCap; c++ {
 		v, err := unix.PrctlRetInt(
 			unix.PR_CAP_AMBIENT,
@@ -121,10 +133,12 @@ func readAmbient() (uint64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("%w: prctl(PR_CAP_AMBIENT_IS_SET, %s): %w", ErrFailed, c, err)
 		}
+
 		if v == 1 {
 			mask = setBit(mask, c)
 		}
 	}
+
 	return mask, nil
 }
 
@@ -137,14 +151,17 @@ func getSnapshot() (Sets, error) {
 	if err != nil {
 		return Sets{}, err
 	}
+
 	bnd, err := readBounding()
 	if err != nil {
 		return Sets{}, err
 	}
+
 	amb, err := readAmbient()
 	if err != nil {
 		return Sets{}, err
 	}
+
 	return Sets{
 		Effective:   eff,
 		Permitted:   perm,
@@ -205,6 +222,7 @@ func applySnapshot(s Sets) error {
 // the sibling seccomp package.
 func applyTarget(target func(cur Sets) Sets) (retErr error) {
 	runtime.LockOSThread()
+
 	mutated := false
 	defer func() {
 		if retErr == nil || !mutated {
@@ -216,6 +234,7 @@ func applyTarget(target func(cur Sets) Sets) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("applySnapshot: read current state: %w", err)
 	}
+
 	s := target(cur)
 	if err = validateTarget(cur, s); err != nil {
 		return err
@@ -223,6 +242,7 @@ func applyTarget(target func(cur Sets) Sets) (retErr error) {
 
 	lowered, c, err := forEachCap(cur.Ambient&^s.Ambient, ambientLower)
 	mutated = lowered
+
 	if err != nil {
 		return fmt.Errorf(
 			"applySnapshot: step 3 (ambient lower of %s) failed; "+
@@ -235,11 +255,13 @@ func applyTarget(target func(cur Sets) Sets) (retErr error) {
 	// Keep CAP_SETPCAP for the bounding drops; validateTarget has made
 	// sure it is in the current permitted set.
 	toDrop := cur.Bounding &^ s.Bounding
+
 	eff, perm := s.Effective, s.Permitted
 	if toDrop != 0 {
 		eff = setBit(eff, CAP_SETPCAP)
 		perm = setBit(perm, CAP_SETPCAP)
 	}
+
 	if err = capset(eff, perm, s.Inheritable); err != nil {
 		return fmt.Errorf(
 			"applySnapshot: step 4 (capset eff=%#x perm=%#x inh=%#x) failed; "+
@@ -248,6 +270,7 @@ func applyTarget(target func(cur Sets) Sets) (retErr error) {
 			eff, perm, s.Inheritable, err,
 		)
 	}
+
 	mutated = true
 
 	if _, c, err = forEachCap(toDrop, boundingDrop); err != nil {
@@ -261,11 +284,13 @@ func applyTarget(target func(cur Sets) Sets) (retErr error) {
 		if eff == s.Effective && perm == s.Permitted {
 			return dropErr
 		}
+
 		if revertErr := capset(s.Effective, s.Permitted, s.Inheritable); revertErr != nil {
 			return errors.Join(dropErr, fmt.Errorf(
 				"applySnapshot: removing CAP_SETPCAP kept for the bounding drop failed; "+
 					"it is still effective and permitted: %w", revertErr))
 		}
+
 		return dropErr
 	}
 
@@ -290,6 +315,7 @@ func applyTarget(target func(cur Sets) Sets) (retErr error) {
 			c, c, err,
 		)
 	}
+
 	return nil
 }
 
@@ -301,11 +327,14 @@ func forEachCap(mask uint64, op func(Cap) error) (done bool, failed Cap, err err
 		if !has(mask, c) {
 			continue
 		}
+
 		if err := op(c); err != nil {
 			return done, c, err
 		}
+
 		done = true
 	}
+
 	return done, 0, nil
 }
 
@@ -324,18 +353,21 @@ func validateTarget(cur, s Sets) error {
 			ErrInvalidOption, s.Permitted, extra, cur.Permitted,
 		)
 	}
+
 	if extra := s.Effective &^ s.Permitted; extra != 0 {
 		return fmt.Errorf(
 			"%w: effective mask %#x has %#x, which is not in the requested permitted mask %#x",
 			ErrInvalidOption, s.Effective, extra, s.Permitted,
 		)
 	}
+
 	if extra := s.Inheritable &^ (cur.Inheritable | cur.Bounding); extra != 0 {
 		return fmt.Errorf(
 			"%w: inheritable mask %#x adds %#x, which is in neither the current inheritable set %#x nor the bounding set %#x",
 			ErrInvalidOption, s.Inheritable, extra, cur.Inheritable, cur.Bounding,
 		)
 	}
+
 	if !has(cur.Effective, CAP_SETPCAP) {
 		if extra := s.Inheritable &^ (cur.Inheritable | cur.Permitted); extra != 0 {
 			return fmt.Errorf(
@@ -361,6 +393,7 @@ func validateTarget(cur, s Sets) error {
 			ErrInvalidOption, toDrop, cur.Permitted,
 		)
 	}
+
 	return nil
 }
 
@@ -373,14 +406,18 @@ func validateTarget(cur, s Sets) error {
 // error: there is nothing to keep.
 func dropAllExcept(keep []Cap) error {
 	var mask uint64
+
 	for _, c := range keep {
 		if c < 0 || c > capLastCap {
 			return fmt.Errorf("%w: %s is out of range", ErrInvalidOption, c)
 		}
+
 		mask = setBit(mask, c)
 	}
+
 	return applyTarget(func(cur Sets) Sets {
 		perm := cur.Permitted & mask
+
 		return Sets{
 			Effective:   perm,
 			Permitted:   perm,
@@ -399,9 +436,11 @@ func boundingDrop(c Cap) error {
 	if c < 0 || c > capLastCap {
 		return fmt.Errorf("%w: %s is out of range", ErrInvalidOption, c)
 	}
+
 	if err := unix.Prctl(unix.PR_CAPBSET_DROP, uintptr(c), 0, 0, 0); err != nil {
 		return fmt.Errorf("%w: prctl(PR_CAPBSET_DROP, %s): %w", ErrFailed, c, err)
 	}
+
 	return nil
 }
 
@@ -414,6 +453,7 @@ func ambientClearAll() error {
 	); err != nil {
 		return fmt.Errorf("%w: prctl(PR_CAP_AMBIENT_CLEAR_ALL): %w", ErrFailed, err)
 	}
+
 	return nil
 }
 
@@ -422,6 +462,7 @@ func ambientRaise(c Cap) error {
 	if c < 0 || c > capLastCap {
 		return fmt.Errorf("%w: %s is out of range", ErrInvalidOption, c)
 	}
+
 	if err := unix.Prctl(
 		unix.PR_CAP_AMBIENT,
 		unix.PR_CAP_AMBIENT_RAISE,
@@ -429,6 +470,7 @@ func ambientRaise(c Cap) error {
 	); err != nil {
 		return fmt.Errorf("%w: prctl(PR_CAP_AMBIENT_RAISE, %s): %w", ErrFailed, c, err)
 	}
+
 	return nil
 }
 
@@ -437,6 +479,7 @@ func ambientLower(c Cap) error {
 	if c < 0 || c > capLastCap {
 		return fmt.Errorf("%w: %s is out of range", ErrInvalidOption, c)
 	}
+
 	if err := unix.Prctl(
 		unix.PR_CAP_AMBIENT,
 		unix.PR_CAP_AMBIENT_LOWER,
@@ -444,5 +487,6 @@ func ambientLower(c Cap) error {
 	); err != nil {
 		return fmt.Errorf("%w: prctl(PR_CAP_AMBIENT_LOWER, %s): %w", ErrFailed, c, err)
 	}
+
 	return nil
 }

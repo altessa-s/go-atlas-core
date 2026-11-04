@@ -41,6 +41,7 @@ func TestBudget_ChargesAndReleases(t *testing.T) {
 	// 6 of 10 are held; a second 6-byte spool cannot fit and blocks until ctx.
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
+
 	_, err = b.Spool(ctx, strings.NewReader(strings.Repeat("y", 6)), 6)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 
@@ -59,11 +60,13 @@ func TestBudget_BlockedSpoolUnblocksOnRelease(t *testing.T) {
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
+
 	go func() {
 		sp, serr := b.Spool(t.Context(), strings.NewReader(strings.Repeat("b", 8)), 8)
 		if serr == nil {
 			_ = sp.Close()
 		}
+
 		done <- serr
 	}()
 
@@ -75,6 +78,7 @@ func TestBudget_BlockedSpoolUnblocksOnRelease(t *testing.T) {
 	}
 
 	require.NoError(t, held.Close())
+
 	select {
 	case serr := <-done:
 		require.NoError(t, serr)

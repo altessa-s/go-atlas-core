@@ -25,8 +25,11 @@ func BenchmarkJSON(b *testing.B) {
 
 	b.Run("Deserialize", func(b *testing.B) {
 		data, _ := s.Serialize(val)
+
 		var out testhelpers.Person
+
 		b.ResetTimer()
+
 		for b.Loop() {
 			_ = s.Deserialize(data, &out)
 		}
@@ -51,8 +54,10 @@ func BenchmarkJSONCodecs(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		b.Run("op=Serialize/codec="+codec.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if _, err := codec.s.Serialize(val); err != nil {
 					b.Fatal(err)
@@ -61,6 +66,7 @@ func BenchmarkJSONCodecs(b *testing.B) {
 		})
 		b.Run("op=Deserialize/codec="+codec.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			var out testhelpers.Person
 			for b.Loop() {
 				if err := codec.s.Deserialize(data, &out); err != nil {

@@ -33,14 +33,17 @@ func BenchmarkPriorityQueue(b *testing.B) {
 				for i := range priorities {
 					priorities[i] = tc.pool[i%len(tc.pool)]
 				}
+
 				entries := makeHandlersWithPriorities(priorities)
 
 				b.ReportAllocs()
+
 				for b.Loop() {
 					pq := newPriorityQueue()
 					for _, e := range entries {
 						pq.addHandler(e)
 					}
+
 					_ = pq.getHandlersInOrder()
 				}
 			})

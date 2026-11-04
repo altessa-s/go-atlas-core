@@ -92,6 +92,7 @@ func TestNamedByte(t *testing.T) {
 	t.Parallel()
 
 	type myByte uint8
+
 	require.Equal(t, uint64(7), bits.CountLeadingZeros(myByte(1)))
 	require.Equal(t, uint64(8), bits.CountTrailingZeros(myByte(0)))
 	require.Equal(t, myByte(3), bits.RotateLeft(myByte(0x81), 1))

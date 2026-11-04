@@ -30,6 +30,7 @@ func BenchmarkJoin(b *testing.B) {
 					res = append(res, e)
 				}
 			}
+
 			strings.Join(res, ",")
 		}
 	})
@@ -55,6 +56,7 @@ func BenchmarkSplit(b *testing.B) {
 					res = append(res, p) //nolint:staticcheck // SA4010: benchmark measures split+filter allocation pattern
 				}
 			}
+
 			_ = res
 		}
 	})
@@ -144,54 +146,63 @@ var (
 func BenchmarkTo(b *testing.B) {
 	b.Run("To[int]", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkInt = corestrings.To[int]("123456")
 		}
 	})
 	b.Run("To[benchPort]", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkPort = corestrings.To[benchPort]("8080")
 		}
 	})
 	b.Run("ToInt", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkInt = corestrings.ToInt("123456")
 		}
 	})
 	b.Run("ToInt64", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkInt64 = corestrings.ToInt64("-9223372036854775808")
 		}
 	})
 	b.Run("ToUint", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkUint = corestrings.ToUint("123456")
 		}
 	})
 	b.Run("ToUint8", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkUint8 = corestrings.ToUint8("255")
 		}
 	})
 	b.Run("ToFloat32", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkFloat32 = corestrings.ToFloat32("3.14159")
 		}
 	})
 	b.Run("ToFloat64", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkFloat64 = corestrings.ToFloat64("3.14159")
 		}
 	})
 	b.Run("ToInt/invalid", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			sinkInt = corestrings.ToInt("not-a-number")
 		}
@@ -203,6 +214,7 @@ func BenchmarkTo(b *testing.B) {
 // whole-word search and occurrence counting.
 func BenchmarkContains(b *testing.B) {
 	haystack := strings.Repeat("The quick brown fox jumps over the lazy dog. ", 20) + "Needle at the end."
+
 	for _, tc := range []struct {
 		name   string
 		substr string
@@ -215,6 +227,7 @@ func BenchmarkContains(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if !corestrings.Contains(haystack, tc.substr, tc.opts).Found {
 					b.Fatalf("%q not found", tc.substr)

@@ -41,6 +41,7 @@ func TestProcessCollect_Canceled_NoLeakedWorkers(t *testing.T) {
 	_, err := concurrency.ProcessCollect(ctx, items, func(ctx context.Context, item int) (int, error) {
 		cancel()
 		<-ctx.Done()
+
 		return 0, ctx.Err()
 	}, concurrency.WithConcurrency[int](8))
 	require.ErrorIs(t, err, context.Canceled)
@@ -51,11 +52,14 @@ func TestWaitContext_Timeout_WaiterExitsWhenGroupFinishes(t *testing.T) {
 	testhelpers.VerifyNoLeaks(t)
 
 	var wg sync.WaitGroup
+
 	release := make(chan struct{})
+
 	wg.Go(func() { <-release })
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
+
 	require.ErrorIs(t, concurrency.WaitContext(ctx, &wg), context.DeadlineExceeded)
 
 	// WaitContext's waiter goroutine is still blocked on wg here; it is not

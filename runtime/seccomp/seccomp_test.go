@@ -6,6 +6,7 @@
 // exercise only the sentinels and the platform-dispatch contract.
 // Filter-construction tests live in seccomp_linux_test.go because
 // buildFilter and the dangerousSyscalls list are Linux-specific.
+
 package seccomp
 
 import (
@@ -33,6 +34,7 @@ func TestBlockDangerousSyscalls_NonLinuxReturnsUnsupported(t *testing.T) {
 	if runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64") {
 		t.Skip("BlockDangerousSyscalls is irreversible on supported platforms; skipping to avoid poisoning the test binary")
 	}
+
 	err := BlockDangerousSyscalls()
 	require.ErrorIs(t, err, ErrUnsupported)
 }

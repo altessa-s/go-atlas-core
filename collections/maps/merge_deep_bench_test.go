@@ -13,6 +13,7 @@ import (
 func BenchmarkMergeDeep(b *testing.B) {
 	b.Run("shallow_no_overlap", func(b *testing.B) {
 		src := map[string]any{"a": 1, "b": 2}
+
 		dst := map[string]any{"c": 3, "d": 4}
 		for b.Loop() {
 			coremaps.MergeDeep(src, dst)
@@ -21,6 +22,7 @@ func BenchmarkMergeDeep(b *testing.B) {
 
 	b.Run("shallow_with_overlap", func(b *testing.B) {
 		src := map[string]any{"host": "prod.db", "port": 5432}
+
 		dst := map[string]any{"host": "localhost", "port": 5432, "timeout": 30}
 		for b.Loop() {
 			coremaps.MergeDeep(src, dst)
@@ -33,6 +35,7 @@ func BenchmarkMergeDeep(b *testing.B) {
 				"primary": map[string]any{"host": "prod.db"},
 			},
 		}
+
 		dst := map[string]any{
 			"db": map[string]any{
 				"primary": map[string]any{"host": "localhost", "port": 5432},
@@ -48,12 +51,15 @@ func BenchmarkMergeDeep(b *testing.B) {
 	b.Run("wide_flat_100_keys", func(b *testing.B) {
 		src := make(map[string]any, 50)
 		dst := make(map[string]any, 100)
+
 		for i := range 50 {
 			src[string(rune('a'+i%26))+string(rune('0'+i/26))] = i
 		}
+
 		for i := range 100 {
 			dst[string(rune('a'+i%26))+string(rune('0'+i/26))] = i * 10
 		}
+
 		for b.Loop() {
 			coremaps.MergeDeep(src, dst)
 		}

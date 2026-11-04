@@ -20,6 +20,7 @@ func BenchmarkWithReadPaths(b *testing.B) {
 	for b.Loop() {
 		sink = landlock.WithReadPaths("/etc", "/usr/share")
 	}
+
 	_ = sink
 }
 
@@ -28,5 +29,6 @@ func BenchmarkWithReadWritePaths(b *testing.B) {
 	for b.Loop() {
 		sink = landlock.WithReadWritePaths("/var/lib/app", "/var/log/app")
 	}
+
 	_ = sink
 }

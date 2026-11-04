@@ -33,6 +33,7 @@ func TestDo_JoinLastError(t *testing.T) {
 
 	t.Run("WaitInterruptedByCancel", func(t *testing.T) {
 		t.Parallel()
+
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
@@ -49,6 +50,7 @@ func TestDo_JoinLastError(t *testing.T) {
 
 	t.Run("DefaultKeepsContextErrorOnly", func(t *testing.T) {
 		t.Parallel()
+
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
@@ -59,7 +61,9 @@ func TestDo_JoinLastError(t *testing.T) {
 
 	t.Run("CauseIsJoined", func(t *testing.T) {
 		t.Parallel()
+
 		cause := errors.New("shutting down")
+
 		ctx, cancel := context.WithCancelCause(t.Context())
 		defer cancel(nil)
 
@@ -73,7 +77,9 @@ func TestDo_JoinLastError(t *testing.T) {
 
 	t.Run("SleepEndedByContextKeepsCause", func(t *testing.T) {
 		t.Parallel()
+
 		cause := errors.New("shutting down")
+
 		ctx, cancel := context.WithCancelCause(t.Context())
 		defer cancel(nil)
 
@@ -90,6 +96,7 @@ func TestDo_JoinLastError(t *testing.T) {
 
 	t.Run("DeadlineDuringWait", func(t *testing.T) {
 		t.Parallel()
+
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 		defer cancel()
 
@@ -105,6 +112,7 @@ func TestDo_JoinLastError(t *testing.T) {
 
 	t.Run("ContextEndsAfterWait", func(t *testing.T) {
 		t.Parallel()
+
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
@@ -128,6 +136,7 @@ func TestDo_JoinLastError(t *testing.T) {
 
 	t.Run("SleepFailure", func(t *testing.T) {
 		t.Parallel()
+
 		errSleep := errors.New("clock stopped")
 
 		err := retry.Do(t.Context(), func(context.Context) error { return errAttempt },

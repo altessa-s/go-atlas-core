@@ -41,12 +41,14 @@ func TestWithClock(t *testing.T) {
 		t.Parallel()
 
 		var slept []time.Duration
+
 		calls := 0
 		err := retry.Do(t.Context(), func(context.Context) error {
 			calls++
 			if calls < 3 {
 				return errors.New("transient")
 			}
+
 			return nil
 		},
 			retry.WithMaxAttempts(5),
@@ -72,6 +74,7 @@ func TestWithClock(t *testing.T) {
 			if calls < 3 {
 				return errors.New("transient")
 			}
+
 			return nil
 		}, retry.WithMaxAttempts(5), fixedDelay(time.Hour), retry.WithClock(fake))
 		require.NoError(t, err)
@@ -88,6 +91,7 @@ func TestWithClock(t *testing.T) {
 			if calls < 2 {
 				return errors.New("transient")
 			}
+
 			return nil
 		}, retry.WithMaxAttempts(1), fixedDelay(time.Nanosecond), retry.WithClock(nil))
 		require.NoError(t, err)
@@ -121,6 +125,7 @@ func TestWithStopBeforeDeadline(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 		defer cancel()
+
 		calls, retries := 0, 0
 		err := retry.Do(ctx, func(context.Context) error {
 			calls++
@@ -140,12 +145,14 @@ func TestWithStopBeforeDeadline(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 		defer cancel()
+
 		calls := 0
 		err := retry.Do(ctx, func(context.Context) error {
 			calls++
 			if calls < 3 {
 				return errAttempt
 			}
+
 			return nil
 		},
 			retry.WithMaxAttempts(5), fixedDelay(time.Millisecond), retry.WithStopBeforeDeadline(),
@@ -186,8 +193,10 @@ func TestWithStopBeforeDeadline(t *testing.T) {
 				t.Parallel()
 
 				fake := clock.NewFake(time.Now())
+
 				ctx, cancel := context.WithDeadline(t.Context(), fake.Now().Add(tc.remaining))
 				defer cancel()
+
 				calls := 0
 				err := retry.Do(ctx, func(context.Context) error {
 					calls++
@@ -208,6 +217,7 @@ func TestWithStopBeforeDeadline(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 		defer cancel()
+
 		err := retry.Do(ctx, func(context.Context) error { return errAttempt },
 			retry.WithMaxAttempts(5), fixedDelay(time.Hour))
 		require.ErrorIs(t, err, context.DeadlineExceeded)
@@ -238,7 +248,9 @@ func TestWithMaxElapsedTime(t *testing.T) {
 			calls := 0
 			err := retry.Do(t.Context(), func(context.Context) error {
 				calls++
+
 				fake.Advance(tc.attempt)
+
 				return errAttempt
 			},
 				retry.WithMaxAttempts(-1), fixedDelay(3*time.Second),
@@ -263,13 +275,16 @@ func TestNextDelayRaisedFromError(t *testing.T) {
 	t.Parallel()
 
 	backoff := retry.Exponential(time.Millisecond, retry.WithExponentialFactor(1))
+
 	var slept []time.Duration
+
 	calls := 0
 	err := retry.Do(t.Context(), func(context.Context) error {
 		calls++
 		if calls == 1 {
 			return retryAfterError{after: 3 * time.Second}
 		}
+
 		return nil
 	},
 		retry.WithMaxAttempts(1),
@@ -278,6 +293,7 @@ func TestNextDelayRaisedFromError(t *testing.T) {
 			if ra, ok := errors.AsType[retryAfterError](err); ok {
 				d = max(d, ra.after)
 			}
+
 			return d
 		}),
 		withSleep(func(_ context.Context, d time.Duration) error {

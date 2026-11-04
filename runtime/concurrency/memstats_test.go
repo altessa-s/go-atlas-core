@@ -24,6 +24,7 @@ func newFakeClock() *clock.Fake {
 
 func TestMemStatsCache_ReturnsSameDataWithinTTL(t *testing.T) {
 	t.Parallel()
+
 	clk := newFakeClock()
 	cache := concurrency.NewMemStatsCache(time.Second, clk)
 
@@ -36,6 +37,7 @@ func TestMemStatsCache_ReturnsSameDataWithinTTL(t *testing.T) {
 
 func TestMemStatsCache_RefreshesAfterTTL(t *testing.T) {
 	t.Parallel()
+
 	clk := newFakeClock()
 	cache := concurrency.NewMemStatsCache(10*time.Millisecond, clk)
 
@@ -43,6 +45,7 @@ func TestMemStatsCache_RefreshesAfterTTL(t *testing.T) {
 	require.NotNil(t, stats1)
 
 	clk.Advance(10 * time.Millisecond)
+
 	stats2 := cache.Get()
 	require.NotSame(t, stats1, stats2, "an expired snapshot must be refreshed")
 	require.NotZero(t, stats2.Sys)
@@ -50,6 +53,7 @@ func TestMemStatsCache_RefreshesAfterTTL(t *testing.T) {
 
 func TestMemStatsCache_Invalidate(t *testing.T) {
 	t.Parallel()
+
 	cache := concurrency.NewMemStatsCache(time.Hour, newFakeClock())
 
 	stats1 := cache.Get()
@@ -61,6 +65,7 @@ func TestMemStatsCache_Invalidate(t *testing.T) {
 
 func TestMemStatsCache_ZeroTTLDisablesCaching(t *testing.T) {
 	t.Parallel()
+
 	cache := concurrency.NewMemStatsCache(0, newFakeClock())
 
 	require.NotSame(t, cache.Get(), cache.Get())
@@ -68,10 +73,12 @@ func TestMemStatsCache_ZeroTTLDisablesCaching(t *testing.T) {
 
 func TestNewMemStatsCache_Defaults(t *testing.T) {
 	t.Parallel()
+
 	clk := newFakeClock()
 	cache := concurrency.NewMemStatsCache(-1, clk)
 
 	stats1 := cache.Get()
+
 	clk.Advance(concurrency.DefaultMemStatsCacheTTL - time.Nanosecond)
 	require.Same(t, stats1, cache.Get(), "a negative TTL must fall back to DefaultMemStatsCacheTTL")
 	clk.Advance(time.Nanosecond)
@@ -82,10 +89,13 @@ func TestNewMemStatsCache_Defaults(t *testing.T) {
 
 func TestMemStatsCache_ConcurrentAccess(t *testing.T) {
 	t.Parallel()
+
 	cache := concurrency.NewMemStatsCache(50*time.Millisecond, clock.Real())
 
 	const numGoroutines = 100
+
 	var wg sync.WaitGroup
+
 	results := make(chan *runtime.MemStats, numGoroutines)
 
 	for range numGoroutines {
@@ -98,15 +108,19 @@ func TestMemStatsCache_ConcurrentAccess(t *testing.T) {
 	close(results)
 
 	count := 0
+
 	for stats := range results {
 		require.NotNil(t, stats, "got nil stats from concurrent call")
+
 		count++
 	}
+
 	require.Equal(t, numGoroutines, count)
 }
 
 func TestMemStatsCache_AsMemorySource(t *testing.T) {
 	t.Parallel()
+
 	cache := concurrency.NewMemStatsCache(time.Hour, newFakeClock())
 
 	limit := concurrency.MemoryAwareConcurrency(100, 500, 1000, concurrency.WithAvailableMemory(cache.RuntimeHeadroom))
@@ -117,11 +131,13 @@ func TestMemStatsCache_AsMemorySource(t *testing.T) {
 // memory limit through debug.SetMemoryLimit and restores it on cleanup.
 func TestMemStatsCache_RuntimeHeadroom(t *testing.T) {
 	previous := debug.SetMemoryLimit(-1)
+
 	t.Cleanup(func() { debug.SetMemoryLimit(previous) })
 
 	cache := concurrency.NewMemStatsCache(time.Hour, newFakeClock())
 
 	debug.SetMemoryLimit(math.MaxInt64)
+
 	_, known := cache.RuntimeHeadroom()
 	require.False(t, known, "without a runtime limit the headroom is unknown")
 
@@ -130,11 +146,13 @@ func TestMemStatsCache_RuntimeHeadroom(t *testing.T) {
 
 	const extra = 1 << 30
 	debug.SetMemoryLimit(int64(used + extra))
+
 	available, known := cache.RuntimeHeadroom()
 	require.True(t, known)
 	require.Equal(t, uint64(extra), available, "headroom is the limit minus runtime-managed memory of the cached snapshot")
 
 	debug.SetMemoryLimit(int64(used / 2))
+
 	available, known = cache.RuntimeHeadroom()
 	require.True(t, known)
 	require.Zero(t, available, "a limit below current usage leaves no headroom")

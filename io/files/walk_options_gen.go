@@ -7,6 +7,9 @@ package files
 type WalkOption func(o *walkOptions)
 
 // WithFollowSymlinks enables the followSymlinks option.
+//
+// followSymlinks, when true, instructs [Walk] to descend into symlinked
+// directories.
 func WithFollowSymlinks() WalkOption {
 	return func(o *walkOptions) {
 		value := true
@@ -15,6 +18,9 @@ func WithFollowSymlinks() WalkOption {
 }
 
 // WithMaxDepth sets the maxDepth option.
+//
+// maxDepth is the maximum recursion depth. 0 = top-level only,
+// negative = unlimited. Set via [WithMaxDepth] or [WithRecursive].
 func WithMaxDepth(v int) WalkOption {
 	return func(o *walkOptions) {
 		o.maxDepth = v
@@ -22,6 +28,8 @@ func WithMaxDepth(v int) WalkOption {
 }
 
 // WithSkipHidden enables the skipHidden option.
+//
+// skipHidden, when true, skips entries whose name starts with a dot.
 func WithSkipHidden() WalkOption {
 	return func(o *walkOptions) {
 		value := true

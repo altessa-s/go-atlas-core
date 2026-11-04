@@ -15,6 +15,7 @@ func BenchmarkWrapNonZeroHit(b *testing.B) {
 	for b.Loop() {
 		sink = ptr.WrapNonZero(42)
 	}
+
 	_ = sink
 }
 
@@ -23,15 +24,18 @@ func BenchmarkWrapNonZeroMiss(b *testing.B) {
 	for b.Loop() {
 		sink = ptr.WrapNonZero(0)
 	}
+
 	_ = sink
 }
 
 func BenchmarkUnwrapHit(b *testing.B) {
 	p := new(42)
+
 	var sink int
 	for b.Loop() {
 		sink = ptr.Unwrap(p)
 	}
+
 	_ = sink
 }
 
@@ -40,5 +44,6 @@ func BenchmarkUnwrapNilDefault(b *testing.B) {
 	for b.Loop() {
 		sink = ptr.Unwrap[int](nil, 99)
 	}
+
 	_ = sink
 }

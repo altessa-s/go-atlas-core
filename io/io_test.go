@@ -36,6 +36,7 @@ func TestLimitedReadCloser(t *testing.T) {
 
 	t.Run("UnderLimit", func(t *testing.T) {
 		t.Parallel()
+
 		baseReader := io.NopCloser(strings.NewReader("hello"))
 		lrc := coreio.NewLimitedReadCloser(baseReader, 10)
 
@@ -47,6 +48,7 @@ func TestLimitedReadCloser(t *testing.T) {
 
 	t.Run("AtLimit", func(t *testing.T) {
 		t.Parallel()
+
 		baseReader := io.NopCloser(strings.NewReader("hello"))
 		lrc := coreio.NewLimitedReadCloser(baseReader, 5)
 
@@ -57,6 +59,7 @@ func TestLimitedReadCloser(t *testing.T) {
 
 	t.Run("OverLimit", func(t *testing.T) {
 		t.Parallel()
+
 		baseReader := io.NopCloser(strings.NewReader("hello world"))
 		lrc := coreio.NewLimitedReadCloser(baseReader, 5)
 
@@ -66,6 +69,7 @@ func TestLimitedReadCloser(t *testing.T) {
 
 	t.Run("CloseCallsUnderlying", func(t *testing.T) {
 		t.Parallel()
+
 		mrc := &testhelpers.MockReadCloser{Reader: strings.NewReader("test")}
 		lrc := coreio.NewLimitedReadCloser(mrc, 100)
 		lrc.Close()
@@ -112,6 +116,7 @@ func TestLimitedReadCloser_NeverDeliversPastLimit(t *testing.T) {
 	t.Parallel()
 
 	const limit = 1024
+
 	cases := []struct {
 		name    string
 		srcLen  int
@@ -130,19 +135,27 @@ func TestLimitedReadCloser_NeverDeliversPastLimit(t *testing.T) {
 
 			lrc := coreio.NewLimitedReadCloser(io.NopCloser(strings.NewReader(strings.Repeat("a", tc.srcLen))), limit)
 			buf := make([]byte, tc.bufSize)
-			var delivered int
-			var err error
+
+			var (
+				delivered int
+				err       error
+			)
 			for err == nil {
 				var n int
+
 				n, err = lrc.Read(buf)
 				delivered += n
 			}
+
 			require.LessOrEqual(t, delivered, limit)
+
 			if tc.wantErr {
 				require.ErrorIs(t, err, coreio.ErrReadLimitExceeded)
 				require.Equal(t, limit, delivered)
+
 				return
 			}
+
 			require.ErrorIs(t, err, io.EOF)
 			require.NotErrorIs(t, err, coreio.ErrReadLimitExceeded)
 			require.Equal(t, tc.srcLen, delivered)
@@ -174,8 +187,10 @@ type endlessReader struct {
 func (r *endlessReader) Read(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.served += int64(len(p))
 	clear(p)
+
 	return len(p), nil
 }
 
@@ -187,6 +202,7 @@ func TestLimitedReadCloser_ConcurrentReads(t *testing.T) {
 	t.Parallel()
 
 	const limit = 1000
+
 	src := &endlessReader{}
 	lrc := coreio.NewLimitedReadCloser(src, limit)
 
@@ -201,10 +217,12 @@ func TestLimitedReadCloser_ConcurrentReads(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 
 	src.mu.Lock()
 	defer src.mu.Unlock()
+
 	require.LessOrEqual(t, src.served, int64(limit+1))
 }
 

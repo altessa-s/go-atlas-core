@@ -7,6 +7,8 @@ package etag
 type Option func(o *options)
 
 // WithNewHash sets the newHash option.
+//
+// newHash constructs the hash.Hash used for content-based strong tags.
 func WithNewHash(v NewHashFunc) Option {
 	return func(o *options) {
 		if v == nil {

@@ -20,6 +20,7 @@ func benchColdKeys(si *intern.Interner, n int) []string {
 		keys[i] = fmt.Sprintf("interner-bench-key-%05d", i)
 		si.String(keys[i])
 	}
+
 	return keys
 }
 
@@ -29,6 +30,7 @@ func BenchmarkInterner_ColdHit(b *testing.B) {
 	keys := benchColdKeys(si, 4096)
 
 	b.ReportAllocs()
+
 	i := 0
 	for b.Loop() {
 		_ = si.String(keys[i%len(keys)])
@@ -56,6 +58,7 @@ func BenchmarkInterner_ColdHitParallel(b *testing.B) {
 // often enough to be promoted to the lock-free hot cache.
 func BenchmarkInterner_HotHit(b *testing.B) {
 	si := intern.New(intern.DefaultMaxSize)
+
 	keys := []string{"GET", "POST", "content-type", "authorization"}
 	for range intern.PromotionCheckInterval * 2 {
 		for _, k := range keys {
@@ -65,6 +68,7 @@ func BenchmarkInterner_HotHit(b *testing.B) {
 
 	b.Run("Sequential", func(b *testing.B) {
 		b.ReportAllocs()
+
 		i := 0
 		for b.Loop() {
 			_ = si.String(keys[i%len(keys)])
@@ -87,13 +91,16 @@ func BenchmarkInterner_HotHit(b *testing.B) {
 // strings into a bounded interner, so inserts keep triggering eviction.
 func BenchmarkInterner_MissWithEviction(b *testing.B) {
 	const maxSize = 1024
+
 	si := intern.New(maxSize)
+
 	keys := make([]string, 1<<15)
 	for i := range keys {
 		keys[i] = fmt.Sprintf("stream-key-%06d", i)
 	}
 
 	b.ReportAllocs()
+
 	i := 0
 	for b.Loop() {
 		_ = si.String(keys[i%len(keys)])
@@ -109,6 +116,7 @@ func BenchmarkInterner_Derived(b *testing.B) {
 
 	b.Run("LowerString", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if si.LowerString("Content-Type") != "content-type" {
 				b.Fatal("unexpected lowercase")
@@ -117,6 +125,7 @@ func BenchmarkInterner_Derived(b *testing.B) {
 	})
 	b.Run("JoinString", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if si.JoinString(parts, ".") != "service.region.shard-07" {
 				b.Fatal("unexpected join")
@@ -128,7 +137,9 @@ func BenchmarkInterner_Derived(b *testing.B) {
 		for i := range labels {
 			labels[i] = fmt.Sprintf("label-%d", i%4)
 		}
+
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if len(si.StringSlice(labels)) != len(labels) {
 				b.Fatal("unexpected length")

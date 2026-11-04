@@ -42,7 +42,9 @@ func (s *RedactedString) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if err != nil {
 		return err
 	}
+
 	*s = RedactedString(v)
+
 	return nil
 }
 
@@ -53,6 +55,7 @@ func decodeJSONString(dec *jsontext.Decoder) (string, error) {
 	if err := json.UnmarshalDecode(dec, &v); err != nil {
 		return "", fmt.Errorf("redacted: unmarshal json: %w", err)
 	}
+
 	return v, nil
 }
 
@@ -70,7 +73,9 @@ func (s *RedactedString) UnmarshalYAML(unmarshal func(any) error) error {
 	if err := unmarshal(&v); err != nil {
 		return fmt.Errorf("redacted: unmarshal yaml: %w", err)
 	}
+
 	*s = RedactedString(v)
+
 	return nil
 }
 
@@ -98,9 +103,11 @@ func (s RedactedString) MarshalBSONValue() (byte, []byte, error) {
 	// BSON string: little-endian length (including NUL), UTF-8 bytes, NUL.
 	// This fixed redaction encoding must work even without a custom registry.
 	const headerSize = 4
+
 	data := make([]byte, headerSize+len(placeholder)+1)
 	binary.LittleEndian.PutUint32(data, uint32(len(placeholder)+1))
 	copy(data[headerSize:], placeholder)
+
 	return bsonStringType, data, nil
 }
 
@@ -113,11 +120,14 @@ func (s *RedactedString) UnmarshalBSONValue(typ byte, data []byte) error {
 		*s = ""
 		return nil
 	}
+
 	const headerSize = 4
 	if typ != bsonStringType || len(data) < headerSize+1 ||
 		uint64(binary.LittleEndian.Uint32(data)) != uint64(len(data)-headerSize) || data[len(data)-1] != 0 {
 		return fmt.Errorf("redacted: invalid BSON string")
 	}
+
 	*s = RedactedString(data[headerSize : len(data)-1])
+
 	return nil
 }

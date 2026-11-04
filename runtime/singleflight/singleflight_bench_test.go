@@ -16,7 +16,9 @@ func BenchmarkDo(b *testing.B) {
 	g := singleflight.New[string, int]()
 	ctx := b.Context()
 	fn := func(context.Context) (int, error) { return 1, nil }
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_, _ = g.Do(ctx, "key", fn)
 	}
@@ -44,7 +46,9 @@ func BenchmarkDo_Parallel(b *testing.B) {
 	b.Run("DistinctKeys", func(b *testing.B) {
 		g := singleflight.New[int, int]()
 		ctx := b.Context()
+
 		var next atomic.Int64
+
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			key := int(next.Add(1))
@@ -66,6 +70,7 @@ func BenchmarkDoShared(b *testing.B) {
 		if lifecycle {
 			name = "WithLifecycle"
 		}
+
 		b.Run(name, func(b *testing.B) { benchmarkCalls(b, true, lifecycle) })
 	}
 }
@@ -74,41 +79,54 @@ func BenchmarkDoWithLifecycle(b *testing.B) { benchmarkCalls(b, false, true) }
 
 func benchmarkCalls(b *testing.B, shared, lifecycle bool) {
 	b.Helper()
+
 	for _, mode := range []string{"SingleKey", "ParallelSameKey", "ParallelDistinctKeys"} {
 		b.Run(mode, func(b *testing.B) {
 			ctx := b.Context()
+
 			var opts []singleflight.Option
 			if lifecycle {
 				opts = append(opts, singleflight.WithLifecycle(ctx))
 			}
+
 			g := singleflight.New[int, int](opts...)
 			b.Cleanup(g.Wait)
+
 			fn := func(context.Context) (int, error) { return 1, nil }
 			call := func(key int) {
-				var value int
-				var err error
+				var (
+					value int
+					err   error
+				)
 				if shared {
 					value, _, err = g.DoShared(ctx, key, fn)
 				} else {
 					value, err = g.Do(ctx, key, fn)
 				}
+
 				if err != nil || value != 1 {
 					b.Errorf("call = (%d, %v)", value, err)
 				}
 			}
+
 			b.ReportAllocs()
+
 			if mode == "SingleKey" {
 				for b.Loop() {
 					call(0)
 				}
+
 				return
 			}
+
 			var next atomic.Int64
+
 			b.RunParallel(func(pb *testing.PB) {
 				key := 0
 				if mode == "ParallelDistinctKeys" {
 					key = int(next.Add(1))
 				}
+
 				for pb.Next() {
 					call(key)
 				}

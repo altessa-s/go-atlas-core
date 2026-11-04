@@ -58,9 +58,11 @@ const (
 // which is the right behavior for tests of Linux-only primitives.
 func RunInSubprocess(t *testing.T, fn func()) {
 	t.Helper()
+
 	if runtime.GOOS != "linux" {
 		t.Skipf("subprocess test requires linux, current GOOS=%s", runtime.GOOS)
 	}
+
 	if os.Getenv(childEnvVar) == "1" {
 		// runChildBody returns the exit code rather than calling
 		// os.Exit itself so its deferred recover is guaranteed to
@@ -68,6 +70,7 @@ func RunInSubprocess(t *testing.T, fn func()) {
 		// must come from a scope that has already returned.
 		os.Exit(runChildBody(fn))
 	}
+
 	runParent(t)
 }
 
@@ -80,6 +83,7 @@ func runChildBody(fn func()) (code int) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Fprintf(os.Stderr, "exectest: child panicked: %v\n", r)
+
 			code = exitCodePanic
 		}
 	}()
@@ -90,7 +94,9 @@ func runChildBody(fn func()) (code int) {
 	// cause a second os.Exit which we do not want racing with the
 	// deferred recover above.
 	_, _ = fmt.Fprintln(os.Stdout, childRanSentinel)
+
 	fn()
+
 	return exitCodeSuccess
 }
 
@@ -108,7 +114,9 @@ func runParent(t *testing.T) {
 	// leaking it.
 	// #nosec G204 -- re-executes the test binary (os.Args[0]) for subprocess testing
 	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+testName+"$", "-test.v")
+
 	cmd.Env = append(os.Environ(), childEnvVar+"=1")
+
 	out, err := cmd.CombinedOutput()
 	if !bytes.Contains(out, []byte(childRanSentinel)) {
 		t.Fatalf("child process did not run the test body (sentinel %q not found in output)\n"+
@@ -116,6 +124,7 @@ func runParent(t *testing.T) {
 			"--- child output ---\n%s",
 			childRanSentinel, out)
 	}
+
 	if err != nil {
 		t.Fatalf("child process failed: %v\n--- child output ---\n%s", err, out)
 	}

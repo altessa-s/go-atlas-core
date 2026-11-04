@@ -22,6 +22,7 @@ func BenchmarkAddInt(b *testing.B) {
 	for b.Loop() {
 		sum = addNumbers[int](sum, 1)
 	}
+
 	_ = sum
 }
 
@@ -30,6 +31,7 @@ func BenchmarkAddFloat64(b *testing.B) {
 	for b.Loop() {
 		sum = addNumbers[float64](sum, 1)
 	}
+
 	_ = sum
 }
 
@@ -38,5 +40,6 @@ func BenchmarkAddUint64(b *testing.B) {
 	for b.Loop() {
 		sum = addNumbers[uint64](sum, 1)
 	}
+
 	_ = sum
 }

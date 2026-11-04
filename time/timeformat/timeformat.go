@@ -92,24 +92,28 @@ func (f Format) Parse(s string) (time.Time, error) {
 		if err != nil {
 			return time.Time{}, coreerrs.Wrap(err, "invalid Unix timestamp")
 		}
+
 		return time.Unix(sec, 0), nil
 	case UnixMilli:
 		ms, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
 			return time.Time{}, coreerrs.Wrap(err, "invalid UnixMilli timestamp")
 		}
+
 		return time.UnixMilli(ms), nil
 	case UnixMicro:
 		us, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
 			return time.Time{}, coreerrs.Wrap(err, "invalid UnixMicro timestamp")
 		}
+
 		return time.UnixMicro(us), nil
 	case UnixNano:
 		ns, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
 			return time.Time{}, coreerrs.Wrap(err, "invalid UnixNano timestamp")
 		}
+
 		return time.Unix(0, ns), nil
 	default:
 		return time.Parse(time.RFC3339, s)

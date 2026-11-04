@@ -28,6 +28,7 @@ func TestGoroutineID_DifferentGoroutinesUsuallyDiffer(t *testing.T) {
 	go func() {
 		ch <- GoroutineID()
 	}()
+
 	idOther := <-ch
 	require.NotZero(t, idOther, "other GoroutineID returned 0")
 }

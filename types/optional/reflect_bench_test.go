@@ -20,6 +20,7 @@ func BenchmarkIsOptionalType(b *testing.B) {
 
 	b.Run("Optional", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if !optional.IsOptionalType(optType) {
 				b.Fatal("Optional not detected")
@@ -28,6 +29,7 @@ func BenchmarkIsOptionalType(b *testing.B) {
 	})
 	b.Run("Plain", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if optional.IsOptionalType(plainType) {
 				b.Fatal("plain type detected as Optional")
@@ -40,11 +42,14 @@ func BenchmarkGetReflect(b *testing.B) {
 	type record struct {
 		Name optional.Optional[string]
 	}
+
 	rec := record{Name: optional.Some("value")}
 
 	b.Run("Addressable", func(b *testing.B) {
 		field := reflect.ValueOf(&rec).Elem().Field(0)
+
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if v, ok := optional.GetReflect(field); !ok || v.String() != "value" {
 				b.Fatal("unexpected value")
@@ -53,7 +58,9 @@ func BenchmarkGetReflect(b *testing.B) {
 	})
 	b.Run("NotAddressable", func(b *testing.B) {
 		field := reflect.ValueOf(rec).Field(0)
+
 		b.ReportAllocs()
+
 		for b.Loop() {
 			if v, ok := optional.GetReflect(field); !ok || v.String() != "value" {
 				b.Fatal("unexpected value")
@@ -65,7 +72,9 @@ func BenchmarkGetReflect(b *testing.B) {
 func BenchmarkSomeReflect(b *testing.B) {
 	optType := reflect.TypeFor[optional.Optional[string]]()
 	value := reflect.ValueOf("value")
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if optional.SomeReflect(optType, value).IsZero() {
 			b.Fatal("Some built as zero")

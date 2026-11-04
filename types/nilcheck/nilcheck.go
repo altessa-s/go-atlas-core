@@ -69,6 +69,7 @@ func IsNilValue(v reflect.Value) bool {
 	if !v.IsValid() {
 		return true
 	}
+
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
 		return v.IsNil()
@@ -134,11 +135,13 @@ func isStringEmptyOrWhitespace(s string) bool {
 	if len(s) == 0 {
 		return true
 	}
+
 	for _, r := range s {
 		if !unicode.IsSpace(r) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -156,5 +159,6 @@ func RequireNotNil(value any, fieldName string) error {
 	if IsNil(value) {
 		return NewRequiredError(fieldName)
 	}
+
 	return nil
 }

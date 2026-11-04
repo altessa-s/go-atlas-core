@@ -71,6 +71,7 @@ func IsBitSet[T constraints.Integer](value T, bitPosition uint64) bool {
 	if !isValidBitPosition[T](bitPosition) {
 		return false
 	}
+
 	return (value & (1 << bitPosition)) != 0
 }
 
@@ -86,6 +87,7 @@ func SetBit[T constraints.Integer](value T, bitPosition uint64) T {
 	if !isValidBitPosition[T](bitPosition) {
 		return value
 	}
+
 	return value | (1 << bitPosition)
 }
 
@@ -101,6 +103,7 @@ func ClearBit[T constraints.Integer](value T, bitPosition uint64) T {
 	if !isValidBitPosition[T](bitPosition) {
 		return value
 	}
+
 	return value &^ (1 << bitPosition)
 }
 
@@ -117,6 +120,7 @@ func ToggleBit[T constraints.Integer](value T, bitPosition uint64) T {
 	if !isValidBitPosition[T](bitPosition) {
 		return value
 	}
+
 	return value ^ (1 << bitPosition)
 }
 
@@ -135,6 +139,7 @@ func GetBits[T constraints.Integer](value T, start, length uint64) T {
 	}
 
 	mask := T((1 << length) - 1)
+
 	return (value >> start) & mask
 }
 
@@ -155,6 +160,7 @@ func CountSetBits[T constraints.Integer](value T) uint64 {
 		count++
 		value &= value - 1 // Clear the lowest set bit
 	}
+
 	return count
 }
 
@@ -175,6 +181,7 @@ func CountTrailingZeros[T constraints.Integer](value T) uint64 {
 		count++
 		value >>= 1
 	}
+
 	return count
 }
 
@@ -192,12 +199,15 @@ func CountLeadingZeros[T constraints.Integer](value T) uint64 {
 
 	maxBits := getBitWidth[T]()
 	count := uint64(0)
+
 	for i := maxBits - 1; i < maxBits; i-- {
 		if (value & (1 << i)) != 0 {
 			break
 		}
+
 		count++
 	}
+
 	return count
 }
 
@@ -213,6 +223,7 @@ func FindFirstSet[T constraints.Integer](value T) uint64 {
 	if value == 0 {
 		return 0
 	}
+
 	return CountTrailingZeros(value) + 1
 }
 
@@ -228,7 +239,9 @@ func FindLastSet[T constraints.Integer](value T) uint64 {
 	if value == 0 {
 		return 0
 	}
+
 	maxBits := getBitWidth[T]()
+
 	return maxBits - CountLeadingZeros(value)
 }
 
@@ -252,6 +265,7 @@ func FindNextSet[T constraints.Integer](value T, after uint64) uint64 {
 			return pos
 		}
 	}
+
 	return 0
 }
 
@@ -265,6 +279,7 @@ func FindNextSet[T constraints.Integer](value T, after uint64) uint64 {
 //	RotateLeft(uint8(0b10000001), 1) // 0b00000011 (3)
 func RotateLeft[T constraints.Integer](value T, n uint64) T {
 	maxBits := getBitWidth[T]()
+
 	n %= maxBits // Handle n > maxBits
 	if n == 0 {
 		return value
@@ -277,6 +292,7 @@ func RotateLeft[T constraints.Integer](value T, n uint64) T {
 	// 64-bit shift of a uint64 yields 0).
 	widthMask := uint64(1)<<maxBits - 1
 	uv := uint64(value) & widthMask
+
 	return T(((uv << n) | (uv >> (maxBits - n))) & widthMask)
 }
 
@@ -312,6 +328,7 @@ func ReverseBits[T constraints.Integer](value T) T {
 			result = SetBit(result, maxBits-1-i)
 		}
 	}
+
 	return result
 }
 
@@ -328,6 +345,7 @@ func SetBits[T constraints.Integer](value T, start, length uint64) T {
 	}
 
 	mask := T((1 << length) - 1)
+
 	return value | (mask << start)
 }
 
@@ -344,6 +362,7 @@ func ClearBits[T constraints.Integer](value T, start, length uint64) T {
 	}
 
 	mask := T((1 << length) - 1)
+
 	return value &^ (mask << start)
 }
 
@@ -360,6 +379,7 @@ func ToggleBits[T constraints.Integer](value T, start, length uint64) T {
 	}
 
 	mask := T((1 << length) - 1)
+
 	return value ^ (mask << start)
 }
 
@@ -375,12 +395,14 @@ func TestBits[T constraints.Integer](value T, start, length uint64) bool {
 	if length == 0 {
 		return true
 	}
+
 	if !isValidBitRange[T](start, length) {
 		return false
 	}
 
 	mask := T((1 << length) - 1)
 	expected := mask << start
+
 	return (value & expected) == expected
 }
 
@@ -468,6 +490,7 @@ func SwapBits[T constraints.Integer](value T, pos1, pos2 uint64) T {
 	if bit1 {
 		value |= 1 << pos2
 	}
+
 	if bit2 {
 		value |= 1 << pos1
 	}
@@ -500,5 +523,6 @@ func SignExtend[T constraints.Integer](value T, fromBits uint64) T {
 
 	// Negative number, set all bits above fromBits
 	mask := CreateMask[T](fromBits)
+
 	return value | ^mask
 }

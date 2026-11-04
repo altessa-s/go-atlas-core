@@ -24,6 +24,7 @@ import (
 // them. Hooks may only run on the re-panic path.
 func TestHandle_SwallowedPanic_DoesNotConsumeShutdownHooks(t *testing.T) {
 	var hookRan atomic.Bool
+
 	coreruntime.OnShutdown(func(context.Context) error {
 		hookRan.Store(true)
 		return nil
@@ -31,6 +32,7 @@ func TestHandle_SwallowedPanic_DoesNotConsumeShutdownHooks(t *testing.T) {
 
 	func() {
 		defer panics.HandleWithOpts(t.Context(), panics.NewHandleOpts().SetReallyPanic(false))
+
 		panic("routine panic")
 	}()
 
@@ -60,8 +62,10 @@ func TestHandleWithOpts_ReallyPanicTrue(t *testing.T) {
 	}()
 
 	opts := panics.NewHandleOpts().SetReallyPanic(true)
+
 	func() {
 		defer panics.HandleWithOpts(t.Context(), opts)
+
 		panic("test panic")
 	}()
 }
@@ -70,12 +74,14 @@ func TestHandleWithOpts_ReallyPanicFalse(t *testing.T) {
 	opts := panics.NewHandleOpts().SetReallyPanic(false)
 
 	var recovered bool
+
 	handler := func(_ context.Context, r any) {
 		recovered = true
 	}
 
 	func() {
 		defer panics.HandleWithOpts(t.Context(), opts, handler)
+
 		panic("test panic")
 	}()
 
@@ -84,6 +90,7 @@ func TestHandleWithOpts_ReallyPanicFalse(t *testing.T) {
 
 func TestHandle_WithCustomHandler(t *testing.T) {
 	var got any
+
 	handler := func(_ context.Context, r any) {
 		got = r
 	}
@@ -93,6 +100,7 @@ func TestHandle_WithCustomHandler(t *testing.T) {
 
 	func() {
 		defer panics.Handle(t.Context(), handler)
+
 		panic("custom panic value")
 	}()
 
@@ -144,6 +152,7 @@ func TestSetLogger_Default(t *testing.T) {
 
 func TestAddGlobalPanicHandler(t *testing.T) {
 	var handlerCalled bool
+
 	panics.AddGlobalPanicHandler(func(_ context.Context, _ any) {
 		handlerCalled = true
 	})
@@ -153,6 +162,7 @@ func TestAddGlobalPanicHandler(t *testing.T) {
 
 	func() {
 		defer panics.Handle(t.Context())
+
 		panic("test")
 	}()
 
@@ -171,8 +181,11 @@ func TestAddGlobalPanicHandler_ConcurrentRegistration(t *testing.T) {
 	t.Cleanup(func() { panics.SetGlobalPanicHandlers() })
 
 	const n = 64
-	var calls atomic.Int32
-	var wg sync.WaitGroup
+
+	var (
+		calls atomic.Int32
+		wg    sync.WaitGroup
+	)
 	for range n {
 		wg.Go(func() {
 			panics.AddGlobalPanicHandler(func(context.Context, any) {
@@ -180,10 +193,12 @@ func TestAddGlobalPanicHandler_ConcurrentRegistration(t *testing.T) {
 			})
 		})
 	}
+
 	wg.Wait()
 
 	func() {
 		defer panics.HandleWithOpts(t.Context(), panics.NewHandleOpts().SetReallyPanic(false))
+
 		panic("boom")
 	}()
 
@@ -213,17 +228,23 @@ func TestMustResult_Success(t *testing.T) {
 func TestHandleWithOpts_RePanicRunsInjectedShutdown(t *testing.T) {
 	t.Parallel()
 
-	var group coreruntime.HookGroup
-	var hookRan atomic.Bool
+	var (
+		group   coreruntime.HookGroup
+		hookRan atomic.Bool
+	)
+
 	group.OnShutdown(func(ctx context.Context) error {
 		_, hasDeadline := ctx.Deadline()
 		hookRan.Store(hasDeadline)
+
 		return nil
 	})
 
 	opts := panics.NewHandleOpts().SetReallyPanic(true).SetShutdown(group.Shutdown)
+
 	require.PanicsWithValue(t, "boom", func() {
 		defer panics.HandleWithOpts(t.Context(), opts)
+
 		panic("boom")
 	})
 	require.True(t, hookRan.Load(), "injected shutdown must run, with a deadline, before the re-panic")
@@ -233,12 +254,15 @@ func TestHandleWithOpts_SwallowedPanicSkipsInjectedShutdown(t *testing.T) {
 	t.Parallel()
 
 	var calls atomic.Int32
+
 	opts := panics.NewHandleOpts().SetReallyPanic(false).SetShutdown(func(context.Context) error {
 		calls.Add(1)
 		return nil
 	})
+
 	func() {
 		defer panics.HandleWithOpts(t.Context(), opts)
+
 		panic("routine panic")
 	}()
 	require.Zero(t, calls.Load())

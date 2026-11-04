@@ -46,6 +46,7 @@ func TestNone(t *testing.T) {
 	require.Equal(t, 99, o.OrDefault(99))
 
 	var calls int
+
 	got := o.OrElse(func() int {
 		calls++
 		return 7
@@ -121,6 +122,7 @@ func TestOrElseInvocationCount(t *testing.T) {
 		t.Parallel()
 
 		var calls int
+
 		got := optional.Some("x").OrElse(func() string {
 			calls++
 			return "y"
@@ -133,6 +135,7 @@ func TestOrElseInvocationCount(t *testing.T) {
 		t.Parallel()
 
 		var calls int
+
 		got := optional.None[string]().OrElse(func() string {
 			calls++
 			return "y"
@@ -162,24 +165,28 @@ func TestGenericInstantiation(t *testing.T) {
 
 	t.Run("struct", func(t *testing.T) {
 		t.Parallel()
+
 		s := fooStruct{A: 1, B: "x"}
 		require.Equal(t, s, optional.Some(s).Value())
 	})
 
 	t.Run("pointer", func(t *testing.T) {
 		t.Parallel()
+
 		p := &fooStruct{A: 2}
 		require.Same(t, p, optional.Some(p).Value())
 	})
 
 	t.Run("slice", func(t *testing.T) {
 		t.Parallel()
+
 		sl := []int{1, 2, 3}
 		require.Equal(t, sl, optional.Some(sl).Value())
 	})
 
 	t.Run("None of pointer is empty", func(t *testing.T) {
 		t.Parallel()
+
 		o := optional.None[*fooStruct]()
 		require.True(t, o.IsNone())
 		require.Nil(t, o.Value())
@@ -200,7 +207,9 @@ func TestFromPtr(t *testing.T) {
 
 	t.Run("nil pointer returns None", func(t *testing.T) {
 		t.Parallel()
+
 		var ptr *int
+
 		opt := optional.FromPtr(ptr)
 		require.True(t, opt.IsNone())
 		require.False(t, opt.IsSome())
@@ -208,6 +217,7 @@ func TestFromPtr(t *testing.T) {
 
 	t.Run("non-nil pointer returns Some", func(t *testing.T) {
 		t.Parallel()
+
 		value := 42
 		opt := optional.FromPtr(&value)
 		require.True(t, opt.IsSome())
@@ -219,7 +229,9 @@ func TestFromPtr(t *testing.T) {
 
 	t.Run("zero value pointer returns Some(zero)", func(t *testing.T) {
 		t.Parallel()
+
 		var zero int
+
 		opt := optional.FromPtr(&zero)
 		require.True(t, opt.IsSome())
 		v, ok := opt.Get()
@@ -229,17 +241,20 @@ func TestFromPtr(t *testing.T) {
 
 	t.Run("string type", func(t *testing.T) {
 		t.Parallel()
+
 		str := "hello"
 		opt := optional.FromPtr(&str)
 		require.Equal(t, "hello", opt.Value())
 
 		var nilStr *string
+
 		opt = optional.FromPtr(nilStr)
 		require.True(t, opt.IsNone())
 	})
 
 	t.Run("struct type", func(t *testing.T) {
 		t.Parallel()
+
 		type Person struct {
 			Name string
 			Age  int
@@ -250,6 +265,7 @@ func TestFromPtr(t *testing.T) {
 		require.Equal(t, Person{Name: "Alice", Age: 30}, opt.Value())
 
 		var nilPerson *Person
+
 		opt = optional.FromPtr(nilPerson)
 		require.True(t, opt.IsNone())
 	})
@@ -260,6 +276,7 @@ func TestToPtr(t *testing.T) {
 
 	t.Run("None returns nil", func(t *testing.T) {
 		t.Parallel()
+
 		opt := optional.None[int]()
 		ptr := optional.ToPtr(opt)
 		require.Nil(t, ptr)
@@ -267,6 +284,7 @@ func TestToPtr(t *testing.T) {
 
 	t.Run("Some returns pointer to value", func(t *testing.T) {
 		t.Parallel()
+
 		opt := optional.Some(42)
 		ptr := optional.ToPtr(opt)
 		require.NotNil(t, ptr)
@@ -275,6 +293,7 @@ func TestToPtr(t *testing.T) {
 
 	t.Run("Some(zero) returns pointer to zero", func(t *testing.T) {
 		t.Parallel()
+
 		opt := optional.Some(0)
 		ptr := optional.ToPtr(opt)
 		require.NotNil(t, ptr)
@@ -283,6 +302,7 @@ func TestToPtr(t *testing.T) {
 
 	t.Run("string type", func(t *testing.T) {
 		t.Parallel()
+
 		opt := optional.Some("hello")
 		ptr := optional.ToPtr(opt)
 		require.NotNil(t, ptr)
@@ -295,6 +315,7 @@ func TestToPtr(t *testing.T) {
 
 	t.Run("struct type", func(t *testing.T) {
 		t.Parallel()
+
 		type Person struct {
 			Name string
 			Age  int
@@ -316,7 +337,9 @@ func TestFromPtrToPtr_RoundTrip(t *testing.T) {
 
 	t.Run("nil roundtrip", func(t *testing.T) {
 		t.Parallel()
+
 		var original *int
+
 		opt := optional.FromPtr(original)
 		result := optional.ToPtr(opt)
 		require.Nil(t, result)
@@ -324,6 +347,7 @@ func TestFromPtrToPtr_RoundTrip(t *testing.T) {
 
 	t.Run("value roundtrip", func(t *testing.T) {
 		t.Parallel()
+
 		value := 42
 		original := &value
 		opt := optional.FromPtr(original)
@@ -336,6 +360,7 @@ func TestFromPtrToPtr_RoundTrip(t *testing.T) {
 
 	t.Run("Some to pointer to Optional", func(t *testing.T) {
 		t.Parallel()
+
 		opt := optional.Some(100)
 		ptr := optional.ToPtr(opt)
 		opt2 := optional.FromPtr(ptr)

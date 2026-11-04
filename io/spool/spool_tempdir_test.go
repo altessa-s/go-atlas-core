@@ -22,10 +22,12 @@ func TestWithTempDir(t *testing.T) {
 
 	for _, tee := range []bool{false, true} {
 		dir := t.TempDir()
+
 		opts := []spool.Option{spool.WithMemThreshold(4), spool.WithTempDir(dir)}
 		if tee {
 			opts = append(opts, spool.WithTee(io.Discard))
 		}
+
 		sp, err := spool.New(strings.NewReader("spills to disk"), opts...)
 		require.NoError(t, err)
 
@@ -34,6 +36,7 @@ func TestWithTempDir(t *testing.T) {
 		require.Len(t, files, 1, "the spill file lives in the configured directory (tee=%v)", tee)
 
 		var got bytes.Buffer
+
 		_, err = io.Copy(&got, sp)
 		require.NoError(t, err)
 		require.Equal(t, "spills to disk", got.String())
@@ -52,6 +55,7 @@ func TestWithTempDirValues(t *testing.T) {
 
 	dir := t.TempDir()
 	blank := "   "
+
 	tests := []struct {
 		name    string
 		opt     spool.Option
@@ -66,6 +70,7 @@ func TestWithTempDirValues(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			sp, err := spool.New(strings.NewReader("spills to disk"), spool.WithMemThreshold(4), tc.opt)
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = sp.Close() })

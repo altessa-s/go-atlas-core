@@ -26,6 +26,7 @@ func TestMarshalBSONValue_RequiresCodec(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			kind, data, err := tc.opt.MarshalBSONValue()
 			require.ErrorIs(t, err, optional.ErrBSONCodecRequired)
 			require.Zero(t, kind)

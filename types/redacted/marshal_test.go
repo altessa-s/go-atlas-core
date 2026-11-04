@@ -36,6 +36,7 @@ func TestRedactedString_MarshalJSON_InStruct(t *testing.T) {
 	type cfg struct {
 		Password redacted.RedactedString `json:"password"`
 	}
+
 	data, err := json.Marshal(cfg{Password: plain})
 	require.NoError(t, err)
 
@@ -57,6 +58,7 @@ func TestRedactedString_UnmarshalJSON_Invalid(t *testing.T) {
 	t.Parallel()
 
 	var s redacted.RedactedString
+
 	err := json.Unmarshal([]byte(`{"not":"a string"}`), &s)
 	require.Error(t, err)
 }
@@ -96,10 +98,13 @@ func TestRedactedString_UnmarshalYAML(t *testing.T) {
 	t.Parallel()
 
 	var s redacted.RedactedString
+
 	unmarshal := func(out any) error {
 		p, ok := out.(*string)
 		require.True(t, ok)
+
 		*p = plain
+
 		return nil
 	}
 	require.NoError(t, s.UnmarshalYAML(unmarshal))
@@ -110,6 +115,7 @@ func TestRedactedString_UnmarshalYAML_Error(t *testing.T) {
 	t.Parallel()
 
 	var s redacted.RedactedString
+
 	wantErr := errors.New("boom")
 	err := s.UnmarshalYAML(func(any) error { return wantErr })
 	require.Error(t, err)
@@ -189,6 +195,7 @@ func TestRedactedString_UnmarshalBSONValue_Invalid(t *testing.T) {
 			t.Parallel()
 
 			var s redacted.RedactedString
+
 			err := s.UnmarshalBSONValue(tc.typ, tc.data)
 			require.Error(t, err)
 		})

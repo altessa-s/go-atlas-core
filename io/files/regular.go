@@ -31,6 +31,7 @@ func OpenRegular(path string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return checkRegular(f, path)
 }
 
@@ -43,6 +44,7 @@ func OpenRegularIn(root *os.Root, name string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return checkRegular(f, name)
 }
 
@@ -57,9 +59,11 @@ func OpenRootDir(path string) (*os.Root, error) {
 	if path == "" {
 		return os.OpenRoot(path)
 	}
+
 	if !strings.HasSuffix(path, string(filepath.Separator)) {
 		path += string(filepath.Separator)
 	}
+
 	return os.OpenRoot(path)
 }
 
@@ -71,10 +75,12 @@ func checkRegular(f *os.File, name string) (*os.File, error) {
 		_ = f.Close()
 		return nil, fmt.Errorf("stat %s: %w", name, err)
 	}
+
 	if !fi.Mode().IsRegular() {
 		_ = f.Close()
 		return nil, fmt.Errorf("%s: %w", name, ErrNotRegular)
 	}
+
 	return f, nil
 }
 
@@ -86,5 +92,6 @@ func ReadRegular(path string) ([]byte, error) {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
+
 	return io.ReadAll(f)
 }

@@ -79,6 +79,7 @@ func TestNewImmutableMap_Large(t *testing.T) {
 	t.Parallel()
 
 	const n = 100_000
+
 	src := make(map[int]int, n)
 	for i := range n {
 		src[i] = i * 7
@@ -206,6 +207,7 @@ func TestImmutableMap_All_EarlyBreak(t *testing.T) {
 			break
 		}
 	}
+
 	require.Equal(t, 2, count)
 }
 
@@ -219,9 +221,11 @@ func TestImmutableMap_Keys(t *testing.T) {
 	for k := range m.Keys() {
 		got[k] = true
 	}
+
 	for k := range src {
 		require.True(t, got[k], "missing key %q", k)
 	}
+
 	require.Len(t, got, len(src))
 }
 
@@ -235,6 +239,7 @@ func TestImmutableMap_Values(t *testing.T) {
 	for v := range m.Values() {
 		got = append(got, v)
 	}
+
 	require.Len(t, got, len(src))
 	require.ElementsMatch(t, []int{1, 2, 3}, got)
 }
@@ -245,6 +250,7 @@ func TestImmutableMap_ManyCollisions(t *testing.T) {
 	// Fill a small table densely to force many H2 collisions and multi-group
 	// probing. With groupSize=8 and 87.5% load, 14 entries → 16 slots (2 groups).
 	const n = 14
+
 	src := make(map[int]int, n)
 	for i := range n {
 		src[i] = i * 3
@@ -276,9 +282,11 @@ func TestImmutableMap_ZeroValue(t *testing.T) {
 	for range m.All() {
 		t.Fatal("unexpected entry")
 	}
+
 	for range m.Keys() {
 		t.Fatal("unexpected key")
 	}
+
 	for range m.Values() {
 		t.Fatal("unexpected value")
 	}
@@ -297,6 +305,7 @@ func TestImmutableMap_Keys_EarlyBreak(t *testing.T) {
 			break
 		}
 	}
+
 	require.Equal(t, 2, count)
 }
 
@@ -313,6 +322,7 @@ func TestImmutableMap_Values_EarlyBreak(t *testing.T) {
 			break
 		}
 	}
+
 	require.Equal(t, 2, count)
 }
 
@@ -320,16 +330,19 @@ func TestImmutableMap_ConcurrentGet(t *testing.T) {
 	t.Parallel()
 
 	const n = 10_000
+
 	src := make(map[int]int, n)
 	for i := range n {
 		src[i] = i
 	}
+
 	m := coremaps.NewImmutableMap(src)
 
 	var wg sync.WaitGroup
 	for g := range 8 {
 		wg.Go(func() {
 			start := g * (n / 8)
+
 			end := start + (n / 8)
 			for i := start; i < end; i++ {
 				v, ok := m.Get(i)
@@ -340,6 +353,7 @@ func TestImmutableMap_ConcurrentGet(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 }
 
@@ -356,6 +370,7 @@ func TestImmutableMap_ExactlySevenOfEight(t *testing.T) {
 		require.True(t, ok, "key %d", k)
 		require.Equal(t, v, got)
 	}
+
 	require.False(t, m.Contains(7))
 }
 

@@ -7,6 +7,11 @@ package concurrency
 type Option[T any] func(o *options[T])
 
 // WithConcurrency sets the concurrency option.
+//
+// concurrency sets a fixed upper bound on the number of goroutines
+// that process items simultaneously. It is ignored when limitFunc
+// is set. Zero or negative values fall through to the default
+// adaptive concurrency limit.
 func WithConcurrency[T any](v int) Option[T] {
 	return func(o *options[T]) {
 		o.concurrency = v
@@ -14,6 +19,11 @@ func WithConcurrency[T any](v int) Option[T] {
 }
 
 // WithLimitFunc sets the limitFunc option.
+//
+// limitFunc, when non-nil, is called to determine the concurrency
+// limit dynamically and takes precedence over concurrency. Use one
+// of the built-in factories such as [MemoryAwareConcurrency] or
+// [AdaptiveConcurrency] to create a suitable function.
 func WithLimitFunc[T any](v ConcurrencyLimitFunc) Option[T] {
 	return func(o *options[T]) {
 		o.limitFunc = v
@@ -21,6 +31,9 @@ func WithLimitFunc[T any](v ConcurrencyLimitFunc) Option[T] {
 }
 
 // WithOnError sets the onError option.
+//
+// onError is an optional callback invoked after each item that
+// fails.
 func WithOnError[T any](v ErrorCallback[T]) Option[T] {
 	return func(o *options[T]) {
 		o.onError = v
@@ -28,6 +41,9 @@ func WithOnError[T any](v ErrorCallback[T]) Option[T] {
 }
 
 // WithOnSuccess sets the onSuccess option.
+//
+// onSuccess is an optional callback invoked after each item
+// completes without error.
 func WithOnSuccess[T any](v SuccessCallback[T]) Option[T] {
 	return func(o *options[T]) {
 		o.onSuccess = v
@@ -35,6 +51,10 @@ func WithOnSuccess[T any](v SuccessCallback[T]) Option[T] {
 }
 
 // WithStopOnError enables the stopOnError option.
+//
+// stopOnError, when true, cancels the internal context after the
+// first error, preventing new items from starting. Items already in
+// flight may still complete. Only the first error is returned.
 func WithStopOnError[T any]() Option[T] {
 	return func(o *options[T]) {
 		value := true
