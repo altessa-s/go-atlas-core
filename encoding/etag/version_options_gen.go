@@ -7,6 +7,9 @@ package etag
 type VersionOption func(o *versionOptions)
 
 // WithSingleton enables the singleton option.
+//
+// singleton accepts W/"0", the etag of a singleton resource that has not
+// been saved yet; every other resource has a positive stored version.
 func WithSingleton() VersionOption {
 	return func(o *versionOptions) {
 		value := true

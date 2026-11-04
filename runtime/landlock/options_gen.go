@@ -11,6 +11,9 @@ import (
 type Option func(o *options)
 
 // WithReadPaths appends to the readPaths option.
+//
+// readPaths grants read+execute access on each listed path (and
+// everything beneath it for directories). Use [WithReadPaths] to set.
 func WithReadPaths(v ...string) Option {
 	return func(o *options) {
 		if len(v) == 0 {
@@ -36,6 +39,10 @@ func WithReadPaths(v ...string) Option {
 }
 
 // WithReadWritePaths appends to the readWritePaths option.
+//
+// readWritePaths grants read+execute+write+truncate access on each
+// listed path. On kernels older than Landlock ABI 3 the truncate flag
+// is silently dropped from the ruleset. Use [WithReadWritePaths] to set.
 func WithReadWritePaths(v ...string) Option {
 	return func(o *options) {
 		if len(v) == 0 {

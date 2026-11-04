@@ -12,6 +12,8 @@ import (
 type Option func(o *options)
 
 // WithMaxBytes sets the maxBytes option.
+//
+// maxBytes caps the total materialized size. Zero means unlimited.
 func WithMaxBytes(v int64) Option {
 	return func(o *options) {
 		o.maxBytes = v
@@ -19,6 +21,9 @@ func WithMaxBytes(v int64) Option {
 }
 
 // WithMemThreshold sets the memThreshold option.
+//
+// memThreshold is the maximum number of bytes to hold in memory before
+// spilling to a temp file.
 func WithMemThreshold(v int64) Option {
 	return func(o *options) {
 		o.memThreshold = v
@@ -26,6 +31,9 @@ func WithMemThreshold(v int64) Option {
 }
 
 // WithTee sets the tee option.
+//
+// tee mirrors every byte read from the source into this writer during
+// materialization so callers can compute a digest in one pass.
 func WithTee(v io.Writer) Option {
 	return func(o *options) {
 		o.tee = v
@@ -33,6 +41,9 @@ func WithTee(v io.Writer) Option {
 }
 
 // WithTempDir sets the tempDir option.
+//
+// tempDir is the directory for the spill file. Empty means the default
+// directory for temporary files (os.TempDir).
 func WithTempDir[T interface{ string | *string }](v T) Option {
 	return func(o *options) {
 		var value string

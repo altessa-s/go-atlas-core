@@ -12,6 +12,10 @@ import (
 type Option func(o *options)
 
 // WithFsyncInterval sets the fsyncInterval option.
+//
+// fsyncInterval is the period between background fsync calls on the
+// active segment. Shorter intervals reduce the loss window after a
+// crash at the cost of throughput.
 func WithFsyncInterval(v time.Duration) Option {
 	return func(o *options) {
 		if v <= 0 {
@@ -22,6 +26,11 @@ func WithFsyncInterval(v time.Duration) Option {
 }
 
 // WithFsyncTicker sets the fsyncTicker option.
+//
+// fsyncTicker starts the ticker that paces the background fsync, called
+// once with fsyncInterval when the fsync goroutine starts; stop runs when
+// the goroutine exits on Close. Tests pass a ticker they drive by hand to
+// trigger the background fsync deterministically. A nil value is ignored.
 func WithFsyncTicker(v TickerFunc) Option {
 	return func(o *options) {
 		if v == nil {
@@ -32,6 +41,10 @@ func WithFsyncTicker(v TickerFunc) Option {
 }
 
 // WithInsecurePermissions enables the insecurePermissions option.
+//
+// insecurePermissions restores legacy 0755 directory / 0644 segment creation
+// and skips POSIX permission validation on existing paths. Use only when
+// payloads may be exposed to other local users.
 func WithInsecurePermissions() Option {
 	return func(o *options) {
 		value := true
@@ -40,6 +53,11 @@ func WithInsecurePermissions() Option {
 }
 
 // WithLogger sets the logger option.
+//
+// logger is the structured logger used to surface background fsync
+// errors that would otherwise be silently dropped. When nil, a
+// discard handler is installed by [Open] so call sites can emit
+// logs unconditionally.
 func WithLogger(v *slog.Logger) Option {
 	return func(o *options) {
 		if v == nil {
@@ -50,6 +68,9 @@ func WithLogger(v *slog.Logger) Option {
 }
 
 // WithMaxBytes sets the maxBytes option.
+//
+// maxBytes is the soft cap on total bytes held across all segments.
+// When exceeded, Append returns ErrFull. Zero disables the cap.
 func WithMaxBytes(v int64) Option {
 	return func(o *options) {
 		o.maxBytes = v
@@ -57,6 +78,9 @@ func WithMaxBytes(v int64) Option {
 }
 
 // WithMaxSegmentBytes sets the maxSegmentBytes option.
+//
+// maxSegmentBytes is the maximum size of a single segment file before
+// rolling over to a new one.
 func WithMaxSegmentBytes(v int64) Option {
 	return func(o *options) {
 		o.maxSegmentBytes = v

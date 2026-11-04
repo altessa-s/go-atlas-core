@@ -13,6 +13,9 @@ import (
 type Option func(o *options)
 
 // WithClock sets the clock option.
+//
+// clock supplies the access timestamps used to break eviction ties by
+// least recent access.
 func WithClock(v clock.Clock) Option {
 	return func(o *options) {
 		switch rv := reflect.ValueOf(v); rv.Kind() {

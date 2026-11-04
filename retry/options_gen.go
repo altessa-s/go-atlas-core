@@ -14,6 +14,12 @@ import (
 type Option func(o *options)
 
 // WithAttemptOnDoneContext enables the attemptOnDoneContext option.
+//
+// attemptOnDoneContext, set by the generated WithAttemptOnDoneContext,
+// makes the first attempt even when ctx has already ended, so fn decides
+// how a done context fails (and the failure is reported like any other
+// attempt's) instead of Do returning ctx.Err() without calling fn. Later
+// attempts still stop on a done context.
 func WithAttemptOnDoneContext() Option {
 	return func(o *options) {
 		value := true
@@ -22,6 +28,14 @@ func WithAttemptOnDoneContext() Option {
 }
 
 // WithClock sets the clock option.
+//
+// clock is the single time source of the retry loop: it starts and
+// checks the maxElapsedTime budget, measures the time left before the
+// context deadline for stopBeforeDeadline, and waits between attempts.
+// Its Sleep error ends Do as is, except an error matching ctx.Err() while
+// ctx has ended, which Do reports as a context end (context.Cause
+// included). Pass a clock.Fake to drive the loop in tests; a nil value
+// is ignored.
 func WithClock(v clock.Clock) Option {
 	return func(o *options) {
 		switch rv := reflect.ValueOf(v); rv.Kind() {
@@ -37,6 +51,14 @@ func WithClock(v clock.Clock) Option {
 }
 
 // WithJoinLastError enables the joinLastError option.
+//
+// joinLastError, set by the generated WithJoinLastError, keeps the
+// failure that caused a retry when the context ends before that retry
+// starts (during the wait, or right after it) or the clock's Sleep fails:
+// Do returns errors.Join(lastErr, ctx.Err()[, context.Cause(ctx)]) or
+// errors.Join(lastErr, sleepErr) instead of the context or sleep error
+// alone, so errors.Is matches both the attempt's failure and the
+// interruption.
 func WithJoinLastError() Option {
 	return func(o *options) {
 		value := true
@@ -45,6 +67,9 @@ func WithJoinLastError() Option {
 }
 
 // WithMaxElapsedTime sets the maxElapsedTime option.
+//
+// maxElapsedTime caps the total time, as read from clock, spent across
+// all attempts. A zero or negative value disables the limit.
 func WithMaxElapsedTime(v time.Duration) Option {
 	return func(o *options) {
 		o.maxElapsedTime = v
@@ -52,6 +77,9 @@ func WithMaxElapsedTime(v time.Duration) Option {
 }
 
 // WithNextDelay sets the nextDelay option.
+//
+// nextDelay computes the backoff before each retry. A nil value or a
+// non-positive return stops retrying.
 func WithNextDelay(v NextDelayFunc) Option {
 	return func(o *options) {
 		o.nextDelay = v
@@ -59,6 +87,8 @@ func WithNextDelay(v NextDelayFunc) Option {
 }
 
 // WithOnRetry sets the onRetry option.
+//
+// onRetry is an optional callback invoked after each failed attempt.
 func WithOnRetry(v OnRetryFunc) Option {
 	return func(o *options) {
 		o.onRetry = v
@@ -66,6 +96,9 @@ func WithOnRetry(v OnRetryFunc) Option {
 }
 
 // WithShouldRetry sets the shouldRetry option.
+//
+// shouldRetry, when non-nil, filters retryable errors. A nil value
+// retries every error that reaches the retry loop.
 func WithShouldRetry(v ShouldRetryFunc) Option {
 	return func(o *options) {
 		o.shouldRetry = v
@@ -73,6 +106,11 @@ func WithShouldRetry(v ShouldRetryFunc) Option {
 }
 
 // WithStopBeforeDeadline enables the stopBeforeDeadline option.
+//
+// stopBeforeDeadline, set by the generated WithStopBeforeDeadline, skips
+// a retry whose backoff would reach the context deadline: Do returns the
+// last attempt's error instead of sleeping into the deadline and
+// returning ctx.Err().
 func WithStopBeforeDeadline() Option {
 	return func(o *options) {
 		value := true

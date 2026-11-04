@@ -20,6 +20,7 @@ encoding/hash               # Hash abstractions
 encoding/keys               # Composite keys and digests
 encoding/serializer         # Serializer interface
 errors                      # Error wrapping and classification
+errors/network              # Network, URL and TLS error classification
 id                          # Service identity
 io                          # I/O helpers
 io/files                    # File walk and listing
@@ -33,6 +34,7 @@ runtime/capabilities        # Linux capabilities
 runtime/concurrency         # Bounded fan-out and adaptive limits
 runtime/cycle               # Guard for a cycle driven manually or by an owner
 runtime/helpers             # Goroutine introspection
+runtime/internal/exectest   # Test helper for executing the test binary
 runtime/landlock            # Linux Landlock sandboxing
 runtime/leakcheck           # Goroutine leak detection
 runtime/nonewprivs          # Linux no_new_privs
@@ -44,6 +46,8 @@ runtime/singleflight        # Keyed singleflight
 text                        # Text helpers
 text/charset                # Charsets
 text/strings                # String helpers
+text/strings/intern         # String interning
+text/strings/secure         # Sensitive string storage
 time                        # Time helpers
 time/civil                  # Calendar dates
 time/clock                  # Injectable clock

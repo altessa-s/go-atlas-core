@@ -12,6 +12,8 @@ import (
 type Option func(o *options)
 
 // WithLifecycle sets the lifecycle option.
+//
+// lifecycle cancels work independently of callers; nil preserves legacy behavior.
 func WithLifecycle(v context.Context) Option {
 	return func(o *options) {
 		o.lifecycle = v
@@ -26,6 +28,8 @@ func WithMaxConcurrent(v int) Option {
 }
 
 // WithPanicAsError sets the panicAsError option.
+//
+// panicAsError replaces recovered panics without retaining their values.
 func WithPanicAsError(v error) Option {
 	return func(o *options) {
 		o.panicAsError = v
