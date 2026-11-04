@@ -19,8 +19,10 @@ crash.
 
 Workers (durable ones from the WAL, volatile ones from the in-memory channel) build batches up to `BatchSize` or `FlushInterval`, and call
 `Sink.StoreBatch`. On success the corresponding WAL records are acked; once all records in a sealed segment are acked, the segment file is removed.
-Sinks receive **at-least-once** delivery: a single item may reappear after a crash-and-replay sequence, so implementations should be idempotent on the
-records' natural identity (e.g. event ID).
+With `WithWAL`, sinks receive **at-least-once** delivery: a failed batch stays in the WAL and is retried until it is delivered or `Shutdown` gives up,
+and a single item may reappear after a crash-and-replay sequence, so implementations should be idempotent on the records' natural identity (e.g.
+event ID). Without a WAL, delivery is **best effort**: a failed batch is retried up to `WithRetryAttempts` times and then dropped; the failure is
+reported through `Observer.BatchStoreFailed` and the error returned by `Shutdown`.
 
 Acks live only in memory, and a segment is removed only once every record in it is acked. When `Shutdown` returns `ErrBacklog` (the sink kept failing or
 the deadline ran out), `Start` on a new engine using the same WAL directory therefore replays every segment that still holds an undelivered record —
@@ -37,6 +39,7 @@ when it rolls over or at `Close`.
 | Loss window                   | Bounded by the WAL fsync interval (default 5 ms)             |
 | Sink temporarily unavailable  | Records accumulate in the WAL up to its configured max bytes |
 | WAL disabled                  | Zero I/O on the submit path; loses buffered items on crash   |
+| WAL disabled, sink failing    | Batch dropped after `WithRetryAttempts` retries; error reported by `Shutdown` |
 
 ## Engine
 
@@ -60,7 +63,8 @@ when it rolls over or at `Close`.
 | `ErrReplayDecode` | Replay cannot decode a retained WAL record                 |
 | `ErrAlreadyStarted` | `Start` was called on an engine that already started     |
 | `ErrSinkRequired` | `NewEngine` was given a nil sink                           |
-| `ErrCodecRequired` | The WAL is enabled but no codec is set                    |
+| `ErrCodecRequired` | `NewEngine` was given `WithWAL` with a nil codec          |
+| `ErrWALDirRequired` | `NewEngine` was given `WithWAL` with an empty directory  |
 
 ## Options
 
@@ -79,7 +83,7 @@ when it rolls over or at `Close`.
 | `WithOnDrop`            | Callback invoked on submit-time drop                       |
 | `WithLogger`            | `*slog.Logger` for diagnostic messages                     |
 | `WithObserver`          | `Observer` receiving engine events (default `NoopObserver`) |
-| `WithWAL`               | Enable crash-safe WAL; requires a `Codec[T]`               |
+| `WithWAL`               | Enable crash-safe WAL; requires a directory and a `Codec[T]`, otherwise `NewEngine` fails |
 
 `Observer` methods run in `Start` and on the `Submit` and worker hot paths: keep them cheap and non-blocking. Embed `NoopObserver` to implement only the events you
 need. The package has no metrics dependency; go-atlas provides a `metrics.Meter` adapter.

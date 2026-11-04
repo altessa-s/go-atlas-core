@@ -27,8 +27,12 @@ var (
 	ErrEngineClosed = errors.New("dispatch: engine closed")
 	// ErrAlreadyStarted is returned by Start when the engine has already started.
 	ErrAlreadyStarted = errors.New("dispatch: already started")
-	// ErrCodecRequired is returned when WAL is enabled but no codec is set.
+	// ErrCodecRequired is returned by NewEngine when WithWAL is given a nil
+	// codec.
 	ErrCodecRequired = errors.New("dispatch: codec required when WAL enabled")
+	// ErrWALDirRequired is returned by NewEngine when WithWAL is given an
+	// empty directory.
+	ErrWALDirRequired = errors.New("dispatch: directory required when WAL enabled")
 	// ErrSinkRequired is returned by NewEngine when sink is nil.
 	ErrSinkRequired = errors.New("dispatch: sink required")
 )
@@ -69,7 +73,9 @@ type Engine[T any] struct {
 	wg          sync.WaitGroup
 }
 
-// NewEngine creates an Engine with the given Sink and options.
+// NewEngine creates an Engine with the given Sink and options. It returns
+// ErrSinkRequired for a nil sink, and ErrWALDirRequired or ErrCodecRequired
+// when WithWAL is given an empty directory or a nil codec.
 func NewEngine[T any](sink Sink[T], opts ...Option[T]) (*Engine[T], error) {
 	if nilcheck.IsNil(sink) {
 		return nil, ErrSinkRequired
@@ -80,8 +86,14 @@ func NewEngine[T any](sink Sink[T], opts ...Option[T]) (*Engine[T], error) {
 		o.observer = NoopObserver{}
 	}
 
-	if o.walEnabled && nilcheck.IsNil(o.codec) {
-		return nil, ErrCodecRequired
+	if o.walEnabled {
+		if o.walDir == "" {
+			return nil, ErrWALDirRequired
+		}
+
+		if nilcheck.IsNil(o.codec) {
+			return nil, ErrCodecRequired
+		}
 	}
 
 	e := &Engine[T]{

@@ -70,20 +70,19 @@ type options[T any] struct {
 }
 
 // WithWAL enables write-ahead logging rooted at dir, using codec to
-// serialize items for durability. When WAL is enabled, codec must be
-// non-nil; the engine becomes crash-safe and records that have reached
-// the most recent fsync are guaranteed to be delivered to the sink
-// (at-least-once) even after a process crash. Additional WAL tunables
-// (segment size, fsync interval, max bytes) are supplied via the
+// serialize items for durability. The engine becomes crash-safe and records
+// that have reached the most recent fsync are guaranteed to be delivered to
+// the sink (at-least-once) even after a process crash. Additional WAL
+// tunables (segment size, fsync interval, max bytes) are supplied via the
 // variadic walOpts argument — see the [wal] package for the available
 // [wal.Option] constructors. Without this option the engine runs purely
 // in-memory and incurs no I/O on Submit.
+//
+// WithWAL never disables the WAL silently: [NewEngine] fails with
+// [ErrWALDirRequired] when dir is empty and with [ErrCodecRequired] when
+// codec is nil.
 func WithWAL[T any](dir string, codec Codec[T], walOpts ...wal.Option) Option[T] {
 	return func(o *options[T]) {
-		if codec == nil || dir == "" {
-			return
-		}
-
 		o.walEnabled = true
 		o.walDir = dir
 		o.walOpts = walOpts

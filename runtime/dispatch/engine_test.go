@@ -132,21 +132,51 @@ func TestNewEngine_NilSink_ReturnsErrSinkRequired(t *testing.T) {
 	require.Nil(t, eng)
 }
 
-func TestNewEngine_WithWALNoCodec_ReturnsErrCodecRequired(t *testing.T) {
+func TestNewEngine_InvalidWAL_ReturnsError(t *testing.T) {
 	t.Parallel()
-	// WithWAL with a non-nil codec populates the codec field, so the
-	// only way to reach ErrCodecRequired is to bypass WithWAL. We
-	// simulate that by calling WithWAL with a nil codec (which is a
-	// documented no-op) and then verifying the engine opens without
-	// WAL — there is no public surface to enable WAL without a codec,
-	// which is exactly the invariant the sentinel protects. The test
-	// is therefore the dual: nil codec → WAL is disabled, Engine builds.
-	sink := &fakeSink{}
-	eng, err := dispatch.NewEngine[int](sink,
-		dispatch.WithWAL[int](filepath.Join(t.TempDir(), "wal"), nil),
-	)
-	require.NoError(t, err)
-	require.NotNil(t, eng)
+
+	tests := []struct {
+		name    string
+		dir     func(t *testing.T) string
+		codec   dispatch.Codec[int]
+		wantErr error
+	}{
+		{
+			name:    "nil codec",
+			dir:     func(t *testing.T) string { t.Helper(); return filepath.Join(t.TempDir(), "wal") },
+			codec:   nil,
+			wantErr: dispatch.ErrCodecRequired,
+		},
+		{
+			name:    "typed nil codec",
+			dir:     func(t *testing.T) string { t.Helper(); return filepath.Join(t.TempDir(), "wal") },
+			codec:   (*intCodec)(nil),
+			wantErr: dispatch.ErrCodecRequired,
+		},
+		{
+			name:    "empty directory",
+			dir:     func(*testing.T) string { return "" },
+			codec:   intCodec{},
+			wantErr: dispatch.ErrWALDirRequired,
+		},
+		{
+			name:    "empty directory and nil codec",
+			dir:     func(*testing.T) string { return "" },
+			codec:   nil,
+			wantErr: dispatch.ErrWALDirRequired,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			eng, err := dispatch.NewEngine[int](&fakeSink{},
+				dispatch.WithWAL[int](tt.dir(t), tt.codec),
+			)
+			require.ErrorIs(t, err, tt.wantErr)
+			require.Nil(t, eng)
+		})
+	}
 }
 
 func TestEngine_Start_Twice_ReturnsErrAlreadyStarted(t *testing.T) {
@@ -333,6 +363,36 @@ func TestEngine_RetriesAndAcks(t *testing.T) {
 
 	require.NoError(t, eng.Shutdown(ctx))
 	require.Len(t, sink.snapshot(), 5)
+}
+
+func TestEngine_NoWAL_DropsBatchAfterRetryBudget(t *testing.T) {
+	t.Parallel()
+
+	sink := &fakeSink{failN: 1 << 30}
+	eng := newRunningEngine(t, sink,
+		dispatch.WithBatchSize[int](1),
+		dispatch.WithWorkers[int](1),
+		dispatch.WithRetryAttempts[int](2),
+		dispatch.WithRetryBackoff[int](time.Millisecond),
+	)
+	require.True(t, eng.Submit(1))
+	waitFor(t, 2*time.Second, func() bool {
+		sink.mu.Lock()
+		defer sink.mu.Unlock()
+
+		return sink.calls == 3
+	}, "volatile batch was not retried up to the budget")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	require.ErrorContains(t, eng.Shutdown(ctx), "transient")
+	require.Empty(t, sink.snapshot())
+
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+
+	require.Equal(t, 3, sink.calls, "a dropped volatile batch must not be retried again")
 }
 
 // slowSink blocks StoreBatch on every call until the test closes it,

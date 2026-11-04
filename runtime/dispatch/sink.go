@@ -6,10 +6,19 @@ package dispatch
 
 import "context"
 
-// Sink is the destination for batched items processed by Engine. Sinks
-// receive at-least-once delivery: a single item may appear in StoreBatch
-// more than once after a crash-and-replay sequence. Implementations should
-// be idempotent on the records' natural identity (e.g. event ID).
+// Sink is the destination for batched items processed by Engine. The
+// delivery guarantee depends on the mode:
+//
+//   - With WithWAL, delivery is at-least-once: a failed batch stays in the
+//     WAL and is retried until it is delivered or the engine shuts down, and
+//     a single item may appear in StoreBatch more than once after a
+//     crash-and-replay sequence. Implementations should be idempotent on the
+//     records' natural identity (e.g. event ID).
+//   - Without WithWAL, delivery is best effort: a failed batch is retried up
+//     to WithRetryAttempts times and then dropped. The failure is reported
+//     through Observer.BatchStoreFailed and the last sink error is joined
+//     into the error returned by Engine.Shutdown; buffered items are lost on
+//     a crash.
 type Sink[T any] interface {
 	// StoreBatch persists a batch of items. The batch is non-empty.
 	StoreBatch(ctx context.Context, items []T) error

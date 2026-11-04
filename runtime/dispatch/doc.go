@@ -39,17 +39,29 @@
 //
 // # Durability guarantees
 //
+// With WAL, the sink receives at-least-once delivery:
+//
 //   - Graceful Shutdown: drains the queue and waits for the sink, then closes
 //     the WAL. Acked segments are removed; nothing is lost.
+//   - Sink failure: a failed batch stays in the WAL and is retried in capped
+//     backoff rounds until it is delivered or Shutdown gives up, which then
+//     reports ErrBacklog; a new engine on the same directory replays it.
 //   - Crash (SIGKILL/panic/OOM): records that reached the most recent fsync
 //     survive and are replayed on next start. The loss window is bounded by
 //     FsyncInterval.
+//
+// Without WAL, delivery is best effort: a failed batch is retried up to
+// RetryAttempts times and then dropped, reported through
+// [Observer.BatchStoreFailed] and the error returned by Engine.Shutdown, and
+// buffered items are lost on a crash.
 //
 // # Disabling the WAL
 //
 // Pass no WithWAL option to keep the engine purely in-memory. In that mode
 // the engine is equivalent to a generic batching dispatcher with no I/O on
-// the submit path; the Codec field is not required.
+// the submit path; the Codec field is not required. WithWAL with an empty
+// directory or a nil codec does not fall back to this mode: NewEngine fails
+// with ErrWALDirRequired or ErrCodecRequired.
 //
 // # Performance
 //
