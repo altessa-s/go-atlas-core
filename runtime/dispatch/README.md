@@ -43,8 +43,8 @@ when it rolls over or at `Close`.
 | Function / Method    | Description                                                |
 |----------------------|------------------------------------------------------------|
 | `NewEngine[T]`       | Construct an `Engine` for item type `T` with a `Sink[T]`   |
-| `Engine.Start`       | Open the WAL, replay unflushed records, start workers      |
-| `Engine.Submit`      | Non-blocking enqueue (returns `false` on full-buffer drop) |
+| `Engine.Start`       | Open the WAL, check that unflushed records decode, start the workers that deliver them |
+| `Engine.Submit`      | Accept an item; `false` when rejected: engine not started or closed, full buffer (volatile, without `WithBackPressure`, which blocks instead), encode or WAL append failure. A full buffer never rejects a WAL record |
 | `Engine.Enqueue`     | Like `Submit`, but reports the tier that accepted the item (`Rejected`, `Queued`, `Logged`) and the error |
 | `Engine.Shutdown`    | Drain pending items and close the WAL, bounded by `ctx`    |
 | `Engine.Dropped`     | Total items dropped at submit time                         |
