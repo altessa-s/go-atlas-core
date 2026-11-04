@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/altessa-s/go-atlas-core/io/wal"
 	"github.com/altessa-s/go-atlas-core/runtime/dispatch"
 )
 
@@ -24,15 +25,26 @@ type recordingObserver struct {
 
 	enqueued, dropped, encodeFailed, batches, workers atomic.Int64
 	walSize                                           atomic.Int64
+	storeFailed, storeFailedItems, replayed           atomic.Int64
+	walAppendFailed, batchNanos                       atomic.Int64
 }
 
-func (o *recordingObserver) ItemEnqueued()           { o.enqueued.Add(1) }
-func (o *recordingObserver) ItemDropped()            { o.dropped.Add(1) }
-func (o *recordingObserver) EncodeFailed()           { o.encodeFailed.Add(1) }
-func (o *recordingObserver) BatchDone(time.Duration) { o.batches.Add(1) }
-func (o *recordingObserver) WorkerStarted()          { o.workers.Add(1) }
-func (o *recordingObserver) WorkerStopped()          { o.workers.Add(-1) }
-func (o *recordingObserver) WALSize(bytes int64)     { o.walSize.Store(bytes) }
+func (o *recordingObserver) ItemEnqueued() { o.enqueued.Add(1) }
+func (o *recordingObserver) ItemDropped()  { o.dropped.Add(1) }
+func (o *recordingObserver) EncodeFailed() { o.encodeFailed.Add(1) }
+func (o *recordingObserver) BatchDone(d time.Duration) {
+	o.batches.Add(1)
+	o.batchNanos.Add(int64(d))
+}
+func (o *recordingObserver) BatchStoreFailed(items int) {
+	o.storeFailed.Add(1)
+	o.storeFailedItems.Add(int64(items))
+}
+func (o *recordingObserver) ItemsReplayed(n int) { o.replayed.Add(int64(n)) }
+func (o *recordingObserver) WALAppendFailed()    { o.walAppendFailed.Add(1) }
+func (o *recordingObserver) WorkerStarted()      { o.workers.Add(1) }
+func (o *recordingObserver) WorkerStopped()      { o.workers.Add(-1) }
+func (o *recordingObserver) WALSize(bytes int64) { o.walSize.Store(bytes) }
 
 // TestEngine_ObserverEvents pins the events a volatile engine reports through
 // its Observer: admission, flushed batches and the worker lifecycle.
@@ -208,4 +220,89 @@ func TestEngine_ConcurrentStartAndSubmit(t *testing.T) {
 		require.NoError(t, e.Shutdown(stopCtx))
 		cancel()
 	}
+}
+
+// TestEngine_ObserverRetryEvents pins that every failed sink attempt is
+// reported with the batch size, and that BatchDone fires once per batch with
+// a duration that includes the retry backoff.
+func TestEngine_ObserverRetryEvents(t *testing.T) {
+	t.Parallel()
+
+	const backoff = 20 * time.Millisecond
+	obs := &recordingObserver{}
+	e, err := dispatch.NewEngine[int](&fakeSink{failN: 2},
+		dispatch.WithObserver[int](obs),
+		dispatch.WithWorkers[int](1),
+		dispatch.WithBatchSize[int](3),
+		dispatch.WithRetryAttempts[int](3),
+		dispatch.WithRetryBackoff[int](backoff),
+		dispatch.WithRetryJitter[int](0))
+	require.NoError(t, err)
+	require.NoError(t, e.Start())
+
+	for i := range 3 {
+		require.True(t, e.Submit(i))
+	}
+	waitFor(t, 5*time.Second, func() bool { return obs.batches.Load() == 1 }, "batch never completed")
+	require.NoError(t, e.Shutdown(t.Context()))
+
+	require.EqualValues(t, 2, obs.storeFailed.Load(), "one event per failed attempt")
+	require.EqualValues(t, 6, obs.storeFailedItems.Load(), "each failed attempt reports the batch size")
+	require.EqualValues(t, 1, obs.batches.Load())
+	require.GreaterOrEqual(t, time.Duration(obs.batchNanos.Load()), backoff, "BatchDone includes the retry backoff")
+}
+
+// TestEngine_WALSizeReportedDuringOutage pins that the WAL size is refreshed
+// while the sink keeps failing, so the gauge follows a growing backlog.
+func TestEngine_WALSizeReportedDuringOutage(t *testing.T) {
+	t.Parallel()
+
+	obs := &recordingObserver{}
+	e, err := dispatch.NewEngine[int](&fakeSink{failN: 1 << 30},
+		dispatch.WithWAL[int](filepath.Join(t.TempDir(), "wal"), intCodec{}),
+		dispatch.WithObserver[int](obs),
+		dispatch.WithRetryBackoff[int](time.Millisecond),
+		dispatch.WithRetryMaxBackoff[int](5*time.Millisecond),
+		dispatch.WithFlushInterval[int](10*time.Millisecond))
+	require.NoError(t, err)
+	require.NoError(t, e.Start())
+
+	require.True(t, e.Submit(1))
+	waitFor(t, 2*time.Second, func() bool { return obs.walSize.Load() > 0 }, "wal size never reported during the outage")
+	require.Zero(t, obs.batches.Load(), "no batch was delivered")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	_ = e.Shutdown(ctx) // The undelivered backlog is expected.
+}
+
+// TestEngine_ObserverReplayAndAppendFailure pins ItemsReplayed for records a
+// previous engine left in the WAL, and WALAppendFailed when the WAL is full.
+func TestEngine_ObserverReplayAndAppendFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "wal")
+	first, err := dispatch.NewEngine[int](&fakeSink{failN: 1 << 30},
+		dispatch.WithWAL[int](dir, intCodec{}),
+		dispatch.WithRetryBackoff[int](time.Millisecond))
+	require.NoError(t, err)
+	require.NoError(t, first.Start())
+	require.True(t, first.Submit(1))
+	require.True(t, first.Submit(2))
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	_ = first.Shutdown(ctx) // Leaves both records in the WAL.
+
+	obs := &recordingObserver{}
+	second, err := dispatch.NewEngine[int](&fakeSink{},
+		dispatch.WithWAL[int](dir, intCodec{}, wal.WithMaxBytes(1)),
+		dispatch.WithObserver[int](obs))
+	require.NoError(t, err)
+	require.NoError(t, second.Start())
+	require.EqualValues(t, 2, obs.replayed.Load())
+
+	require.False(t, second.Submit(3), "the WAL is over its one-byte cap")
+	require.EqualValues(t, 1, obs.walAppendFailed.Load())
+	require.EqualValues(t, 1, obs.dropped.Load())
+	require.NoError(t, second.Shutdown(t.Context()))
 }

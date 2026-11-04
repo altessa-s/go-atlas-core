@@ -320,6 +320,7 @@ func (e *Engine[T]) worker() {
 }
 
 // observeWALSize refreshes the WAL size gauge. It runs once per flushed batch
+// and once per failed sink attempt
 // rather than once per Submit: Stats takes the same mutex as Append, so
 // sampling it inline doubled the WAL lock acquisitions on the hot path — at
 // the default batch size that is a hundredfold reduction in contention for a
@@ -356,6 +357,9 @@ func (e *Engine[T]) storeBatch(items []T, offsets []wal.Offset) error {
 			return nil
 		}
 		e.obs.BatchStoreFailed(len(items))
+		// Refresh the WAL size on every failed attempt: during a sink outage
+		// the backlog keeps growing while no batch completes.
+		e.observeWALSize()
 		if e.shutdownCtx.Err() != nil || ((e.log == nil || e.closed.Load()) && attempt >= e.opts.retryAttempts) {
 			return err
 		}

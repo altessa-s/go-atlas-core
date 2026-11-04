@@ -15,7 +15,8 @@
 // Without WAL, Engine.Submit only sends the item to an in-memory channel and
 // returns. With WAL enabled, Submit additionally serializes the item via the
 // configured Codec, appends it to the active WAL segment (page-cache write,
-// no fsync), and then sends it to the channel. A background goroutine fsyncs
+// no fsync) and wakes a worker; durable workers claim records straight from
+// the WAL rather than from the channel. A background goroutine fsyncs
 // the active segment on the interval configured via wal.WithFsyncInterval
 // (group commit), bounding the loss window after a crash.
 //
