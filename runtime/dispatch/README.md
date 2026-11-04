@@ -54,7 +54,7 @@ when it rolls over or at `Close`.
 
 | Sentinel          | Meaning                                                    |
 |-------------------|------------------------------------------------------------|
-| `ErrEngineClosed` | The engine is shut down and accepts no more items          |
+| `ErrEngineClosed` | The engine is not started yet or already shut down and accepts no items |
 | `ErrQueueFull`    | The volatile queue has no capacity                         |
 | `ErrBacklog`      | `Shutdown` left accepted records undelivered               |
 | `ErrReplayDecode` | Replay cannot decode a retained WAL record                 |
@@ -75,13 +75,13 @@ when it rolls over or at `Close`.
 | `WithRetryMaxBackoff`   | Cap on retry waits during a durable sink outage (default 30 s) |
 | `WithRetryJitter`       | Fraction of each backoff added as random jitter (default 0.2) |
 | `WithStoreTimeout`      | Deadline for each `Sink.StoreBatch` call (default 30 s)    |
-| `WithBackPressure`      | Block `Submit` when the buffer is full instead of dropping |
+| `WithBackPressure`      | Without WAL, block `Submit` when the buffer is full instead of dropping; no effect with WAL |
 | `WithOnDrop`            | Callback invoked on submit-time drop                       |
 | `WithLogger`            | `*slog.Logger` for diagnostic messages                     |
 | `WithObserver`          | `Observer` receiving engine events (default `NoopObserver`) |
 | `WithWAL`               | Enable crash-safe WAL; requires a `Codec[T]`               |
 
-`Observer` methods run on the `Submit` and worker hot paths: keep them cheap and non-blocking. Embed `NoopObserver` to implement only the events you
+`Observer` methods run in `Start` and on the `Submit` and worker hot paths: keep them cheap and non-blocking. Embed `NoopObserver` to implement only the events you
 need. The package has no metrics dependency; go-atlas provides a `metrics.Meter` adapter.
 
 ## WAL

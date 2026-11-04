@@ -22,7 +22,7 @@ import (
 
 // Engine errors.
 var (
-	// ErrEngineClosed is returned by Submit after Shutdown.
+	// ErrEngineClosed is returned by Submit before Start and after Shutdown.
 	ErrEngineClosed = errors.New("dispatch: engine closed")
 	// ErrAlreadyStarted is returned by Start when the engine has already started.
 	ErrAlreadyStarted = errors.New("dispatch: already started")
