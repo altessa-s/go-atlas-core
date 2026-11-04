@@ -11,9 +11,9 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/altessa-s/go-atlas-core/runtime/nonewprivs"
-
 	"golang.org/x/sys/unix"
+
+	"github.com/altessa-s/go-atlas-core/runtime/nonewprivs"
 )
 
 // Landlock ABI version constants. Each version corresponds to a kernel

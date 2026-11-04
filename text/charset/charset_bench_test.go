@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/altessa-s/go-atlas-core/text/charset"
-
 	"golang.org/x/text/encoding/charmap"
+
+	"github.com/altessa-s/go-atlas-core/text/charset"
 )
 
 func benchInput(b *testing.B) (utf8Body, cp1251Body []byte) {

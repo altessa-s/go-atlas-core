@@ -18,10 +18,10 @@ import (
 	"errors"
 	"testing"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/altessa-s/go-atlas-core/runtime/internal/exectest"
 	"github.com/altessa-s/go-atlas-core/runtime/seccomp"
-
-	"golang.org/x/sys/unix"
 )
 
 // TestBlockDangerousSyscalls_DeniesMountInSubprocess is the headline

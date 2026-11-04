@@ -8,9 +8,9 @@ import (
 	"context"
 	"io"
 
-	"github.com/altessa-s/go-atlas-core/io/spool"
-
 	"golang.org/x/sync/semaphore"
+
+	"github.com/altessa-s/go-atlas-core/io/spool"
 
 	coreerrs "github.com/altessa-s/go-atlas-core/errors"
 )
