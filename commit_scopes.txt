@@ -33,6 +33,7 @@ runtime/appinfo             # Build and version info
 runtime/capabilities        # Linux capabilities
 runtime/concurrency         # Bounded fan-out and adaptive limits
 runtime/cycle               # Guard for a cycle driven manually or by an owner
+runtime/dispatch            # Batching dispatcher with optional WAL
 runtime/helpers             # Goroutine introspection
 runtime/internal/exectest   # Test helper for executing the test binary
 runtime/landlock            # Linux Landlock sandboxing
