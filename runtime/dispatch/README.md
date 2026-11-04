@@ -1,0 +1,137 @@
+# dispatch
+
+```go
+import "github.com/altessa-s/go-atlas-core/runtime/dispatch"
+```
+
+Package `dispatch` provides a generic, non-blocking, batching dispatch engine with optional crash-safe persistence backed by
+[`go-atlas-core/io/wal`](https://github.com/altessa-s/go-atlas-core/tree/develop/io/wal).
+
+It is the foundation for fire-and-forget producers (audit logs, request access logs, telemetry) where the hot path must not block on I/O but events must
+still survive process crashes.
+
+## Hot path
+
+Without a WAL, `Engine.Submit` only sends the item to an in-memory channel and returns. With `WithWAL` enabled, `Submit` additionally serializes the
+item via the configured `Codec`, appends it to the active WAL segment (page-cache write, no fsync) and notifies a durable worker, which reads pending
+records straight from the WAL. A background goroutine fsyncs the active segment every fsync interval (group commit), bounding the loss window after a
+crash.
+
+Workers (durable ones from the WAL, volatile ones from the in-memory channel) build batches up to `BatchSize` or `FlushInterval`, and call
+`Sink.StoreBatch`. On success the corresponding WAL records are acked; once all records in a sealed segment are acked, the segment file is removed.
+With `WithWAL`, sinks receive **at-least-once** delivery: a failed batch stays in the WAL and is retried until it is delivered or `Shutdown` gives up,
+and a single item may reappear after a crash-and-replay sequence, so implementations should be idempotent on the records' natural identity (e.g.
+event ID). Without a WAL, delivery is **best effort**: a failed batch is retried up to `WithRetryAttempts` times and then dropped; the failure is
+reported through `Observer.BatchStoreFailed` and the error returned by `Shutdown`.
+
+Acks live only in memory, and a segment is removed only once every record in it is acked. When `Shutdown` returns `ErrBacklog` (the sink kept failing or
+the deadline ran out), `Start` on a new engine using the same WAL directory therefore replays every segment that still holds an undelivered record —
+including records of those segments that were already delivered and acked. The same holds after a crash for the active segment, which is removed only
+when it rolls over or at `Close`.
+
+## Durability guarantees
+
+| Scenario                      | Guarantee                                                    |
+|-------------------------------|--------------------------------------------------------------|
+| Graceful `Shutdown(ctx)`      | Full drain to `Sink`, acked segments removed; a failing batch keeps its backoff and gets up to `WithRetryAttempts` attempts before `ctx` ends |
+| `Shutdown` with a backlog     | `ErrBacklog`; a new engine on the WAL replays whole segments |
+| `SIGKILL` / `panic` / OOM     | Records past the last fsync are replayed on next `Start`    |
+| Loss window                   | Bounded by the WAL fsync interval (default 5 ms)             |
+| Sink temporarily unavailable  | Records accumulate in the WAL up to its configured max bytes |
+| WAL disabled                  | Zero I/O on the submit path; loses buffered items on crash   |
+| WAL disabled, sink failing    | Batch dropped after `WithRetryAttempts` retries; error reported by `Shutdown` |
+
+## Engine
+
+| Function / Method    | Description                                                |
+|----------------------|------------------------------------------------------------|
+| `NewEngine[T]`       | Construct an `Engine` for item type `T` with a `Sink[T]`   |
+| `Engine.Start`       | Open the WAL, check that unflushed records decode, start the workers that deliver them |
+| `Engine.Submit`      | Accept an item; `false` when rejected: engine not started or closed, full buffer (volatile, without `WithBackPressure`, which blocks instead), encode or WAL append failure. A full buffer never rejects a WAL record |
+| `Engine.Enqueue`     | Like `Submit`, but reports the tier that accepted the item (`Rejected`, `Queued`, `Logged`) and the error |
+| `Engine.Shutdown`    | Drain pending items and close the WAL, bounded by `ctx`    |
+| `Engine.Dropped`     | Total items rejected at submit time: a full buffer without WAL, an encode or WAL append failure with WAL |
+| `Engine.WAL`         | Underlying `*wal.WAL`, or nil when WAL is disabled         |
+
+## Errors
+
+| Sentinel          | Meaning                                                    |
+|-------------------|------------------------------------------------------------|
+| `ErrEngineClosed` | The engine is not started yet or already shut down and accepts no items |
+| `ErrQueueFull`    | The volatile queue has no capacity                         |
+| `ErrBacklog`      | `Shutdown` left accepted records undelivered               |
+| `ErrReplayDecode` | Replay cannot decode a retained WAL record                 |
+| `ErrAlreadyStarted` | `Start` was called on an engine that already started     |
+| `ErrSinkRequired` | `NewEngine` was given a nil sink                           |
+| `ErrCodecRequired` | `NewEngine` was given `WithWAL` with a nil codec          |
+| `ErrWALDirRequired` | `NewEngine` was given `WithWAL` with an empty directory  |
+
+## Options
+
+| Option                  | Effect                                                     |
+|-------------------------|------------------------------------------------------------|
+| `WithBufferSize`        | In-memory queue capacity (default 10000)                   |
+| `WithBatchSize`         | Max batch size passed to `Sink.StoreBatch` (default 100)   |
+| `WithFlushInterval`     | Partial-batch flush deadline (default 1 s)                 |
+| `WithWorkers`           | Number of dispatch goroutines (default 2)                  |
+| `WithRetryAttempts`     | Max retries per failed batch (default 3)                   |
+| `WithRetryBackoff`      | Exponential backoff base (default 100 ms)                  |
+| `WithRetryMaxBackoff`   | Cap on retry waits during a durable sink outage (default 30 s) |
+| `WithRetryJitter`       | Fraction of each backoff added as random jitter (default 0.2) |
+| `WithStoreTimeout`      | Deadline for each `Sink.StoreBatch` call (default 30 s)    |
+| `WithBackPressure`      | Without WAL, block `Submit` when the buffer is full instead of dropping; no effect with WAL |
+| `WithOnDrop`            | Callback for every item rejected at submit time (full buffer without WAL; encode or WAL append failure with WAL) |
+| `WithLogger`            | `*slog.Logger` for diagnostic messages                     |
+| `WithObserver`          | `Observer` receiving engine events (default `NoopObserver`) |
+| `WithWAL`               | Enable crash-safe WAL; requires a directory and a `Codec[T]`, otherwise `NewEngine` fails |
+
+`Observer` methods run in `Start` and on the `Submit` and worker hot paths: keep them cheap and non-blocking. Embed `NoopObserver` to implement only the events you
+need. The package has no metrics dependency; go-atlas provides a `metrics.Meter` adapter.
+
+## WAL
+
+The write-ahead log lives in its own package, [`go-atlas-core/io/wal`](https://github.com/altessa-s/go-atlas-core/tree/develop/io/wal), and can be used
+independently of this engine. `WithWAL(dir, codec, walOpts...)` wires it in; the full API surface, durability guarantees, and performance notes are
+documented in the [[`go-atlas-core/io/wal`](https://github.com/altessa-s/go-atlas-core/tree/develop/io/wal)
+README](https://github.com/altessa-s/go-atlas-core/tree/develop/io/wal/README.md). Only the `wal.Option` variadic tail is exposed through this package —
+everything else is the WAL package's surface.
+
+## Usage
+
+```go
+sink := &mySink{}          // implements dispatch.Sink[*Event]
+codec := myCodec{}         // implements dispatch.Codec[*Event]
+
+eng, err := dispatch.NewEngine[*Event](sink,
+    dispatch.WithBatchSize[*Event](100),
+    dispatch.WithFlushInterval[*Event](time.Second),
+    dispatch.WithWAL[*Event]("/var/lib/svc/wal", codec,
+        wal.WithMaxSegmentBytes(64<<20),
+        wal.WithFsyncInterval(5*time.Millisecond),
+    ),
+)
+if err != nil {
+    return err
+}
+if err := eng.Start(); err != nil {
+    return err
+}
+defer func() {
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    _ = eng.Shutdown(ctx)
+}()
+
+eng.Submit(&Event{...}) // non-blocking hot path
+```
+
+For a runnable end-to-end example, see `Example` in `example_test.go`.
+
+## When to use — and when not to
+
+Use `dispatch.Engine` when you need a non-blocking producer interface with batching and optional local durability. Prefer a dedicated facade for
+domain-specific producers (audit, request logs) over a direct dependency on this package; build a new facade only when the schema and sink semantics
+genuinely differ.
+
+Do **not** use it as a distributed queue: delivery is to a single in-process `Sink`, and the WAL is a local, per-process spool. Cross-node durability
+belongs to the broker layer.
