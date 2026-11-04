@@ -33,7 +33,7 @@ when it rolls over or at `Close`.
 
 | Scenario                      | Guarantee                                                    |
 |-------------------------------|--------------------------------------------------------------|
-| Graceful `Shutdown(ctx)`      | Full drain to `Sink`, acked segments removed                 |
+| Graceful `Shutdown(ctx)`      | Full drain to `Sink`, acked segments removed; a failing batch keeps its backoff and gets up to `WithRetryAttempts` attempts before `ctx` ends |
 | `Shutdown` with a backlog     | `ErrBacklog`; a new engine on the WAL replays whole segments |
 | `SIGKILL` / `panic` / OOM     | Records past the last fsync are replayed on next `Start`    |
 | Loss window                   | Bounded by the WAL fsync interval (default 5 ms)             |

@@ -381,7 +381,9 @@ func (e *Engine[T]) observeWALSize() {
 }
 
 // storeBatch retries durable records until delivery or shutdown. RetryAttempts
-// bounds a volatile batch; durable batches continue in capped backoff rounds.
+// bounds a volatile batch; durable batches continue in capped backoff rounds
+// until Shutdown, after which RetryAttempts bounds them too. The backoff holds
+// during Shutdown and ends early only when Shutdown gives up.
 func (e *Engine[T]) storeBatch(items []T, offsets []wal.Offset) error {
 	start := time.Now()
 	defer func() { e.obs.BatchDone(time.Since(start)) }()
@@ -428,10 +430,13 @@ func (e *Engine[T]) storeBatch(items []T, offsets []wal.Offset) error {
 			backoff = DefaultRetryBackoff
 		}
 
+		// Shutdown keeps the backoff, so a failing batch spends its remaining
+		// attempts over time instead of at once; only Shutdown giving up
+		// (its context ending) cuts the wait short.
 		timer := time.NewTimer(backoff)
 		select {
 		case <-timer.C:
-		case <-e.done:
+		case <-e.shutdownCtx.Done():
 			timer.Stop()
 		}
 	}

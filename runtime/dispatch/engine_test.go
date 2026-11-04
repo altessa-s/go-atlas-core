@@ -395,6 +395,57 @@ func TestEngine_NoWAL_DropsBatchAfterRetryBudget(t *testing.T) {
 	require.Equal(t, 3, sink.calls, "a dropped volatile batch must not be retried again")
 }
 
+// recoveringSink fails every StoreBatch until recoverAt, then stores.
+type recoveringSink struct {
+	mu        sync.Mutex
+	recoverAt time.Time
+	calls     int
+	items     []int
+}
+
+func (s *recoveringSink) StoreBatch(_ context.Context, items []int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.calls++
+	if time.Now().Before(s.recoverAt) {
+		return errors.New("sink down")
+	}
+
+	s.items = append(s.items, items...)
+
+	return nil
+}
+
+func TestEngine_WAL_ShutdownKeepsTheRetryBackoff(t *testing.T) {
+	t.Parallel()
+
+	// The sink recovers after 250ms; with a 100ms base backoff the third
+	// attempt (at about 300ms) succeeds. Without the backoff during Shutdown
+	// every attempt would fail at once and Shutdown would report a backlog.
+	sink := &recoveringSink{recoverAt: time.Now().Add(250 * time.Millisecond)}
+	eng := newRunningEngine(t, sink,
+		dispatch.WithBatchSize[int](1),
+		dispatch.WithWorkers[int](1),
+		dispatch.WithWAL[int](filepath.Join(t.TempDir(), "wal"), intCodec{}),
+		dispatch.WithRetryAttempts[int](3),
+		dispatch.WithRetryBackoff[int](100*time.Millisecond),
+		dispatch.WithRetryJitter[int](0),
+	)
+	require.True(t, eng.Submit(1))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	require.NoError(t, eng.Shutdown(ctx))
+
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+
+	require.Equal(t, []int{1}, sink.items)
+	require.GreaterOrEqual(t, sink.calls, 2, "the batch must have been retried")
+}
+
 // slowSink blocks StoreBatch on every call until the test closes it,
 // so the in-memory buffer fills up and Submit triggers the drop path.
 type slowSink struct {
