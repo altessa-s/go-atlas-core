@@ -32,6 +32,9 @@ type Codec[T any] interface {
 	Decode(b []byte) (T, error)
 }
 
-// DropHandler is invoked when an item is dropped at submit time due to a
-// full in-memory buffer (and back-pressure mode is disabled).
+// DropHandler is invoked for every item rejected at submit time: without a
+// WAL when the in-memory buffer is full and back-pressure mode is disabled
+// ([ErrQueueFull]); with a WAL when the codec fails to encode the item or the
+// WAL append fails (the Enqueue error). It is not invoked for a batch the sink
+// fails to store.
 type DropHandler[T any] func(item T)

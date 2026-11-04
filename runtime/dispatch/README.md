@@ -50,7 +50,7 @@ when it rolls over or at `Close`.
 | `Engine.Submit`      | Accept an item; `false` when rejected: engine not started or closed, full buffer (volatile, without `WithBackPressure`, which blocks instead), encode or WAL append failure. A full buffer never rejects a WAL record |
 | `Engine.Enqueue`     | Like `Submit`, but reports the tier that accepted the item (`Rejected`, `Queued`, `Logged`) and the error |
 | `Engine.Shutdown`    | Drain pending items and close the WAL, bounded by `ctx`    |
-| `Engine.Dropped`     | Total items dropped at submit time                         |
+| `Engine.Dropped`     | Total items rejected at submit time: a full buffer without WAL, an encode or WAL append failure with WAL |
 | `Engine.WAL`         | Underlying `*wal.WAL`, or nil when WAL is disabled         |
 
 ## Errors
@@ -80,7 +80,7 @@ when it rolls over or at `Close`.
 | `WithRetryJitter`       | Fraction of each backoff added as random jitter (default 0.2) |
 | `WithStoreTimeout`      | Deadline for each `Sink.StoreBatch` call (default 30 s)    |
 | `WithBackPressure`      | Without WAL, block `Submit` when the buffer is full instead of dropping; no effect with WAL |
-| `WithOnDrop`            | Callback invoked on submit-time drop                       |
+| `WithOnDrop`            | Callback for every item rejected at submit time (full buffer without WAL; encode or WAL append failure with WAL) |
 | `WithLogger`            | `*slog.Logger` for diagnostic messages                     |
 | `WithObserver`          | `Observer` receiving engine events (default `NoopObserver`) |
 | `WithWAL`               | Enable crash-safe WAL; requires a directory and a `Codec[T]`, otherwise `NewEngine` fails |
