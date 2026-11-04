@@ -53,8 +53,7 @@ type Engine[T any] struct {
 	// ready is stored at the end of a successful Start and is what Submit
 	// gates on. Publishing it last gives Submit a happens-before edge to the
 	// WAL handle — gating on started instead would let a concurrent Submit
-	// observe a nil log and silently bypass durability — and it enforces the
-	// documented ordering that WAL replay is queued before any new item.
+	// observe a nil log and silently bypass durability.
 	ready   atomic.Bool
 	closed  atomic.Bool
 	dropped atomic.Int64
