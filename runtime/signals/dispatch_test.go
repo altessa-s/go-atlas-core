@@ -35,6 +35,7 @@ type errorRecorder struct {
 func (r *errorRecorder) handle(sig os.Signal, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.errs = append(r.errs, err)
 	r.sigs = append(r.sigs, sig)
 }
@@ -42,6 +43,7 @@ func (r *errorRecorder) handle(sig os.Signal, err error) {
 func (r *errorRecorder) snapshot() ([]error, []os.Signal) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	return slices.Clone(r.errs), slices.Clone(r.sigs)
 }
 
@@ -55,7 +57,9 @@ func (r *orderRecorder) handler(id int) ContextHandler {
 	return func(context.Context, os.Signal) error {
 		r.mu.Lock()
 		defer r.mu.Unlock()
+
 		r.ids = append(r.ids, id)
+
 		return nil
 	}
 }
@@ -63,6 +67,7 @@ func (r *orderRecorder) handler(id int) ContextHandler {
 func (r *orderRecorder) snapshot() []int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	return slices.Clone(r.ids)
 }
 
@@ -119,11 +124,13 @@ func TestRunHandlers_SequentialOrder(t *testing.T) {
 
 			rec := &orderRecorder{}
 			s := New()
+
 			for id, p := range tc.priorities {
 				if tc.broadcast[id] {
 					s.AddBroadcastHandlerWithPriority(rec.handler(id), p)
 					continue
 				}
+
 				s.AddHandlerWithPriority(rec.handler(id), p, syscall.SIGUSR1)
 			}
 
@@ -146,10 +153,13 @@ func TestRunHandlers_LargeSetUsesPriorityOrder(t *testing.T) {
 	s := New()
 
 	const n = LargeHandlerCountThreshold + 10
+
 	want := make([]int, 0, n)
 	byPriority := map[Priority][]int{}
+
 	for id := range n {
 		p := priorities[id%len(priorities)]
+
 		byPriority[p] = append(byPriority[p], id)
 		if id%2 == 0 {
 			s.AddHandlerWithPriority(rec.handler(id), p, syscall.SIGUSR1)
@@ -167,6 +177,7 @@ func TestRunHandlers_LargeSetUsesPriorityOrder(t *testing.T) {
 				want = append(want, id)
 			}
 		}
+
 		for _, id := range ids {
 			if id%2 == 0 {
 				want = append(want, id)
@@ -189,15 +200,19 @@ func TestRunHandlers_SparsePrioritiesFallBackToInsertionSort(t *testing.T) {
 	s := New()
 
 	const n = insertionSortThreshold + 8
+
 	var high, low []int
+
 	for id := range n {
 		p := Priority(1)
 		if id%3 == 0 {
 			p = 1_000_000
+
 			high = append(high, id)
 		} else {
 			low = append(low, id)
 		}
+
 		s.AddHandlerWithPriority(rec.handler(id), p, syscall.SIGUSR1)
 	}
 
@@ -244,6 +259,7 @@ func TestRunHandlers_ParallelRunsEveryHandler(t *testing.T) {
 
 			synctest.Test(t, func(t *testing.T) {
 				rec := &orderRecorder{}
+
 				s := New(WithExecutionMode(ParallelMode), WithWorkerPoolSize(tc.poolSize))
 				for id := range 4 {
 					s.AddHandler(rec.handler(id), syscall.SIGUSR1)
@@ -293,13 +309,17 @@ func TestRunHandlersParallel_ShutdownGracePeriodUsesClock(t *testing.T) {
 
 		started := make(chan struct{})
 		release := make(chan struct{})
+
 		var finished sync.WaitGroup
 		finished.Add(1)
+
 		entry := handlerEntry{
 			contextHandler: func(context.Context, os.Signal) error {
 				defer finished.Done()
+
 				close(started)
 				<-release
+
 				return nil
 			},
 		}
@@ -307,6 +327,7 @@ func TestRunHandlersParallel_ShutdownGracePeriodUsesClock(t *testing.T) {
 		returned := make(chan struct{})
 		go func() {
 			defer close(returned)
+
 			s.runHandlersParallelOptimized([]handlerEntry{entry}, syscall.SIGUSR1)
 		}()
 
@@ -421,6 +442,7 @@ func TestExecuteHandlerEntry_TimeoutReportsTimeoutError(t *testing.T) {
 		rec := &errorRecorder{}
 		s := New(WithErrorHandler(rec.handle))
 		release := make(chan struct{})
+
 		const timeout = 3 * time.Second
 
 		// The handler ignores its context so the dispatcher deterministically
@@ -460,10 +482,12 @@ func TestExecuteHandlerEntry_ShutdownIsNotReportedAsTimeout(t *testing.T) {
 		returned := make(chan struct{})
 		go func() {
 			defer close(returned)
+
 			s.executeHandlerEntryOptimized(handlerEntry{
 				contextHandler: func(context.Context, os.Signal) error {
 					close(started)
 					<-release
+
 					return nil
 				},
 				timeout: time.Hour,
@@ -487,25 +511,32 @@ func TestSafeCallErrorHandler(t *testing.T) {
 
 	t.Run("nil error handler is ignored", func(t *testing.T) {
 		t.Parallel()
+
 		s := New()
+
 		require.NotPanics(t, func() { s.safeCallErrorHandler(syscall.SIGUSR1, errors.New("x")) })
 	})
 
 	t.Run("panicking error handler is contained", func(t *testing.T) {
 		t.Parallel()
+
 		calls := 0
 		s := New(WithErrorHandler(func(os.Signal, error) {
 			calls++
+
 			panic("error handler failed")
 		}))
+
 		require.NotPanics(t, func() { s.safeCallErrorHandler(syscall.SIGUSR1, errors.New("x")) })
 		require.Equal(t, 1, calls)
 	})
 
 	t.Run("handler panic with panicking error handler", func(t *testing.T) {
 		t.Parallel()
+
 		s := New(WithErrorHandler(func(os.Signal, error) { panic("again") }))
 		entry := handlerEntry{contextHandler: func(context.Context, os.Signal) error { panic("first") }}
+
 		require.NotPanics(t, func() { s.executeHandlerEntryOptimized(entry, syscall.SIGUSR1) })
 	})
 }
@@ -552,9 +583,13 @@ func TestSignalsListener_FullWorkerPoolDropsSignal(t *testing.T) {
 		}, syscall.SIGUSR1)
 
 		s.wg.Go(s.signalsListener)
+
 		s.signalChannel <- syscall.SIGUSR1
+
 		synctest.Wait()
+
 		s.stop <- struct{}{}
+
 		s.wg.Wait()
 
 		errs, sigs := rec.snapshot()
@@ -574,9 +609,13 @@ func TestSignalsListener_DispatchesToWorker(t *testing.T) {
 		s.AddHandler(rec.handler(7), syscall.SIGUSR1)
 
 		s.wg.Go(s.signalsListener)
+
 		s.signalChannel <- syscall.SIGUSR1
+
 		synctest.Wait()
+
 		s.stop <- struct{}{}
+
 		s.wg.Wait()
 
 		require.Equal(t, []int{7}, rec.snapshot())

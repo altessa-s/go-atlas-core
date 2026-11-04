@@ -74,7 +74,9 @@ func (u *URL) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if err != nil {
 		return err
 	}
+
 	*u = URL(v)
+
 	return nil
 }
 
@@ -86,8 +88,10 @@ func replaceInvalidUTF8(s string) string {
 	if utf8.ValidString(s) {
 		return s
 	}
+
 	var b strings.Builder
 	b.Grow(len(s) + 2*utf8.UTFMax)
+
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])
 		if r == utf8.RuneError && size == 1 {
@@ -95,8 +99,10 @@ func replaceInvalidUTF8(s string) string {
 		} else {
 			b.WriteString(s[i : i+size])
 		}
+
 		i += size
 	}
+
 	return b.String()
 }
 
@@ -112,7 +118,9 @@ func (u *URL) UnmarshalYAML(unmarshal func(any) error) error {
 	if err := unmarshal(&v); err != nil {
 		return fmt.Errorf("redacted: unmarshal yaml: %w", err)
 	}
+
 	*u = URL(v)
+
 	return nil
 }
 
@@ -141,10 +149,12 @@ func (u URL) HasAmbiguousUserInfo() bool {
 	if !strings.Contains(raw, "@") {
 		return false
 	}
+
 	parsed, err := url.Parse(raw)
 	if err != nil {
 		return true
 	}
+
 	return ambiguousUserInfo(raw, parsed)
 }
 
@@ -164,6 +174,7 @@ func maskURL(raw string) string {
 	if raw == "" {
 		return ""
 	}
+
 	parsed, err := url.Parse(raw)
 	switch {
 	case err != nil:

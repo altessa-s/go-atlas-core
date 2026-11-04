@@ -54,6 +54,7 @@ func (g *Guard) Run(ctx context.Context) error {
 	if g.managed.Load() {
 		return ErrManaged
 	}
+
 	return g.TryRun(ctx)
 }
 
@@ -70,5 +71,6 @@ func (g *Guard) TryRunFunc(ctx context.Context, fn func(context.Context) error) 
 		return nil
 	}
 	defer g.running.Store(false)
+
 	return fn(ctx)
 }

@@ -27,12 +27,14 @@ func TestLimitedReadCloser_Close(t *testing.T) {
 
 	t.Run("nil closer returns nil", func(t *testing.T) {
 		t.Parallel()
+
 		lrc := coreio.NewLimitedReadCloser(nil, 10)
 		require.NoError(t, lrc.Close())
 	})
 
 	t.Run("underlying error is returned", func(t *testing.T) {
 		t.Parallel()
+
 		lrc := coreio.NewLimitedReadCloser(failingCloser{strings.NewReader("x")}, 10)
 		require.ErrorIs(t, lrc.Close(), errCloseFailed)
 	})
@@ -61,6 +63,7 @@ func TestPutBuffer(t *testing.T) {
 
 	t.Run("oversized buffer is discarded untouched", func(t *testing.T) {
 		t.Parallel()
+
 		buf := bytes.NewBuffer(make([]byte, 0, 64*1024+1))
 		buf.WriteString("data")
 		coreio.PutBuffer(buf)

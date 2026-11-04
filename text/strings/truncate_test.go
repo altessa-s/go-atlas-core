@@ -88,6 +88,7 @@ func TestTruncateBytes(t *testing.T) {
 			got := corestrings.TruncateBytes(tc.s, tc.n, tc.suffix)
 			require.Equal(t, tc.want, got)
 			require.LessOrEqual(t, len(got), max(tc.n, 0))
+
 			if utf8.ValidString(tc.s) && utf8.ValidString(tc.suffix) {
 				require.True(t, utf8.ValidString(got), "a valid input must stay valid")
 			}

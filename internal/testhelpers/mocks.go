@@ -13,6 +13,11 @@ type MockNetError struct {
 	Msg       string
 }
 
-func (e *MockNetError) Error() string   { return e.Msg }
-func (e *MockNetError) Timeout() bool   { return e.IsTimeout }
+// Error returns Msg.
+func (e *MockNetError) Error() string { return e.Msg }
+
+// Timeout returns IsTimeout.
+func (e *MockNetError) Timeout() bool { return e.IsTimeout }
+
+// Temporary returns IsTemp.
 func (e *MockNetError) Temporary() bool { return e.IsTemp }

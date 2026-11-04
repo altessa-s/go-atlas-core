@@ -12,7 +12,9 @@ import (
 
 func BenchmarkPoolReuse(b *testing.B) {
 	pool := coremaps.NewPool[int, int](64)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		m := pool.Get()
 		(*m)[1] = 1
@@ -22,7 +24,9 @@ func BenchmarkPoolReuse(b *testing.B) {
 
 func BenchmarkPoolGetWithCapacity(b *testing.B) {
 	pool := coremaps.NewPool[int, int](64)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		m := pool.GetWithCapacity(32)
 		(*m)[1] = 1

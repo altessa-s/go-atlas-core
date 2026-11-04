@@ -51,6 +51,7 @@ func New(r io.Reader, opts ...Option) (*Spool, error) {
 	if o.tee == nil {
 		return newNoTee(r, o)
 	}
+
 	return newWithTee(r, o)
 }
 
@@ -74,16 +75,20 @@ func newNoTee(r io.Reader, o *options) (*Spool, error) {
 	n, err := head.ReadFrom(lr)
 	lr.R = nil
 	lrPool.Put(lr)
+
 	if err != nil {
 		return nil, coreerrs.WrapOperation(err, "read into spool")
 	}
+
 	if o.maxBytes > 0 && n > o.maxBytes {
 		return nil, ErrTooLarge
 	}
+
 	if n <= o.memThreshold {
 		sp := &Spool{size: n}
 		sp.inMem.Reset(head.Bytes())
 		sp.ReadSeeker = &sp.inMem
+
 		return sp, nil
 	}
 
@@ -91,6 +96,7 @@ func newNoTee(r io.Reader, o *options) (*Spool, error) {
 	if err != nil {
 		return nil, coreerrs.WrapOperation(err, "create spool file")
 	}
+
 	return spillToFile(r, head.Bytes(), f, nil, n, o.maxBytes)
 }
 
@@ -109,16 +115,20 @@ func newWithTee(r io.Reader, o *options) (*Spool, error) {
 	n, err := io.Copy(io.MultiWriter(&head, o.tee), lr)
 	lr.R = nil
 	lrPool.Put(lr)
+
 	if err != nil {
 		return nil, coreerrs.WrapOperation(err, "read into spool")
 	}
+
 	if o.maxBytes > 0 && n > o.maxBytes {
 		return nil, ErrTooLarge
 	}
+
 	if n <= o.memThreshold {
 		sp := &Spool{size: n}
 		sp.inMem.Reset(head.Bytes())
 		sp.ReadSeeker = &sp.inMem
+
 		return sp, nil
 	}
 
@@ -126,6 +136,7 @@ func newWithTee(r io.Reader, o *options) (*Spool, error) {
 	if err != nil {
 		return nil, coreerrs.WrapOperation(err, "create spool file")
 	}
+
 	return spillToFile(r, head.Bytes(), f, o.tee, n, o.maxBytes)
 }
 
@@ -138,10 +149,12 @@ func spillToFile(r io.Reader, headBytes []byte, f *os.File, tee io.Writer, n, ma
 	if _, err := f.Write(headBytes); err != nil {
 		return nil, errors.Join(coreerrs.WrapOperation(err, "spill spool"), remove())
 	}
+
 	var fileDst io.Writer = f
 	if tee != nil {
 		fileDst = io.MultiWriter(f, tee)
 	}
+
 	var (
 		m   int64
 		err error
@@ -153,18 +166,22 @@ func spillToFile(r io.Reader, headBytes []byte, f *os.File, tee io.Writer, n, ma
 		m, err = io.Copy(fileDst, lr)
 		lr.R = nil
 		lrPool.Put(lr)
+
 		if err != nil {
 			return nil, errors.Join(coreerrs.WrapOperation(err, "spill spool"), remove())
 		}
+
 		if m > rem {
 			return nil, errors.Join(ErrTooLarge, remove())
 		}
 	} else if m, err = io.Copy(fileDst, r); err != nil {
 		return nil, errors.Join(coreerrs.WrapOperation(err, "spill spool"), remove())
 	}
+
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, errors.Join(coreerrs.WrapOperation(err, "rewind spool"), remove())
 	}
+
 	return &Spool{ReadSeeker: f, size: n + m, cleanup: remove}, nil
 }
 
@@ -177,7 +194,9 @@ func (s *Spool) Close() error {
 	if s.cleanup == nil {
 		return nil
 	}
+
 	cleanup := s.cleanup
 	s.cleanup = nil
+
 	return cleanup()
 }

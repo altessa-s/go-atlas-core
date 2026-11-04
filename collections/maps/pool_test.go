@@ -15,6 +15,7 @@ import (
 // fillMap stores n distinct entries in m.
 func fillMap(tb testing.TB, m map[int]int, n int) {
 	tb.Helper()
+
 	for i := range n {
 		m[i] = i
 	}
@@ -34,6 +35,7 @@ func TestPoolGetReturnsEmptyMap(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			pool := coremaps.NewPool[int, int](tc.defaultCap)
 			m := pool.Get()
 			require.NotNil(t, m)
@@ -45,6 +47,7 @@ func TestPoolGetReturnsEmptyMap(t *testing.T) {
 
 func TestPoolGetAfterPutIsEmpty(t *testing.T) {
 	t.Parallel()
+
 	pool := coremaps.NewPool[int, int](4)
 	m := pool.Get()
 	fillMap(t, *m, 10)
@@ -70,6 +73,7 @@ func TestPoolPut(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			pool := coremaps.NewPool[int, int](4)
 			m := pool.Get()
 			fillMap(t, *m, tc.entries)
@@ -84,7 +88,9 @@ func TestPoolPut(t *testing.T) {
 
 func TestPoolPutNil(t *testing.T) {
 	t.Parallel()
+
 	pool := coremaps.NewPool[int, int](4)
+
 	require.NotPanics(t, func() { pool.Put(nil) })
 }
 
@@ -101,6 +107,7 @@ func TestPoolGetWithCapacity(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			pool := coremaps.NewPool[int, int](8)
 			seed := pool.Get()
 			fillMap(t, *seed, 4)

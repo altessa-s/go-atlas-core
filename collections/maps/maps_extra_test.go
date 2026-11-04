@@ -19,19 +19,25 @@ func TestMapIter_EarlyBreakStopsTransforming(t *testing.T) {
 	t.Parallel()
 
 	m := map[int]int{1: 1, 2: 2, 3: 3, 4: 4}
+
 	var calls int
+
 	seq := coremaps.Map(m, func(k, v int) (int, int) {
 		calls++
 		return k, v * 10
 	})
+
 	var yielded int
+
 	for k, v := range seq {
 		require.Equal(t, k*10, v)
+
 		yielded++
 		if yielded == 2 {
 			break
 		}
 	}
+
 	require.Equal(t, 2, yielded)
 	require.Equal(t, 2, calls)
 }
@@ -40,6 +46,7 @@ func TestPool_ZeroValueGet(t *testing.T) {
 	t.Parallel()
 
 	var pool coremaps.Pool[string, int]
+
 	m := pool.Get()
 	require.NotNil(t, m)
 	require.NotNil(t, *m)
@@ -72,12 +79,14 @@ func TestWeakMap_RangeStopsEarly(t *testing.T) {
 	t.Parallel()
 
 	wm := coremaps.NewWeakMap[int, int]()
+
 	vals := []int{0, 1, 2, 3}
 	for i := range vals {
 		wm.Set(i, &vals[i])
 	}
 
 	var visited int
+
 	wm.Range(func(int, *int) bool {
 		visited++
 		return false
@@ -97,11 +106,15 @@ func TestWeakMap_RangeAndCleanupDropCollectedValues(t *testing.T) {
 			name: "Range",
 			sweep: func(wm *coremaps.WeakMap[int, testhelpers.User]) []int {
 				var keys []int
+
 				wm.Range(func(k int, v *testhelpers.User) bool {
 					require.NotNil(t, v)
+
 					keys = append(keys, k)
+
 					return true
 				})
+
 				return keys
 			},
 		},
@@ -121,6 +134,7 @@ func TestWeakMap_RangeAndCleanupDropCollectedValues(t *testing.T) {
 			for i := range 20 {
 				wm.Set(i, &testhelpers.User{ID: i})
 			}
+
 			kept := &testhelpers.User{ID: 100}
 			wm.Set(100, kept)
 

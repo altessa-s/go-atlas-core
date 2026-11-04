@@ -58,14 +58,19 @@ func (o *Optional[T]) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 		if _, err := dec.ReadToken(); err != nil {
 			return err
 		}
+
 		*o = None[T]()
+
 		return nil
 	}
+
 	var v T
 	if err := json.UnmarshalDecode(dec, &v); err != nil {
 		return err
 	}
+
 	o.value = v
 	o.present = true
+
 	return nil
 }

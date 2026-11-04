@@ -18,12 +18,14 @@ import (
 
 func TestExponential_JitterOverflow(t *testing.T) {
 	t.Parallel()
+
 	const base = time.Duration(math.MaxInt64 / 4 * 3)
 	for _, limit := range []time.Duration{0, math.MaxInt64 - 1} {
 		fn := retry.Exponential(base, retry.WithExponentialMaxDelay(limit), retry.WithExponentialJitter(1))
 		for range 100 {
 			delay := fn(0, nil)
 			require.GreaterOrEqual(t, delay, base)
+
 			if limit > 0 {
 				require.LessOrEqual(t, delay, limit)
 			}
@@ -33,6 +35,7 @@ func TestExponential_JitterOverflow(t *testing.T) {
 
 func TestDo_ElapsedBudgetOverflow(t *testing.T) {
 	t.Parallel()
+
 	failure := errors.New("failed attempt")
 	slept := false
 	err := retry.Do(t.Context(), func(context.Context) error { return failure },

@@ -51,6 +51,7 @@ func New(year int, month time.Month, day int) (Date, error) {
 	if !d.Valid() {
 		return Date{}, fmt.Errorf("%w: %04d-%02d-%02d", ErrInvalidDate, year, int(month), day)
 	}
+
 	return d, nil
 }
 
@@ -61,6 +62,7 @@ func MustNew(year int, month time.Month, day int) Date {
 	if err != nil {
 		panic(err)
 	}
+
 	return d
 }
 
@@ -71,10 +73,12 @@ func Parse(s string) (Date, error) {
 	if s == "" {
 		return Date{}, nil
 	}
+
 	t, err := time.Parse(layout, s)
 	if err != nil {
 		return Date{}, fmt.Errorf("%w: %q", ErrInvalidDate, s)
 	}
+
 	return New(t.Year(), t.Month(), t.Day())
 }
 
@@ -110,6 +114,7 @@ func (d Date) Valid() bool {
 	if d.Year < minYear || d.Year > maxYear || d.Month < time.January || d.Month > time.December || d.Day < 1 {
 		return false
 	}
+
 	return d.Day <= DaysIn(d.Year, d.Month)
 }
 
@@ -118,6 +123,7 @@ func (d Date) String() string {
 	if d.IsZero() {
 		return ""
 	}
+
 	return fmt.Sprintf("%04d-%02d-%02d", d.Year, int(d.Month), d.Day)
 }
 
@@ -127,6 +133,7 @@ func (d Date) In(loc *time.Location) time.Time {
 	if d.IsZero() {
 		return time.Time{}
 	}
+
 	return time.Date(d.Year, d.Month, d.Day, 0, 0, 0, 0, loc)
 }
 
@@ -162,6 +169,7 @@ func (d Date) AddDays(n int) Date {
 	if !d.Valid() || n > maxDaySpan || n < -maxDaySpan {
 		return Date{}
 	}
+
 	return inRange(Of(d.Time().AddDate(0, 0, n)))
 }
 
@@ -180,6 +188,7 @@ func inRange(d Date) Date {
 	if d.Year < minYear || d.Year > maxYear {
 		return Date{}
 	}
+
 	return d
 }
 
@@ -193,11 +202,14 @@ func (d Date) AddMonthsClamped(n, anchorDay int) Date {
 	if !d.Valid() || n > maxMonthSpan || n < -maxMonthSpan {
 		return Date{}
 	}
+
 	total := d.Year*monthsPerYear + int(d.Month) - 1 + n
 	if total < minYear*monthsPerYear || total >= (maxYear+1)*monthsPerYear {
 		return Date{}
 	}
+
 	y, m := total/monthsPerYear, time.Month(total%monthsPerYear+1)
+
 	return Date{Year: y, Month: m, Day: max(1, min(anchorDay, DaysIn(y, m)))}
 }
 
@@ -207,6 +219,7 @@ func (d Date) MarshalText() ([]byte, error) {
 	if !d.IsZero() && !d.Valid() {
 		return nil, fmt.Errorf("%w: %04d-%02d-%02d", ErrInvalidDate, d.Year, int(d.Month), d.Day)
 	}
+
 	return []byte(d.String()), nil
 }
 
@@ -216,7 +229,9 @@ func (d *Date) UnmarshalText(b []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*d = v
+
 	return nil
 }
 
@@ -236,6 +251,7 @@ func (d Date) MarshalJSONTo(enc *jsontext.Encoder) error {
 		_, err := d.MarshalText()
 		return err
 	}
+
 	return enc.WriteToken(jsontext.String(d.String()))
 }
 
@@ -249,19 +265,23 @@ func (d *Date) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 		if _, err := dec.ReadToken(); err != nil {
 			return err
 		}
+
 		*d = Date{}
+
 		return nil
 	case '"':
 		tok, err := dec.ReadToken()
 		if err != nil {
 			return err
 		}
+
 		return d.UnmarshalText([]byte(tok.String()))
 	default:
 		v, err := dec.ReadValue()
 		if err != nil {
 			return err
 		}
+
 		return d.unmarshalOther(v)
 	}
 }
@@ -274,18 +294,24 @@ func (d *Date) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 func (d *Date) unmarshalOther(v jsontext.Value) error {
 	if v.Kind() != '{' {
 		var s string
+
 		err := json.Unmarshal(v, &s, jsonv1.DefaultOptionsV1())
+
 		return fmt.Errorf("%w: %w", ErrInvalidDate, err)
 	}
+
 	var l legacyDate
 	if err := json.Unmarshal(v, &l, jsonv1.DefaultOptionsV1()); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidDate, err)
 	}
+
 	date := Date(l)
 	if !date.IsZero() && !date.Valid() {
 		return fmt.Errorf("%w: %04d-%02d-%02d", ErrInvalidDate, date.Year, int(date.Month), date.Day)
 	}
+
 	*d = date
+
 	return nil
 }
 

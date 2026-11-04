@@ -19,16 +19,21 @@ import (
 // collect drains a Walk iterator into name lists for assertion.
 func collect(t *testing.T, root string, opts ...files.WalkOption) (names []string, errs []error) {
 	t.Helper()
+
 	for entry, err := range files.Walk(root, opts...) {
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
+
 		rel, relErr := filepath.Rel(root, entry.Path)
 		require.NoError(t, relErr, "rel(%q, %q)", root, entry.Path)
+
 		names = append(names, filepath.ToSlash(rel))
 	}
+
 	slices.Sort(names)
+
 	return names, errs
 }
 
@@ -52,6 +57,7 @@ func makeTree(t *testing.T) string {
 	mustMkdir := func(p string) {
 		require.NoError(t, os.MkdirAll(filepath.Join(root, p), 0o755))
 	}
+
 	mustWrite("a.so")
 	mustWrite("b.SO")
 	mustWrite("notes.txt")
@@ -60,6 +66,7 @@ func makeTree(t *testing.T) string {
 	mustWrite("sub/c.so")
 	mustWrite("sub/d.yaml")
 	mustMkdir("empty")
+
 	return root
 }
 
@@ -67,6 +74,7 @@ func TestWalk_FlatDefault(t *testing.T) {
 	root := makeTree(t)
 	names, errs := collect(t, root)
 	require.Empty(t, errs, "unexpected errors")
+
 	want := []string{".hidden", "a.so", "b.SO", "empty", "notes.txt", "sub"}
 	require.Equal(t, want, names)
 }
@@ -166,15 +174,18 @@ func TestWalk_UnboundedDepth(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(deep, "leaf.txt"), []byte("x"), 0o644))
 
 	var found int
+
 	for entry, err := range files.Walk(root,
 		files.WithUnboundedDepth(),
 		files.WithFileTypes(files.FileTypeRegular),
 	) {
 		require.NoError(t, err, "Walk(WithUnboundedDepth)")
+
 		if entry.Name() == "leaf.txt" {
 			found++
 		}
 	}
+
 	require.Equal(t, 1, found, "Walk(WithUnboundedDepth): expected 1 leaf")
 }
 
@@ -214,11 +225,15 @@ func TestWalk_LastOptionWins(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := append([]files.WalkOption{files.WithFileTypes(files.FileTypeRegular)}, tc.opts...)
+
 			var got int
+
 			for _, err := range files.Walk(root, opts...) {
 				require.NoError(t, err, "Walk")
+
 				got++
 			}
+
 			require.Equal(t, tc.want, got, "leaf file count")
 		})
 	}
@@ -230,6 +245,7 @@ func TestWalk_EntryIsDirAndInfo(t *testing.T) {
 	root := makeTree(t)
 
 	var sawDir, sawFile bool
+
 	for entry, err := range files.Walk(root) {
 		require.NoError(t, err)
 
@@ -239,13 +255,17 @@ func TestWalk_EntryIsDirAndInfo(t *testing.T) {
 
 		if entry.Name() == "sub" {
 			sawDir = true
+
 			require.True(t, entry.IsDir())
 		}
+
 		if entry.Name() == "notes.txt" {
 			sawFile = true
+
 			require.False(t, entry.IsDir())
 		}
 	}
+
 	require.True(t, sawDir, "expected to see directory entry 'sub'")
 	require.True(t, sawFile, "expected to see file entry 'notes.txt'")
 }
@@ -263,6 +283,7 @@ func TestWalk_WithExtensions_BlankEntriesIgnored(t *testing.T) {
 
 func TestWalk_NonexistentRoot(t *testing.T) {
 	const root = "/definitely/does/not/exist/xyz123"
+
 	_, errs := collect(t, root)
 	require.Len(t, errs, 1, "Walk(%q): expected 1 error", root)
 }
@@ -270,8 +291,10 @@ func TestWalk_NonexistentRoot(t *testing.T) {
 func TestWalk_EarlyStop(t *testing.T) {
 	root := makeTree(t)
 	count := 0
+
 	for entry, err := range files.Walk(root, files.WithRecursive()) {
 		require.NoError(t, err)
+
 		count++
 		if count == 2 {
 			// Break out of the loop early.
@@ -279,6 +302,7 @@ func TestWalk_EarlyStop(t *testing.T) {
 			break
 		}
 	}
+
 	require.Equal(t, 2, count, "expected to stop at 2")
 }
 
@@ -293,6 +317,7 @@ func TestWalk_SymlinkNotFollowedByDefault(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlinks unreliable on windows in CI")
 	}
+
 	root := t.TempDir()
 	target := filepath.Join(root, "target")
 	require.NoError(t, os.Mkdir(target, 0o755))
@@ -317,20 +342,26 @@ func TestWalk_EntryType_Symlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlinks unreliable on windows in CI")
 	}
+
 	root := t.TempDir()
 	target := filepath.Join(root, "target")
 	require.NoError(t, os.WriteFile(target, []byte("x"), 0o644))
 	require.NoError(t, os.Symlink(target, filepath.Join(root, "link")))
 
-	var gotType files.FileType
-	var found bool
+	var (
+		gotType files.FileType
+		found   bool
+	)
+
 	for entry, err := range files.Walk(root) {
 		require.NoError(t, err)
+
 		if entry.Name() == "link" {
 			found = true
 			gotType = entry.Type()
 		}
 	}
+
 	require.True(t, found, "expected to see the symlink entry")
 	require.Equal(t, files.FileTypeSymlink, gotType)
 }
@@ -339,6 +370,7 @@ func TestWalk_BrokenSymlinkSurfacesError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlinks unreliable on windows in CI")
 	}
+
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "good.txt"), []byte("x"), 0o644))
 	// Symlink pointing at a non-existent target. With WithFollowSymlinks
@@ -356,9 +388,11 @@ func TestWalk_RecursiveErrorContinues(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission semantics differ on windows")
 	}
+
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses permission errors")
 	}
+
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "a.txt"), []byte("x"), 0o644))
 	bad := filepath.Join(root, "noaccess")
@@ -366,8 +400,11 @@ func TestWalk_RecursiveErrorContinues(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(bad, 0o755) })
 	require.NoError(t, os.WriteFile(filepath.Join(root, "b.txt"), []byte("x"), 0o644))
 
-	var names []string
-	var errCount int
+	var (
+		names    []string
+		errCount int
+	)
+
 	for entry, err := range files.Walk(root, files.WithRecursive()) {
 		if err != nil {
 			// Permission semantics vary across platforms; the contract under test
@@ -375,8 +412,10 @@ func TestWalk_RecursiveErrorContinues(t *testing.T) {
 			errCount++
 			continue
 		}
+
 		names = append(names, entry.Name())
 	}
+
 	require.NotZero(t, errCount, "Walk(%q) recursive: expected at least one error from inaccessible dir", root)
 	// Should still have visited a.txt, b.txt, and noaccess (the dir entry).
 	slices.Sort(names)

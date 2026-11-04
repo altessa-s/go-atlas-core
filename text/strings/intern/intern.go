@@ -113,6 +113,7 @@ func (s Stats) HitRate() float64 {
 	if total == 0 {
 		return 0
 	}
+
 	return float64(s.HotHits+s.ColdHits) / float64(total)
 }
 
@@ -123,6 +124,7 @@ func (s Stats) HotHitRate() float64 {
 	if total == 0 {
 		return 0
 	}
+
 	return float64(s.HotHits) / float64(total)
 }
 
@@ -195,6 +197,7 @@ func Default() *Interner {
 	if !defaultInternerPtr.CompareAndSwap(nil, newInterner) {
 		return defaultInternerPtr.Load()
 	}
+
 	return newInterner
 }
 
@@ -227,6 +230,7 @@ func New(maxSize int, opts ...Option) *Interner {
 		clock:   o.clock,
 	}
 	si.coarseNow.Store(o.clock.Now().Unix())
+
 	return si
 }
 
@@ -257,6 +261,7 @@ func (si *Interner) String(s string) string {
 	// Fast path: lookup in cold cache
 	if value, ok := si.entries.Load(s); ok {
 		entry := value.(*internEntry) //nolint:errcheck // type is guaranteed by internal usage
+
 		si.coldHits.Add(1)
 
 		// Update access information atomically using coarse timestamp
@@ -274,10 +279,12 @@ func (si *Interner) String(s string) string {
 
 	// Slow path: create new handle and entry
 	si.misses.Add(1)
+
 	handle := unique.Make(s)
 	canonicalString := handle.Value()
 	now := si.clock.Now().Unix()
 	si.coarseNow.Store(now)
+
 	newEntry := &internEntry{handle: handle}
 	newEntry.accessCount.Store(1)
 	newEntry.lastAccess.Store(now)
@@ -286,6 +293,7 @@ func (si *Interner) String(s string) string {
 		entry := actual.(*internEntry) //nolint:errcheck // type is guaranteed by internal usage
 		entry.accessCount.Add(1)
 		entry.lastAccess.Store(now)
+
 		return entry.value()
 	}
 
@@ -354,12 +362,14 @@ func (si *Interner) evictInBackground() {
 			accessCount: entry.accessCount.Load(),
 			lastAccess:  entry.lastAccess.Load(),
 		})
+
 		return true
 	})
 
 	if len(candidates) == 0 {
 		*candidatesPtr = candidates
 		evictionCandidatesPool.Put(candidatesPtr)
+
 		return
 	}
 
@@ -369,12 +379,14 @@ func (si *Interner) evictInBackground() {
 		if c := cmp.Compare(a.accessCount, b.accessCount); c != 0 {
 			return c
 		}
+
 		return cmp.Compare(a.lastAccess, b.lastAccess)
 	})
 
 	// Evict the least accessed entries
 	actualEvictCount := min(evictCount, int64(len(candidates)))
 	evictedCount := int64(0)
+
 	for i := range actualEvictCount {
 		key := candidates[i].key
 		if _, loaded := si.entries.LoadAndDelete(key); loaded {
@@ -457,10 +469,12 @@ func (si *Interner) IsFull() bool {
 // if [Interner.MaxSize] is zero.
 func (si *Interner) LoadFactor() float64 {
 	current := float64(si.currentSize.Load())
+
 	maximum := float64(si.maxSize)
 	if maximum == 0 {
 		return 0
 	}
+
 	return current / maximum
 }
 
@@ -522,15 +536,18 @@ func (si *Interner) CleanPathString(path string) string {
 	// Single-pass: collapse consecutive slashes and strip trailing slash.
 	b := corestrings.GetStringBuilder()
 	defer corestrings.PutStringBuilder(b)
+
 	b.Grow(len(path))
 
 	prev := byte(0)
+
 	for i := range len(path) {
 		ch := path[i]
 		if ch == '/' && prev == '/' {
 			prev = ch
 			continue
 		}
+
 		b.WriteByte(ch)
 		prev = ch
 	}
@@ -584,10 +601,12 @@ func (si *Interner) StringSlice(slice []string) []string {
 	if len(slice) == 0 {
 		return nil
 	}
+
 	result := make([]string, len(slice))
 	for i, s := range slice {
 		result[i] = si.String(s)
 	}
+
 	return result
 }
 
@@ -601,10 +620,12 @@ func (si *Interner) StringMap(m map[string]string) map[string]string {
 	if len(m) == 0 {
 		return nil
 	}
+
 	result := make(map[string]string, len(m))
 	for k, v := range m {
 		result[si.String(k)] = si.String(v)
 	}
+
 	return result
 }
 
@@ -631,7 +652,9 @@ func (si *Interner) JoinString(parts []string, separator string) string {
 	if len(parts) == 0 {
 		return si.String("")
 	}
+
 	joined := strings.Join(parts, separator)
+
 	return si.String(joined)
 }
 
@@ -646,7 +669,9 @@ func (si *Interner) JoinWith(parts []string, joiner func([]string) string) strin
 	if len(parts) == 0 {
 		return si.String("")
 	}
+
 	joined := joiner(parts)
+
 	return si.String(joined)
 }
 
@@ -791,14 +816,17 @@ func (si *Interner) fastHash(s string) uint32 {
 	}
 
 	// Simple FNV-1a hash variant optimized for short strings
-	const fnvBasis = 2166136261
-	const fnvPrime = 16777619
+	const (
+		fnvBasis = 2166136261
+		fnvPrime = 16777619
+	)
 
 	hash := uint32(fnvBasis)
 	for i := range len(s) {
 		hash ^= uint32(s[i])
 		hash *= fnvPrime
 	}
+
 	return hash
 }
 

@@ -24,11 +24,14 @@ func swapActiveFile(tb testing.TB, w *WAL, f *os.File) *os.File {
 	tb.Helper()
 	w.wmu.Lock()
 	defer w.wmu.Unlock()
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	require.NotNil(tb, w.active)
 	old := w.active.file
 	w.active.file = f
+
 	return old
 }
 
@@ -37,7 +40,9 @@ func activePath(tb testing.TB, w *WAL) string {
 	tb.Helper()
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	require.NotNil(tb, w.active)
+
 	return w.active.path
 }
 
@@ -45,9 +50,11 @@ func activePath(tb testing.TB, w *WAL) string {
 // and Sync on it fails with os.ErrClosed.
 func closedFile(tb testing.TB, path string) *os.File {
 	tb.Helper()
+
 	f, err := os.Open(path) //nolint:gosec // test-owned segment path
 	require.NoError(tb, err)
 	require.NoError(tb, f.Close())
+
 	return f
 }
 
@@ -56,6 +63,7 @@ func closedFile(tb testing.TB, path string) *os.File {
 // fsync started by the first one has finished.
 func manualTicker() (chan time.Time, Option) {
 	ticks := make(chan time.Time)
+
 	return ticks, WithFsyncTicker(func(time.Duration) (<-chan time.Time, func()) {
 		return ticks, func() {}
 	})
@@ -71,12 +79,14 @@ type syncBuffer struct {
 func (b *syncBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	return b.buf.Write(p)
 }
 
 func (b *syncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	return b.buf.String()
 }
 
@@ -85,6 +95,7 @@ func recoveredPayloads(records []Record) []string {
 	for _, r := range records {
 		out = append(out, string(r.Payload))
 	}
+
 	return out
 }
 
@@ -92,6 +103,7 @@ func TestOptions_IgnoreInvalidValues(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
+
 	tests := []struct {
 		name     string
 		opts     []Option
@@ -108,10 +120,12 @@ func TestOptions_IgnoreInvalidValues(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			o := newOptions(tc.opts...)
 			require.Equal(t, tc.interval, o.fsyncInterval)
 			require.NotNil(t, o.fsyncTicker, "a nil ticker must not replace the default")
 			require.NotNil(t, o.logger, "a nil logger must not replace the default")
+
 			if tc.logger != nil {
 				require.Same(t, tc.logger, o.logger)
 			}
@@ -129,6 +143,7 @@ func TestWAL_Append_WriteFailureLeavesSegmentConsistent(t *testing.T) {
 
 	first, err := w.Append([]byte("first"))
 	require.NoError(t, err)
+
 	before := w.Stats()
 
 	readOnly, err := os.Open(activePath(t, w)) //nolint:gosec // test-owned segment path
@@ -137,6 +152,7 @@ func TestWAL_Append_WriteFailureLeavesSegmentConsistent(t *testing.T) {
 
 	off, err := w.Append([]byte("second"))
 	require.Error(t, err)
+
 	var pathErr *fs.PathError
 	require.ErrorAs(t, err, &pathErr, "the write error is wrapped, not replaced")
 	require.Equal(t, "write", pathErr.Op)
@@ -192,22 +208,30 @@ func TestWAL_SegmentRollFailureIsReported(t *testing.T) {
 // reports the same failure, and that a later successful fsync clears it.
 func TestWAL_BackgroundFsyncFailureIsReported(t *testing.T) {
 	t.Parallel()
+
 	var logs syncBuffer
+
 	ticks, ticker := manualTicker()
 	w, _ := newTestWAL(t, ticker, WithLogger(slog.New(slog.NewTextHandler(&logs, nil))))
 	_, err := w.Append([]byte("payload"))
 	require.NoError(t, err)
 
 	healthy := swapActiveFile(t, w, closedFile(t, activePath(t, w)))
+
 	ticks <- time.Time{}
+
 	ticks <- time.Time{}
+
 	require.ErrorIs(t, w.Faulted(), os.ErrClosed)
 	require.Contains(t, logs.String(), "background fsync failed")
 	require.ErrorIs(t, w.Sync(), os.ErrClosed)
 
 	swapActiveFile(t, w, healthy)
+
 	ticks <- time.Time{}
+
 	ticks <- time.Time{}
+
 	require.NoError(t, w.Faulted(), "a successful fsync clears the fault")
 	require.NoError(t, w.Close())
 }
@@ -225,6 +249,7 @@ func TestWAL_Close_JoinsFinalSyncAndCloseErrors(t *testing.T) {
 
 	err = w.Close()
 	require.ErrorIs(t, err, os.ErrClosed)
+
 	var joined interface{ Unwrap() []error }
 	require.ErrorAs(t, err, &joined)
 	require.Len(t, joined.Unwrap(), 2, "both the final sync and the final close failed")
@@ -236,6 +261,7 @@ func TestWAL_Close_JoinsFinalSyncAndCloseErrors(t *testing.T) {
 // returns ErrClosed while Sync, the background fsync and Close do nothing.
 func TestWAL_RetiredActiveFile(t *testing.T) {
 	t.Parallel()
+
 	ticks, ticker := manualTicker()
 	w, dir := newTestWAL(t, ticker)
 	_, err := w.Append([]byte("kept"))
@@ -247,8 +273,11 @@ func TestWAL_RetiredActiveFile(t *testing.T) {
 	_, err = w.Append([]byte("rejected"))
 	require.ErrorIs(t, err, ErrClosed)
 	require.NoError(t, w.Sync())
+
 	ticks <- time.Time{}
+
 	ticks <- time.Time{}
+
 	require.NoError(t, w.Faulted())
 	require.NoError(t, w.Close())
 
@@ -262,9 +291,11 @@ func TestWAL_RetiredActiveFile(t *testing.T) {
 // removing a fully acked active segment instead of dropping it.
 func TestWAL_Close_ReportsRemoveFailure(t *testing.T) {
 	t.Parallel()
+
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("needs POSIX directory permissions enforced for the current user")
 	}
+
 	w, dir := newTestWAL(t, WithFsyncInterval(time.Hour))
 	off, err := w.Append([]byte("acked"))
 	require.NoError(t, err)

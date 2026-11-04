@@ -47,6 +47,7 @@ func TestSignal_ShutdownTimeout_HandlerOutlivesShutdown(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
+
 	var finished atomic.Bool
 
 	s := signals.New(
@@ -57,20 +58,24 @@ func TestSignal_ShutdownTimeout_HandlerOutlivesShutdown(t *testing.T) {
 		close(started)
 		<-release // ignores ctx on purpose
 		finished.Store(true)
+
 		return nil
 	}, syscall.SIGUSR2)
 	startBlockedHandler(t, s, started)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
+
 	require.ErrorIs(t, s.Shutdown(ctx), context.DeadlineExceeded)
 	require.False(t, finished.Load(), "the handler is still running after Shutdown timed out")
 
 	waited := make(chan struct{})
+
 	go func() {
 		s.Wait()
 		close(waited)
 	}()
+
 	require.Never(t, func() bool {
 		select {
 		case <-waited:
@@ -82,11 +87,13 @@ func TestSignal_ShutdownTimeout_HandlerOutlivesShutdown(t *testing.T) {
 
 	// The blocked handler is not a leak: release is reachable from here.
 	close(release)
+
 	select {
 	case <-waited:
 	case <-time.After(2 * time.Second):
 		require.FailNow(t, "Wait did not return after the handler was released")
 	}
+
 	require.True(t, finished.Load())
 }
 
@@ -114,20 +121,25 @@ func TestSignal_ShutdownTimeout_UnreachableHandlerLeaksWaiter(t *testing.T) {
 	s.AddHandler(func(context.Context, os.Signal) error {
 		close(started)
 		<-make(chan struct{}) // ignores ctx and blocks on a channel nobody can reach
+
 		return nil
 	}, syscall.SIGUSR2)
 	startBlockedHandler(t, s, started)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
+
 	require.ErrorIs(t, s.Shutdown(ctx), context.DeadlineExceeded)
 	// s is not used after this point, so its WaitGroup stays reachable only
 	// from the leaked goroutines.
 
 	var leaked []string
+
 	require.Eventually(t, func() bool {
 		var err error
+
 		leaked, err = tracker.Leaked()
+
 		return err == nil && hasStack(leaked, "TestSignal_ShutdownTimeout_UnreachableHandlerLeaksWaiter.func") &&
 			hasStack(leaked, "signals.(*Signal).Shutdown.func")
 	}, 5*time.Second, 10*time.Millisecond, "expected the handler and the Shutdown waiter to be reported as leaked")
@@ -141,5 +153,6 @@ func hasStack(records []string, frame string) bool {
 			return true
 		}
 	}
+
 	return false
 }

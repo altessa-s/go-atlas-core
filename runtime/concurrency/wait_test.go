@@ -22,9 +22,12 @@ func TestWaitContext(t *testing.T) {
 	require.NoError(t, concurrency.WaitContext(t.Context(), &wg), "an idle group returns at once")
 
 	release := make(chan struct{})
+
 	wg.Go(func() { <-release })
+
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
+
 	require.ErrorIs(t, concurrency.WaitContext(ctx, &wg), context.DeadlineExceeded, "the context bounds the wait")
 
 	close(release)

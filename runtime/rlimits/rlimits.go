@@ -55,6 +55,7 @@ func Apply(opts ...Option) error {
 	if err := validateOptions(o); err != nil {
 		return err
 	}
+
 	return apply(o)
 }
 
@@ -65,15 +66,19 @@ func validateOptions(o *options) error {
 	if err := checkNonNegative("memoryBytes", o.memoryBytes); err != nil {
 		return err
 	}
+
 	if err := checkNonNegative("maxOpenFiles", o.maxOpenFiles); err != nil {
 		return err
 	}
+
 	if err := checkNonNegative("maxProcesses", o.maxProcesses); err != nil {
 		return err
 	}
+
 	if err := checkNonNegative("maxFileSizeBytes", o.maxFileSizeBytes); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -81,5 +86,6 @@ func checkNonNegative(field string, v int64) error {
 	if v < 0 {
 		return fmt.Errorf("%w: %s=%d is negative", ErrInvalidOption, field, v)
 	}
+
 	return nil
 }

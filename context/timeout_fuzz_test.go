@@ -82,7 +82,7 @@ func FuzzApplyTimeoutBoundsADeadlinelessContext(f *testing.F) {
 }
 
 // FuzzApplyTimeoutPreservesCancellation pins that the derived context still
-// belongs to its parent: cancelling upstream cancels it.
+// belongs to its parent: canceling upstream cancels it.
 //
 // A helper that built its context from Background instead of the caller's would
 // satisfy both targets above and still detach every call from the request that
@@ -97,6 +97,7 @@ func FuzzApplyTimeoutPreservesCancellation(f *testing.F) {
 		}
 
 		parent, cancelParent := context.WithCancel(t.Context())
+
 		derived, cancel := corecontext.ApplyTimeout(parent, time.Duration(timeoutNanos))
 		defer cancel()
 
@@ -105,9 +106,10 @@ func FuzzApplyTimeoutPreservesCancellation(f *testing.F) {
 		select {
 		case <-derived.Done():
 		case <-time.After(time.Second):
-			t.Fatalf("cancelling the parent did not cancel the derived context (timeout %v)",
+			t.Fatalf("canceling the parent did not cancel the derived context (timeout %v)",
 				time.Duration(timeoutNanos))
 		}
+
 		require.Error(t, derived.Err())
 
 		// Which error it reports depends on what happened first, and a timeout

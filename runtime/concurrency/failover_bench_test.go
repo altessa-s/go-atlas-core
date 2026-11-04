@@ -19,11 +19,13 @@ func benchSources(failing int) []concurrency.Source[int] {
 	for range failing {
 		out = append(out, concurrency.Source[int]{Name: "down", Fetch: func(context.Context) (int, error) { return 0, errBenchFetch }})
 	}
+
 	return append(out, concurrency.Source[int]{Name: "up", Fetch: func(context.Context) (int, error) { return 1, nil }})
 }
 
 func BenchmarkFirstImmediate(b *testing.B) {
 	ctx := b.Context()
+
 	srcs := benchSources(0)
 	for b.Loop() {
 		_, _ = concurrency.First(ctx, srcs, nil)
@@ -32,6 +34,7 @@ func BenchmarkFirstImmediate(b *testing.B) {
 
 func BenchmarkFirstAfterFailures(b *testing.B) {
 	ctx := b.Context()
+
 	srcs := benchSources(3)
 	for b.Loop() {
 		_, _ = concurrency.First(ctx, srcs, nil)
@@ -40,6 +43,7 @@ func BenchmarkFirstAfterFailures(b *testing.B) {
 
 func BenchmarkFirstAllFailed(b *testing.B) {
 	ctx := b.Context()
+
 	srcs := benchSources(4)[:4]
 	for b.Loop() {
 		_, _ = concurrency.First(ctx, srcs, nil)

@@ -17,7 +17,9 @@ import (
 func TestFileExists(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "testfile")
 	require.NoError(t, err)
+
 	defer os.Remove(tmpFile.Name())
+
 	tmpFile.Close()
 
 	require.True(t, files.FileExists(tmpFile.Name()), "FileExists(%q) = false, want true", tmpFile.Name())
@@ -35,7 +37,9 @@ func TestDirExists(t *testing.T) {
 
 	tmpFile, err := os.CreateTemp("", "testfile")
 	require.NoError(t, err)
+
 	defer os.Remove(tmpFile.Name())
+
 	tmpFile.Close()
 
 	require.False(t, files.DirExists(tmpFile.Name()), "DirExists(%q) (file) = true, want false", tmpFile.Name())
@@ -60,7 +64,6 @@ func TestDirIsEmpty(t *testing.T) {
 func TestFindFile(t *testing.T) {
 	// Setup a dummy structure
 	// /tmp/root/config/app.yaml
-
 	tmpRoot := t.TempDir()
 
 	configDir := filepath.Join(tmpRoot, "config")

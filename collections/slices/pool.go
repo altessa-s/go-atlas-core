@@ -36,6 +36,7 @@ func NewPool[T any](defaultCap int) *Pool[T] {
 	if defaultCap <= 0 {
 		defaultCap = defaultSliceCapacity
 	}
+
 	return &Pool[T]{
 		pool: sync.Pool{
 			New: func() any {
@@ -57,7 +58,9 @@ func (p *Pool[T]) Get() *[]T {
 		newSlice := make([]T, 0, p.defaultCap)
 		slice = &newSlice
 	}
+
 	*slice = (*slice)[:0]
+
 	return slice
 }
 
@@ -92,6 +95,7 @@ func EnsureCapacity[T any](slicePtr *[]T, requiredCapacity int) bool {
 		for newCapacity < requiredCapacity {
 			newCapacity <<= 1
 		}
+
 		if newCapacity > maxSlicePoolCapacity {
 			newCapacity = maxSlicePoolCapacity
 		}

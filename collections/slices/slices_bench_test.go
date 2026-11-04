@@ -68,6 +68,7 @@ func BenchmarkFilterParallel(b *testing.B) {
 		for i := range size {
 			input[i] = i
 		}
+
 		predicate := func(n int) bool { return n%2 == 0 }
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
@@ -85,6 +86,7 @@ func BenchmarkMapParallel(b *testing.B) {
 		for i := range size {
 			input[i] = i
 		}
+
 		fn := func(n int) int { return n * 2 }
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
@@ -105,6 +107,7 @@ func benchInts(size int) []int {
 	for i := range size {
 		input[i] = i
 	}
+
 	return input
 }
 
@@ -113,6 +116,7 @@ func BenchmarkTo(b *testing.B) {
 		input := benchInts(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				out := coreslices.To(input, func(n int) int64 { return int64(n) * 2 })
 				if len(out) != size {
@@ -128,6 +132,7 @@ func BenchmarkToWithFilter(b *testing.B) {
 		input := benchInts(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				out := coreslices.ToWithFilter(input,
 					func(n int) bool { return n%2 == 0 },
@@ -148,13 +153,16 @@ func BenchmarkFilterMap(b *testing.B) {
 		input := benchInts(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				sum := 0
+
 				even := coreslices.FilterSeq(coreslices.Map(input, func(n int) int { return n * 3 }),
 					func(n int) bool { return n%2 == 0 })
 				for v := range even {
 					sum += v
 				}
+
 				if size > 0 && sum == 0 {
 					b.Fatal("empty pipeline")
 				}
@@ -168,6 +176,7 @@ func BenchmarkGroupBy(b *testing.B) {
 		input := benchInts(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				groups := coreslices.GroupBy(input, func(n int) int { return n % 16 })
 				if len(groups) != 16 {
@@ -183,13 +192,16 @@ func BenchmarkDeduplicateBy(b *testing.B) {
 		id   string
 		data int
 	}
+
 	for _, size := range benchSizes {
 		input := make([]record, size)
 		for i := range size {
 			input[i] = record{id: fmt.Sprintf("id-%d", i%(size/2)), data: i}
 		}
+
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				out := coreslices.DeduplicateBy(input, func(r record) string { return r.id })
 				if len(out) != size/2 {
@@ -205,6 +217,7 @@ func BenchmarkReduce(b *testing.B) {
 		input := benchInts(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				sum := coreslices.Reduce(input, 0, func(acc, _ int, v int) int { return acc + v })
 				if sum != size*(size-1)/2 {

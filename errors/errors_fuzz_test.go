@@ -36,6 +36,7 @@ func FuzzContextClassifiersAgreeWithErrorsIs(f *testing.F) {
 			if err == nil {
 				break
 			}
+
 			err = fmt.Errorf("%s: %w", message, err)
 		}
 

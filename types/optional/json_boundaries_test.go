@@ -29,7 +29,9 @@ func TestMarshalJSONNullBuffersAreIndependent(t *testing.T) {
 	// while the package's other tests are running.
 	require.NotSame(t, &a[0], &b[0])
 	a[0] = 'x'
+
 	require.Equal(t, "null", string(b))
+
 	raw, err := json.Marshal(optional.None[int]())
 	require.NoError(t, err)
 	require.Equal(t, "null", string(raw))
@@ -51,7 +53,9 @@ func TestUnmarshalJSONWhitespace(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			value := optional.Some(42)
+
 			err := jsonv2.Unmarshal([]byte(tc.input), &value)
 			if !tc.valid {
 				// v2 decodes in a single pass, so a trailing token is reported
@@ -65,13 +69,16 @@ func TestUnmarshalJSONWhitespace(t *testing.T) {
 
 			// encoding/json (v1) callers keep their error type.
 			value = optional.Some(42)
+
 			err = json.Unmarshal([]byte(tc.input), &value)
 			if !tc.valid {
 				var syntaxErr *json.SyntaxError
 				require.ErrorAs(t, err, &syntaxErr)
 				require.Equal(t, optional.Some(42), value)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.Equal(t, optional.None[int](), value)
 		})

@@ -29,17 +29,21 @@ import (
 // randomContent returns n deterministic pseudo-random bytes.
 func randomContent(n int, seed uint64) []byte {
 	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // deterministic test data
+
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = byte(r.Uint32())
 	}
+
 	return b
 }
 
 func spillFiles(t *testing.T, dir string) []string {
 	t.Helper()
+
 	files, err := filepath.Glob(filepath.Join(dir, "spool-*"))
 	require.NoError(t, err)
+
 	return files
 }
 
@@ -64,6 +68,7 @@ func TestSpoolIntegration_SpillsPastDefaultThreshold(t *testing.T) {
 	info, err := os.Stat(files[0])
 	require.NoError(t, err)
 	require.Equal(t, int64(len(content)), info.Size())
+
 	if runtime.GOOS != "windows" {
 		require.Equal(t, fs.FileMode(0o600), info.Mode().Perm(), "the spill file is private")
 	}
@@ -87,22 +92,29 @@ func TestSpoolIntegration_SpillsPastDefaultThreshold(t *testing.T) {
 func TestSpoolIntegration_ConcurrentSpoolsShareDir(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+
 	const spools = 8
 
 	sps := make([]*spool.Spool, spools)
 	contents := make([][]byte, spools)
+
 	var wg sync.WaitGroup
+
 	errs := make([]error, spools)
 	for i := range spools {
 		contents[i] = randomContent(64<<10+i, uint64(i))
+
 		wg.Go(func() {
 			sps[i], errs[i] = spool.New(bytes.NewReader(contents[i]), spool.WithMemThreshold(4<<10), spool.WithTempDir(dir))
 		})
 	}
+
 	wg.Wait()
+
 	for i := range spools {
 		require.NoError(t, errs[i])
 	}
+
 	require.Len(t, spillFiles(t, dir), spools)
 
 	for i, sp := range sps {
@@ -111,6 +123,7 @@ func TestSpoolIntegration_ConcurrentSpoolsShareDir(t *testing.T) {
 		require.Equal(t, contents[i], got)
 		require.NoError(t, sp.Close())
 	}
+
 	require.Empty(t, spillFiles(t, dir))
 }
 
@@ -119,9 +132,11 @@ func TestSpoolIntegration_ConcurrentSpoolsShareDir(t *testing.T) {
 // fits in memory must not touch the directory at all.
 func TestSpoolIntegration_UnwritableDir(t *testing.T) {
 	t.Parallel()
+
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("needs POSIX directory permissions enforced for the current user")
 	}
+
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o500))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })

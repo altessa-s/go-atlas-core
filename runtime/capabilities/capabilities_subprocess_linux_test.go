@@ -39,6 +39,7 @@ func getSets(when string) capabilities.Sets {
 	if err != nil {
 		exectest.Failf("Get %s: %v", when, err)
 	}
+
 	return s
 }
 
@@ -49,6 +50,7 @@ func requireRejectedUnchanged(op string, err error, before capabilities.Sets) {
 	if !errors.Is(err, capabilities.ErrInvalidOption) {
 		exectest.Failf("%s returned %v, want ErrInvalidOption", op, err)
 	}
+
 	if after := getSets("after the rejected " + op); after != before {
 		exectest.Failf("%s was rejected but changed the thread: before=%+v after=%+v", op, before, after)
 	}
@@ -69,16 +71,21 @@ func requireRejectedUnchanged(op string, err error, before capabilities.Sets) {
 func TestDropAll_ZeroesEverySetInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		before := getSets("before DropAll")
+
 		err := capabilities.DropAll()
 		if before.Bounding != 0 && !canDropBounding(before) {
 			requireRejectedUnchanged("DropAll", err, before)
 			return
 		}
+
 		if err != nil {
 			exectest.Failf("DropAll: %v", err)
 		}
+
 		if got := getSets("after DropAll"); got != (capabilities.Sets{}) {
 			exectest.Failf("sets after DropAll = %+v, want all zero "+
 				"(bounding drop is irreversible — DropAll must clear it)", got)
@@ -101,7 +108,9 @@ func TestDropAll_ZeroesEverySetInSubprocess(t *testing.T) {
 func TestDropAllExcept_KeepsListedAndDropsRestInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		before := getSets("before DropAllExcept")
 		bit := uint64(1) << capabilities.CAP_NET_BIND_SERVICE
 
@@ -110,9 +119,11 @@ func TestDropAllExcept_KeepsListedAndDropsRestInSubprocess(t *testing.T) {
 			requireRejectedUnchanged("DropAllExcept", err, before)
 			return
 		}
+
 		if err != nil {
 			exectest.Failf("DropAllExcept(CAP_NET_BIND_SERVICE): %v", err)
 		}
+
 		want := capabilities.Sets{
 			Effective: before.Permitted & bit,
 			Permitted: before.Permitted & bit,
@@ -132,19 +143,25 @@ func TestDropAllExcept_KeepsListedAndDropsRestInSubprocess(t *testing.T) {
 func TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		cur := getSets("before Apply")
+
 		chown := uint64(1) << capabilities.CAP_CHOWN
 		if !canDropBounding(cur) || cur.Bounding&chown == 0 {
 			return
 		}
+
 		setpcap := uint64(1) << capabilities.CAP_SETPCAP
 
 		lowered := cur
+
 		lowered.Effective &^= setpcap
 		if err := capabilities.Apply(lowered); err != nil {
 			exectest.Failf("Apply(CAP_SETPCAP not effective): %v", err)
 		}
+
 		mid := getSets("after lowering CAP_SETPCAP")
 		if mid != lowered || mid.Has(capabilities.CAP_SETPCAP, capabilities.Effective) ||
 			!mid.Has(capabilities.CAP_SETPCAP, capabilities.Permitted) {
@@ -157,10 +174,12 @@ func TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess(t *testing.T) {
 		want.Permitted &^= chown
 		want.Inheritable &^= chown
 		want.Ambient &^= chown
+
 		want.Bounding &^= chown
 		if err := capabilities.Apply(want); err != nil {
 			exectest.Failf("Apply(drop CAP_CHOWN from bounding): %v", err)
 		}
+
 		if got := getSets("after Apply"); got != want {
 			exectest.Failf("sets after Apply = %+v, want %+v", got, want)
 		}
@@ -176,7 +195,9 @@ func TestApply_BoundingDropWithSetpcapOnlyPermittedInSubprocess(t *testing.T) {
 func TestApply_EffectiveOutsidePermittedRejectedInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		before := getSets("before Apply")
 		err := capabilities.Apply(capabilities.Sets{Effective: uint64(1) << capabilities.CAP_SETPCAP})
 		requireRejectedUnchanged("Apply(effective outside permitted)", err, before)
@@ -196,7 +217,9 @@ func TestApply_EffectiveOutsidePermittedRejectedInSubprocess(t *testing.T) {
 func TestApply_InheritableRulesInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		cur := getSets("before Apply")
 		if !cur.Has(capabilities.CAP_SETPCAP, capabilities.Permitted) ||
 			!cur.Has(capabilities.CAP_CHOWN, capabilities.Permitted) ||
@@ -204,16 +227,19 @@ func TestApply_InheritableRulesInSubprocess(t *testing.T) {
 			cur.Has(capabilities.CAP_CHOWN, capabilities.Inheritable) {
 			return
 		}
+
 		chown := uint64(1) << capabilities.CAP_CHOWN
 		setpcap := uint64(1) << capabilities.CAP_SETPCAP
 
 		lowered := cur
 		lowered.Effective &^= chown | setpcap
 		lowered.Permitted &^= chown
+
 		lowered.Ambient &^= chown
 		if err := capabilities.Apply(lowered); err != nil {
 			exectest.Failf("Apply(lower CAP_CHOWN and CAP_SETPCAP): %v", err)
 		}
+
 		if got := getSets("after lowering"); got != lowered {
 			exectest.Failf("sets after lowering = %+v, want %+v", got, lowered)
 		}
@@ -227,14 +253,17 @@ func TestApply_InheritableRulesInSubprocess(t *testing.T) {
 		// has before the call, so it has to be raised by a call of its
 		// own first.
 		raised := lowered
+
 		raised.Effective |= setpcap
 		if err := capabilities.Apply(raised); err != nil {
 			exectest.Failf("Apply(raise CAP_SETPCAP): %v", err)
 		}
+
 		raised.Inheritable |= chown
 		if err := capabilities.Apply(raised); err != nil {
 			exectest.Failf("Apply(inheritable from bounding with CAP_SETPCAP): %v", err)
 		}
+
 		if got := getSets("after raising"); got != raised {
 			exectest.Failf("sets after raising = %+v, want %+v", got, raised)
 		}
@@ -250,19 +279,24 @@ func TestApply_InheritableRulesInSubprocess(t *testing.T) {
 func TestDropAllExcept_KeepsPermittedOutsideBoundingInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		before := getSets("before BoundingDrop")
 		if !before.Has(capabilities.CAP_SETPCAP, capabilities.Effective) ||
 			!before.Has(capabilities.CAP_NET_BIND_SERVICE, capabilities.Permitted) ||
 			!before.Has(capabilities.CAP_NET_BIND_SERVICE, capabilities.Bounding) {
 			return
 		}
+
 		bit := uint64(1) << capabilities.CAP_NET_BIND_SERVICE
 
 		if err := capabilities.BoundingDrop(capabilities.CAP_NET_BIND_SERVICE); err != nil {
 			exectest.Failf("BoundingDrop(CAP_NET_BIND_SERVICE): %v", err)
 		}
+
 		mid := before
+
 		mid.Bounding &^= bit
 		if got := getSets("after BoundingDrop"); got != mid {
 			exectest.Failf("sets after BoundingDrop = %+v, want %+v", got, mid)
@@ -271,6 +305,7 @@ func TestDropAllExcept_KeepsPermittedOutsideBoundingInSubprocess(t *testing.T) {
 		if err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE); err != nil {
 			exectest.Failf("DropAllExcept(CAP_NET_BIND_SERVICE) after BoundingDrop: %v", err)
 		}
+
 		want := capabilities.Sets{Effective: bit, Permitted: bit}
 		if got := getSets("after DropAllExcept"); got != want {
 			exectest.Failf("sets after DropAllExcept = %+v, want %+v", got, want)
@@ -286,11 +321,14 @@ func TestDropAllExcept_KeepsPermittedOutsideBoundingInSubprocess(t *testing.T) {
 func TestGet_ReturnsKernelStateInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		first, err := capabilities.Get()
 		if err != nil {
 			exectest.Failf("first Get: %v", err)
 		}
+
 		second, err := capabilities.Get()
 		if err != nil {
 			exectest.Failf("second Get: %v", err)

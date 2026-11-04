@@ -129,6 +129,7 @@ func TestCamelCase_ASCIIAndUnicodePathsAgree(t *testing.T) {
 	t.Parallel()
 
 	inputs := []string{"hello_world", "HELLO_WORLD", "a b\tc", "__x__y__", "MiXeD_cAsE", "x1_y2_z3", "trailing_"}
+
 	const suffix = "_é"
 	for _, in := range inputs {
 		require.Equal(t, corestrings.ToCamelCase(in)+"É", corestrings.ToCamelCase(in+suffix), "ToCamelCase(%q)", in)

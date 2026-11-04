@@ -119,5 +119,6 @@ var nameToCap = func() *coremaps.ImmutableMap[string, Cap] {
 	for c, name := range capToName.All() {
 		m[name] = c
 	}
+
 	return coremaps.NewImmutableMap(m)
 }()

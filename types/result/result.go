@@ -84,6 +84,7 @@ func (r Result[T]) OrDefault(def T) T {
 	if r.err != nil {
 		return def
 	}
+
 	return r.value
 }
 
@@ -94,5 +95,6 @@ func (r Result[T]) OrElse(fn func(error) T) T {
 	if r.err != nil {
 		return fn(r.err)
 	}
+
 	return r.value
 }

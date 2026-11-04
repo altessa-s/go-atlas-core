@@ -93,6 +93,7 @@ func doWithOptions(ctx context.Context, fn func(context.Context) error, cfg *opt
 		if err == nil {
 			return nil
 		}
+
 		lastErr = err
 
 		if cfg.shouldRetry != nil && !cfg.shouldRetry(err) {
@@ -132,6 +133,7 @@ func (cfg *options) waitRetry(ctx context.Context, timer **time.Timer, delay tim
 		if cerr := ctx.Err(); cerr != nil && errors.Is(serr, cerr) {
 			return cfg.contextEnded(ctx, lastErr)
 		}
+
 		return cfg.interrupted(lastErr, serr)
 	}
 
@@ -187,6 +189,7 @@ func (cfg *options) retryDelay(ctx context.Context, start time.Time, attempt int
 		if elapsed >= cfg.maxElapsedTime {
 			return 0, false
 		}
+
 		if delay > cfg.maxElapsedTime-elapsed {
 			return 0, false
 		}
@@ -197,6 +200,7 @@ func (cfg *options) retryDelay(ctx context.Context, start time.Time, attempt int
 			return 0, false
 		}
 	}
+
 	return delay, true
 }
 
@@ -208,9 +212,11 @@ func (cfg *options) contextEnded(ctx context.Context, lastErr error) error {
 	if !cfg.joinLastError || lastErr == nil {
 		return err
 	}
+
 	if cause := context.Cause(ctx); cause != err {
 		return errors.Join(lastErr, err, cause)
 	}
+
 	return errors.Join(lastErr, err)
 }
 
@@ -220,6 +226,7 @@ func (cfg *options) interrupted(lastErr, err error) error {
 	if !cfg.joinLastError || lastErr == nil {
 		return err
 	}
+
 	return errors.Join(lastErr, err)
 }
 
@@ -244,6 +251,7 @@ func Exponential(baseDelay time.Duration, opts ...ExponentialOption) NextDelayFu
 		if baseDelay <= 0 {
 			return 0
 		}
+
 		if attempt < 0 {
 			attempt = 0
 		}
@@ -256,11 +264,13 @@ func Exponential(baseDelay time.Duration, opts ...ExponentialOption) NextDelayFu
 		// overflow up front and clamp to maxDelay (or the maximum
 		// representable duration when MaxDelay is uncapped).
 		multiplier := math.Pow(factor, float64(attempt))
+
 		product := float64(baseDelay) * multiplier
 		if math.IsInf(multiplier, 1) || product >= float64(math.MaxInt64) {
 			if maxDelay > 0 {
 				return maxDelay
 			}
+
 			return time.Duration(math.MaxInt64)
 		}
 
@@ -268,6 +278,7 @@ func Exponential(baseDelay time.Duration, opts ...ExponentialOption) NextDelayFu
 		if d <= 0 {
 			return 0
 		}
+
 		if maxDelay > 0 && d > maxDelay {
 			d = maxDelay
 		}
@@ -277,10 +288,12 @@ func Exponential(baseDelay time.Duration, opts ...ExponentialOption) NextDelayFu
 			if maxDelay > 0 {
 				limit = maxDelay
 			}
+
 			extra := float64(d) * jitter * rand.Float64() // #nosec G404 -- non-cryptographic jitter for retry backoff timing
 			if extra >= float64(limit-d) {
 				return limit
 			}
+
 			d += time.Duration(extra)
 		}
 

@@ -14,10 +14,12 @@ import (
 // method can honor its context while the work it stopped winds down.
 func WaitContext(ctx context.Context, wg *sync.WaitGroup) error {
 	done := make(chan struct{})
+
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
+
 	select {
 	case <-done:
 		return nil

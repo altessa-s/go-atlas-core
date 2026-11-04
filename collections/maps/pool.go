@@ -34,6 +34,7 @@ func NewPool[K comparable, V any](defaultCap int) *Pool[K, V] {
 	if defaultCap <= 0 {
 		defaultCap = defaultMapCapacity
 	}
+
 	return &Pool[K, V]{
 		pool: sync.Pool{
 			New: func() any {
@@ -57,6 +58,7 @@ func (p *Pool[K, V]) Get() *map[K]V {
 	}
 
 	clear(*m)
+
 	return m
 }
 
@@ -77,6 +79,7 @@ func (p *Pool[K, V]) GetWithCapacity(expectedCapacity int) *map[K]V {
 	// the requested size. The new, larger map will be retained by the
 	// pool on Put as long as its length stays under maxMapPoolCapacity.
 	*m = make(map[K]V, expectedCapacity)
+
 	return m
 }
 

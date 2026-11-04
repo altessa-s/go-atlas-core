@@ -82,6 +82,7 @@ func (e *FieldError) Unwrap() []error {
 	if e.Err == nil {
 		return []error{ErrInvalidArgument}
 	}
+
 	return []error{ErrInvalidArgument, e.Err}
 }
 
@@ -100,10 +101,12 @@ func MapFieldPath(err error, mapPath func(field string) string) error {
 	if err == nil || mapPath == nil {
 		return err
 	}
+
 	fe, ok := errors.AsType[*FieldError](err)
 	if !ok {
 		return err
 	}
+
 	return &mappedFieldError{mapped: &FieldError{Field: mapPath(fe.Field), Reason: fe.Reason, Err: fe.Err}, err: err}
 }
 

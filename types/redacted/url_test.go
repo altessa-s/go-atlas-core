@@ -67,6 +67,7 @@ func TestURL_SlogTextHandler(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	u := redacted.URL("http://svc:" + urlSecret + "@proxy:3128")
 
@@ -124,6 +125,7 @@ func TestURL_UnmarshalJSON_Invalid(t *testing.T) {
 	t.Parallel()
 
 	var u redacted.URL
+
 	err := json.Unmarshal([]byte(`{"not":"a string"}`), &u)
 	require.Error(t, err)
 }
@@ -141,10 +143,13 @@ func TestURL_UnmarshalYAML(t *testing.T) {
 	t.Parallel()
 
 	var u redacted.URL
+
 	unmarshal := func(out any) error {
 		p, ok := out.(*string)
 		require.True(t, ok)
+
 		*p = "http://proxy:3128"
+
 		return nil
 	}
 	require.NoError(t, u.UnmarshalYAML(unmarshal))
@@ -155,6 +160,7 @@ func TestURL_UnmarshalYAML_Error(t *testing.T) {
 	t.Parallel()
 
 	var u redacted.URL
+
 	wantErr := errors.New("boom")
 	err := u.UnmarshalYAML(func(any) error { return wantErr })
 	require.Error(t, err)

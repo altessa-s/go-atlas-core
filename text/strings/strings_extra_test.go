@@ -90,10 +90,12 @@ func TestStringEqualsUnsafe(t *testing.T) {
 
 func TestSplitSeq_CaseInsensitive(t *testing.T) {
 	opts := corestrings.SplitOptions{Separator: "SEP", CaseSensitive: false}
+
 	count := 0
 	for range corestrings.SplitSeq("asepbSEPc", opts) {
 		count++
 	}
+
 	require.Equal(t, 3, count)
 }
 
@@ -140,11 +142,13 @@ func TestToPtr_StringPointer(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := corestrings.ToPtr(tc.in)
 			if tc.want == nil {
 				require.Nil(t, got)
 				return
 			}
+
 			require.Same(t, tc.want, got)
 		})
 	}
@@ -155,6 +159,7 @@ func TestToPtr_StringReturnsFreshPointer(t *testing.T) {
 
 	a := corestrings.ToPtr(" padded ")
 	b := corestrings.ToPtr(" padded ")
+
 	require.NotNil(t, a)
 	require.Equal(t, " padded ", *a, "the value is not trimmed")
 	require.NotSame(t, a, b)
@@ -201,6 +206,7 @@ func TestConcatUnsafe_DoesNotAliasInputs(t *testing.T) {
 	src := []byte("abc")
 	got := corestrings.ConcatUnsafe(corestrings.FromBytesUnsafe(src), "def")
 	src[0] = 'X'
+
 	require.Equal(t, "abcdef", got)
 }
 

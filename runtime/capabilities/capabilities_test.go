@@ -9,6 +9,7 @@
 // mutate its capability set and poison every subsequent test. For
 // real syscall coverage, run the subprocess smoke test documented in
 // the package README.
+
 package capabilities
 
 import (
@@ -97,9 +98,12 @@ func TestGet_PlatformDispatch(t *testing.T) {
 	s, err := Get()
 	if runtime.GOOS == "linux" {
 		require.NoError(t, err, "Get on linux")
+
 		_ = s
+
 		return
 	}
+
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Equal(t, Sets{}, s)
 }
@@ -111,6 +115,7 @@ func TestGet_PlatformDispatch(t *testing.T) {
 // break ParseName and (Cap).String for the missing bit.
 func TestCapConstants_ContiguousRange(t *testing.T) {
 	require.Equal(t, int(capLastCap)+1, capToName.Len())
+
 	for c := Cap(0); c <= capLastCap; c++ {
 		require.True(t, capToName.Contains(c), "capToName missing entry for Cap(%d)", c)
 	}

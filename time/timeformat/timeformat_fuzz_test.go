@@ -50,6 +50,7 @@ func FuzzFormatParseRoundTrip(f *testing.F) {
 		if sec < -62135596800 || sec > 253402300799 {
 			t.Skip("outside the range shared by every layout")
 		}
+
 		instant := time.Unix(sec, ((nsec%1e9)+1e9)%1e9).UTC()
 		if instant.Year() > 2262 || instant.Year() < 1678 {
 			t.Skip("outside the int64 nanosecond range")

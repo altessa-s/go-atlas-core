@@ -42,17 +42,21 @@ func (l *legacyDate) UnmarshalJSON(b []byte) error {
 		if err := json.Unmarshal(b, &o); err != nil {
 			return fmt.Errorf("%w: %w", civil.ErrInvalidDate, err)
 		}
+
 		v := civil.Date{Year: o.Year, Month: o.Month, Day: o.Day}
 		if !v.IsZero() && !v.Valid() {
 			return fmt.Errorf("%w: %04d-%02d-%02d", civil.ErrInvalidDate, v.Year, int(v.Month), v.Day)
 		}
+
 		l.d = v
+
 		return nil
 	default:
 		var s string
 		if err := json.Unmarshal(b, &s); err != nil {
 			return fmt.Errorf("%w: %w", civil.ErrInvalidDate, err)
 		}
+
 		return l.d.UnmarshalText([]byte(s))
 	}
 }
@@ -95,10 +99,12 @@ func TestMarshalJSONTo_Codecs(t *testing.T) {
 				ref, refErr := codec.marshal(legacyDate{tc.in})
 				require.Equal(t, refErr == nil, err == nil, "%s: %v vs %v", codec.name, err, refErr)
 				require.Equal(t, string(ref), string(got), "%s must match the MarshalText path", codec.name)
+
 				if tc.wantErr {
 					require.ErrorIs(t, err, civil.ErrInvalidDate, codec.name)
 					continue
 				}
+
 				require.NoError(t, err, codec.name)
 				require.Equal(t, tc.want, string(got), codec.name)
 			}
@@ -114,10 +120,12 @@ func TestMarshalJSONTo_StructAndMapKey(t *testing.T) {
 		Opt civil.Date         `json:"opt,omitzero"`
 		By  map[civil.Date]int `json:"by"`
 	}
+
 	in := record{
 		Due: civil.MustNew(2026, time.October, 9),
 		By:  map[civil.Date]int{civil.MustNew(2026, time.March, 1): 1},
 	}
+
 	const want = `{"due":"2026-10-09","by":{"2026-03-01":1}}`
 
 	for _, codec := range jsonCodecs {
@@ -172,6 +180,7 @@ func TestUnmarshalJSONFrom_Codecs(t *testing.T) {
 				require.Equal(t, errors.Is(refErr, civil.ErrInvalidDate), errors.Is(err, civil.ErrInvalidDate), "%s: %v vs %v", codec.name, err, refErr)
 				require.Equal(t, ref.d, got, "%s must match the legacy UnmarshalJSON", codec.name)
 				require.Equal(t, tc.want, got, codec.name)
+
 				switch {
 				case tc.wantInvalid:
 					require.ErrorIs(t, err, civil.ErrInvalidDate, codec.name)

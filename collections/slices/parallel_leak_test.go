@@ -22,6 +22,7 @@ func parallelInput() []int {
 	for i := range in {
 		in[i] = i
 	}
+
 	return in
 }
 

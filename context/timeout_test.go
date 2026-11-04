@@ -17,8 +17,10 @@ import (
 func TestApplyTimeout(t *testing.T) {
 	t.Run("zero timeout returns original", func(t *testing.T) {
 		ctx := t.Context()
+
 		gotCtx, cancel := corecontext.ApplyTimeout(ctx, 0)
 		defer cancel()
+
 		require.Equal(t, ctx, gotCtx, "expected original context")
 	})
 
@@ -48,10 +50,12 @@ func TestWithDefault(t *testing.T) {
 	t.Run("context with deadline remains unchanged", func(t *testing.T) {
 		origCtx, origCancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer origCancel()
+
 		origDeadline, _ := origCtx.Deadline()
 
 		ctx, cancel := corecontext.WithDefault(origCtx, time.Second)
 		defer cancel()
+
 		deadline, ok := ctx.Deadline()
 		require.True(t, ok, "expected deadline to be set")
 		require.True(t, deadline.Equal(origDeadline), "expected deadline %v, got %v", origDeadline, deadline)
@@ -60,14 +64,17 @@ func TestWithDefault(t *testing.T) {
 	t.Run("context without deadline gets default", func(t *testing.T) {
 		ctx, cancel := corecontext.WithDefault(t.Context(), time.Second)
 		defer cancel()
+
 		_, ok := ctx.Deadline()
 		require.True(t, ok, "expected deadline to be set")
 	})
 
 	t.Run("zero timeout is a no-op", func(t *testing.T) {
 		origCtx := t.Context()
+
 		ctx, cancel := corecontext.WithDefault(origCtx, 0)
 		defer cancel()
+
 		require.Equal(t, origCtx, ctx, "expected original context")
 		_, ok := ctx.Deadline()
 		require.False(t, ok, "expected no deadline to be set")
@@ -77,9 +84,11 @@ func TestWithDefault(t *testing.T) {
 	t.Run("nil context defaults to background", func(t *testing.T) {
 		ctx, cancel := corecontext.WithDefault(nil, time.Millisecond) //nolint:staticcheck // intentionally passing nil
 		defer cancel()
+
 		if ctx.Err() == nil {
 			<-ctx.Done()
 		}
+
 		require.Equal(t, context.DeadlineExceeded, ctx.Err())
 	})
 }
@@ -88,10 +97,12 @@ func TestWithMaxTimeout(t *testing.T) {
 	t.Run("context with shorter deadline remains unchanged", func(t *testing.T) {
 		origCtx, origCancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 		defer origCancel()
+
 		origDeadline, _ := origCtx.Deadline()
 
 		ctx, cancel := corecontext.WithMaxTimeout(origCtx, time.Second)
 		defer cancel()
+
 		deadline, ok := ctx.Deadline()
 		require.True(t, ok, "expected deadline to be set")
 		require.True(t, deadline.Equal(origDeadline), "expected deadline %v, got %v", origDeadline, deadline)
@@ -100,10 +111,12 @@ func TestWithMaxTimeout(t *testing.T) {
 	t.Run("context with longer deadline gets capped", func(t *testing.T) {
 		origCtx, origCancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer origCancel()
+
 		origDeadline, _ := origCtx.Deadline()
 
 		ctx, cancel := corecontext.WithMaxTimeout(origCtx, time.Second)
 		defer cancel()
+
 		deadline, ok := ctx.Deadline()
 		require.True(t, ok, "expected deadline to be set")
 		require.True(t, deadline.Before(origDeadline), "expected capped deadline before %v, got %v", origDeadline, deadline)
@@ -112,6 +125,7 @@ func TestWithMaxTimeout(t *testing.T) {
 	t.Run("zero max timeout returns original context", func(t *testing.T) {
 		ctx, cancel := corecontext.WithMaxTimeout(t.Context(), 0)
 		defer cancel()
+
 		_, ok := ctx.Deadline()
 		require.False(t, ok, "expected no deadline to be set")
 	})
@@ -119,6 +133,7 @@ func TestWithMaxTimeout(t *testing.T) {
 	t.Run("nil context defaults to background", func(t *testing.T) {
 		ctx, cancel := corecontext.WithMaxTimeout(nil, time.Minute) //nolint:staticcheck // intentionally passing nil
 		defer cancel()
+
 		require.NotNil(t, ctx, "expected non-nil context")
 	})
 }

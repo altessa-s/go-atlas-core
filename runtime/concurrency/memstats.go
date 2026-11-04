@@ -60,9 +60,11 @@ func NewMemStatsCache(ttl time.Duration, clk clock.Clock) *MemStatsCache {
 	if ttl < 0 {
 		ttl = DefaultMemStatsCacheTTL
 	}
+
 	if nilcheck.IsNil(clk) {
 		clk = clock.Real()
 	}
+
 	return &MemStatsCache{ttl: ttl, clock: clk}
 }
 
@@ -134,6 +136,7 @@ func (c *MemStatsCache) RuntimeHeadroom() (uint64, bool) {
 	if limit == math.MaxInt64 {
 		return 0, false
 	}
+
 	return memoryHeadroom(c.Get(), limit)
 }
 
@@ -141,10 +144,12 @@ func memoryHeadroom(stats *runtime.MemStats, limit int64) (uint64, bool) {
 	if limit < 0 || limit == math.MaxInt64 {
 		return 0, false
 	}
+
 	used := stats.Sys - min(stats.Sys, stats.HeapReleased)
 	if used >= uint64(limit) {
 		return 0, true
 	}
+
 	return uint64(limit) - used, true
 }
 

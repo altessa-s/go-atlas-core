@@ -25,6 +25,7 @@ func List[T any](l *list.List) iter.Seq[T] {
 	if l == nil {
 		return func(yield func(T) bool) {}
 	}
+
 	return func(yield func(T) bool) {
 		for e := l.Front(); e != nil; e = e.Next() {
 			if v, ok := e.Value.(T); ok {
@@ -142,9 +143,11 @@ func Take[T any](seq iter.Seq[T], n int) iter.Seq[T] {
 			if count >= n {
 				return
 			}
+
 			if !yield(v) {
 				return
 			}
+
 			count++
 		}
 	}

@@ -20,6 +20,7 @@ import (
 // run the cleanups they queue.
 func collectGarbage(tb testing.TB) {
 	tb.Helper()
+
 	for range 10 {
 		runtime.GC()
 		time.Sleep(10 * time.Millisecond)
@@ -71,6 +72,7 @@ func TestWeakMap_ValueUnderSeveralKeysIsRemovedFromAll(t *testing.T) {
 	t.Parallel()
 
 	m := coremaps.NewWeakMap[string, testhelpers.User]()
+
 	func() {
 		shared := &testhelpers.User{ID: 1}
 		m.Set("a", shared)

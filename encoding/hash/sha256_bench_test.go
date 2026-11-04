@@ -39,6 +39,7 @@ func BenchmarkSHA256HexBytes(b *testing.B) {
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.SetBytes(int64(size))
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if len(hash.SHA256HexBytes(data)) != 64 {
 					b.Fatal("unexpected digest length")
@@ -52,7 +53,9 @@ func BenchmarkSHA256HexBytes(b *testing.B) {
 func BenchmarkHexSum(b *testing.B) {
 	h := sha256.New()
 	_, _ = h.Write([]byte(strings.Repeat("a", 1024)))
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if len(hash.HexSum(h)) != 64 {
 			b.Fatal("unexpected digest length")

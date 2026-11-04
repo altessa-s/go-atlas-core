@@ -27,6 +27,7 @@ func (l legacy[T]) MarshalJSON() ([]byte, error) {
 	if !ok {
 		return []byte("null"), nil
 	}
+
 	return json.Marshal(v)
 }
 
@@ -35,11 +36,14 @@ func (l *legacy[T]) UnmarshalJSON(data []byte) error {
 		l.o = optional.None[T]()
 		return nil
 	}
+
 	var v T
 	if err := json.Unmarshal(data, &v); err != nil {
 		return err
 	}
+
 	l.o = optional.Some(v)
+
 	return nil
 }
 
@@ -195,10 +199,12 @@ func TestUnmarshalJSONFrom_Codecs(t *testing.T) {
 
 				require.Equal(t, refErr == nil, err == nil, "%s must match the legacy UnmarshalJSON: %v vs %v", codec.name, err, refErr)
 				require.Equal(t, ref.o, got, "%s must match the legacy UnmarshalJSON", codec.name)
+
 				if tc.wantErr {
 					require.Error(t, err, codec.name)
 					continue
 				}
+
 				require.NoError(t, err, codec.name)
 				require.Equal(t, tc.want, got, codec.name)
 			}

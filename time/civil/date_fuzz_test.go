@@ -29,21 +29,25 @@ func FuzzJSONCodecs(f *testing.F) {
 		d := civil.Date{Year: year, Month: time.Month(month), Day: day}
 
 		var outs []string
+
 		for _, codec := range jsonCodecs {
 			got, err := codec.marshal(d)
 			ref, refErr := codec.marshal(legacyDate{d})
 			require.Equal(t, refErr == nil, err == nil, "%s: %v vs %v", codec.name, err, refErr)
 			require.Equal(t, string(ref), string(got), codec.name)
+
 			if err != nil {
 				require.ErrorIs(t, err, civil.ErrInvalidDate, codec.name)
 				continue
 			}
+
 			outs = append(outs, string(got))
 
 			var back civil.Date
 			require.NoError(t, codec.unmarshal(got, &back), codec.name)
 			require.Equal(t, d, back, codec.name)
 		}
+
 		if len(outs) == len(jsonCodecs) {
 			require.Equal(t, outs[0], outs[1], "v1 and v2 must agree on the wire")
 		}

@@ -17,9 +17,11 @@ import (
 // callers use to branch on platform support.
 func BenchmarkErrUnsupportedIs(b *testing.B) {
 	err := errors.New("wrapped: " + seccomp.ErrUnsupported.Error())
+
 	var sink bool
 	for b.Loop() {
 		sink = errors.Is(err, seccomp.ErrUnsupported)
 	}
+
 	_ = sink
 }

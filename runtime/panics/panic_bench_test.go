@@ -25,6 +25,7 @@ func BenchmarkHandleWithPanic(b *testing.B) {
 	for b.Loop() {
 		func() {
 			defer panics.Handle(ctx)
+
 			panic("boom")
 		}()
 	}
@@ -39,10 +40,12 @@ func BenchmarkMustNonNilHit(b *testing.B) {
 
 func BenchmarkMustResultHit(b *testing.B) {
 	op := func() (int, error) { return 42, nil }
+
 	var sink int
 	for b.Loop() {
 		sink = panics.MustResult(op())
 	}
+
 	_ = sink
 }
 

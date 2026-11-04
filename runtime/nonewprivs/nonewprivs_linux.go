@@ -22,6 +22,7 @@ func set() error {
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("%w: PR_SET_NO_NEW_PRIVS: %w", ErrFailed, err)
 	}
+
 	return nil
 }
 
@@ -33,5 +34,6 @@ func enabled() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("%w: PR_GET_NO_NEW_PRIVS: %w", ErrFailed, err)
 	}
+
 	return v == 1, nil
 }

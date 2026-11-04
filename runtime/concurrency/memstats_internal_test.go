@@ -13,6 +13,7 @@ import (
 
 func TestMemoryHeadroom(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name                string
 		limit               int64
@@ -27,6 +28,7 @@ func TestMemoryHeadroom(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, known := memoryHeadroom(&runtime.MemStats{Sys: tc.sys, HeapReleased: tc.released}, tc.limit)
 			require.Equal(t, tc.want, got)
 			require.Equal(t, tc.known, known)

@@ -19,16 +19,22 @@ import (
 // cache slot, and that slot.
 func collidingStrings(tb testing.TB, si *Interner) (first, second string, slot uint32) {
 	tb.Helper()
+
 	seen := map[uint32]string{}
+
 	for i := range 10_000 {
 		s := "key-" + strconv.Itoa(i)
+
 		slot := si.fastHash(s) % HotCacheSlots
 		if prev, ok := seen[slot]; ok {
 			return prev, s, slot
 		}
+
 		seen[slot] = s
 	}
+
 	tb.Fatal("no colliding strings found")
+
 	return "", "", 0
 }
 
@@ -36,6 +42,7 @@ func hotSlotValue(si *Interner, slot uint32) string {
 	if p := si.hotCache[slot].Load(); p != nil {
 		return *p
 	}
+
 	return ""
 }
 
@@ -53,11 +60,13 @@ func TestPromoteToHotCache_ContestedSlot(t *testing.T) {
 	for range HotCacheThreshold {
 		si.String(a)
 	}
+
 	require.Equal(t, a, hotSlotValue(si, slot), "reaching the threshold claims an empty slot")
 
 	for range HotCacheThreshold {
 		si.String(b)
 	}
+
 	require.Equal(t, a, hotSlotValue(si, slot), "an equally hot competitor must not displace the occupant")
 
 	// b's next promotion check happens at PromotionCheckInterval accesses;
@@ -65,6 +74,7 @@ func TestPromoteToHotCache_ContestedSlot(t *testing.T) {
 	for range PromotionCheckInterval - HotCacheThreshold {
 		si.String(b)
 	}
+
 	require.Equal(t, b, hotSlotValue(si, slot), "a much hotter competitor takes over the slot")
 
 	si.ResetStats()
@@ -84,6 +94,7 @@ func TestPromoteToHotCache_EvictedOccupantLosesSlot(t *testing.T) {
 	for range HotCacheThreshold {
 		si.String(a)
 	}
+
 	require.Equal(t, a, hotSlotValue(si, slot))
 
 	// Simulate the occupant being evicted from the cold cache: the next
@@ -98,6 +109,7 @@ func TestPromoteToHotCache_ColderCandidateKeepsOccupant(t *testing.T) {
 	t.Parallel()
 
 	si := New(1024)
+
 	a, b, slot := collidingStrings(t, si)
 	for range PromotionCheckInterval {
 		si.String(a)
@@ -107,6 +119,7 @@ func TestPromoteToHotCache_ColderCandidateKeepsOccupant(t *testing.T) {
 	// stopped at the threshold when it was promoted.
 	value, ok := si.entries.Load(a)
 	require.True(t, ok)
+
 	occupantCount := value.(*internEntry).accessCount.Load()
 	require.Equal(t, int64(HotCacheThreshold), occupantCount)
 

@@ -33,6 +33,7 @@ func TestFromVersion(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, v, got, "a parsed version tag round-trips")
 	}
+
 	assert.True(t, etag.FromVersion(-1).IsZero(), "a negative version is absent")
 }
 
@@ -53,6 +54,7 @@ func TestVersion_Rejects(t *testing.T) {
 	for name, tag := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+
 			v, err := tag.Version()
 			require.ErrorIs(t, err, etag.ErrNotVersion)
 			assert.Zero(t, v)
@@ -94,16 +96,20 @@ func TestParseVersion(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			var opts []etag.VersionOption
 			if tc.singleton {
 				opts = append(opts, etag.WithSingleton())
 			}
+
 			got, err := etag.ParseVersion(tc.in, opts...)
 			if tc.err == nil {
 				require.NoError(t, err)
 				assert.Equal(t, tc.want, got)
+
 				return
 			}
+
 			require.ErrorIs(t, err, tc.err)
 			assert.Zero(t, got)
 		})

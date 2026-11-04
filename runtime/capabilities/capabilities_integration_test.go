@@ -45,29 +45,36 @@ const nobody = 65534
 // run in parallel because of t.Setenv.
 func sharedTempDir(t *testing.T) string {
 	t.Helper()
+
 	if dir := os.Getenv(capabilitiesDirEnv); dir != "" {
 		return dir
 	}
+
 	dir := t.TempDir()
 	t.Setenv(capabilitiesDirEnv, dir)
+
 	return dir
 }
 
 // statusMasks returns the Cap* hex masks of a /proc status file.
 func statusMasks(status []byte) map[string]uint64 {
 	masks := map[string]uint64{}
+
 	sc := bufio.NewScanner(bytes.NewReader(status))
 	for sc.Scan() {
 		name, value, ok := strings.Cut(sc.Text(), ":")
 		if !ok || !strings.HasPrefix(name, "Cap") {
 			continue
 		}
+
 		v, err := strconv.ParseUint(strings.TrimSpace(value), 16, 64)
 		if err != nil {
 			exectest.Failf("parse %s %q: %v", name, value, err)
 		}
+
 		masks[name] = v
 	}
+
 	return masks
 }
 
@@ -78,6 +85,7 @@ func hasChown() bool {
 	if err != nil {
 		exectest.Failf("Get: %v", err)
 	}
+
 	return s.Has(capabilities.CAP_CHOWN, capabilities.Effective)
 }
 
@@ -87,6 +95,7 @@ func newFile(dir, name string) string {
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		exectest.Failf("WriteFile(%s): %v", path, err)
 	}
+
 	return path
 }
 
@@ -96,6 +105,7 @@ func threadMasks() map[string]uint64 {
 	if err != nil {
 		exectest.Failf("read /proc/thread-self/status: %v", err)
 	}
+
 	return statusMasks(status)
 }
 
@@ -103,6 +113,7 @@ func threadMasks() map[string]uint64 {
 // thread to agree with s.
 func requireMatchesProc(s capabilities.Sets) {
 	masks := threadMasks()
+
 	want := map[string]uint64{
 		"CapEff": s.Effective,
 		"CapPrm": s.Permitted,
@@ -121,11 +132,15 @@ func TestApply_EffectiveDropDeniesChownUntilRaised(t *testing.T) {
 	dir := sharedTempDir(t)
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		if !hasChown() {
 			return
 		}
+
 		path := newFile(dir, "probe")
+
 		cur, err := capabilities.Get()
 		if err != nil {
 			exectest.Failf("Get: %v", err)
@@ -136,11 +151,14 @@ func TestApply_EffectiveDropDeniesChownUntilRaised(t *testing.T) {
 		// stays in the permitted set so it can be raised again.
 		chown := uint64(1) << capabilities.CAP_CHOWN
 		lowered := cur
+
 		lowered.Effective &^= chown
 		if err := capabilities.Apply(lowered); err != nil {
 			exectest.Failf("Apply(lowered): %v", err)
 		}
+
 		requireMatchesProc(lowered)
+
 		err = os.Chown(path, nobody, nobody)
 		if !errors.Is(err, syscall.EPERM) {
 			exectest.Failf("chown without CAP_CHOWN in effective returned %v, want EPERM", err)
@@ -149,7 +167,9 @@ func TestApply_EffectiveDropDeniesChownUntilRaised(t *testing.T) {
 		if err := capabilities.Apply(cur); err != nil {
 			exectest.Failf("Apply(raised): %v", err)
 		}
+
 		requireMatchesProc(cur)
+
 		if err := os.Chown(path, nobody, nobody); err != nil {
 			exectest.Failf("chown after raising CAP_CHOWN again: %v", err)
 		}
@@ -160,11 +180,15 @@ func TestApply_PermittedDropIsPermanent(t *testing.T) {
 	dir := sharedTempDir(t)
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		if !hasChown() {
 			return
 		}
+
 		path := newFile(dir, "permanent")
+
 		cur, err := capabilities.Get()
 		if err != nil {
 			exectest.Failf("Get: %v", err)
@@ -175,10 +199,12 @@ func TestApply_PermittedDropIsPermanent(t *testing.T) {
 		dropped.Effective &^= chown
 		dropped.Permitted &^= chown
 		dropped.Inheritable &^= chown
+
 		dropped.Ambient &^= chown
 		if err := capabilities.Apply(dropped); err != nil {
 			exectest.Failf("Apply(dropped): %v", err)
 		}
+
 		requireMatchesProc(dropped)
 
 		// The kernel refuses to raise a bit that left the permitted set;
@@ -187,7 +213,9 @@ func TestApply_PermittedDropIsPermanent(t *testing.T) {
 		if !errors.Is(err, capabilities.ErrInvalidOption) {
 			exectest.Failf("re-raising CAP_CHOWN after dropping it from permitted returned %v, want ErrInvalidOption", err)
 		}
+
 		requireMatchesProc(dropped)
+
 		if err := os.Chown(path, nobody, nobody); !errors.Is(err, syscall.EPERM) {
 			exectest.Failf("chown after dropping CAP_CHOWN from permitted returned %v, want EPERM", err)
 		}
@@ -197,15 +225,19 @@ func TestApply_PermittedDropIsPermanent(t *testing.T) {
 func TestBoundingDrop_ExecdChildCannotRegainCapability(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
+
 		if !hasChown() {
 			return
 		}
+
 		cat, err := exec.LookPath("cat")
 		if err != nil {
 			// No cat in the image: nothing to exec into.
 			return
 		}
+
 		if err := capabilities.BoundingDrop(capabilities.CAP_CHOWN); err != nil {
 			exectest.Failf("BoundingDrop(CAP_CHOWN): %v", err)
 		}
@@ -217,7 +249,9 @@ func TestBoundingDrop_ExecdChildCannotRegainCapability(t *testing.T) {
 		if err != nil {
 			exectest.Failf("exec %s: %v", cat, err)
 		}
+
 		masks := statusMasks(status)
+
 		chown := uint64(1) << capabilities.CAP_CHOWN
 		for _, name := range []string{"CapBnd", "CapPrm", "CapEff"} {
 			if masks[name]&chown != 0 {

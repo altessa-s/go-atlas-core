@@ -43,9 +43,11 @@ func deniedProbes() []deniedProbe {
 			var a [6]uintptr
 			copy(a[:], args)
 			_, _, errno := unix.Syscall6(trap, a[0], a[1], a[2], a[3], a[4], a[5])
+
 			return errno
 		}
 	}
+
 	return []deniedProbe{
 		// unshare(0) is a successful no-op without the filter.
 		{name: "unshare", call: raw(unix.SYS_UNSHARE, 0)},
@@ -67,17 +69,25 @@ func TestBlockDangerousSyscalls_DeniesOnEveryThread(t *testing.T) {
 		// Spread goroutines over OS threads that exist before the
 		// install so TSYNC has peers to propagate to.
 		const threads = 8
+
 		probe := make(chan struct{})
 		results := make(chan string, threads*len(deniedProbes()))
-		var wg sync.WaitGroup
-		var started sync.WaitGroup
+
+		var (
+			wg      sync.WaitGroup
+			started sync.WaitGroup
+		)
 		started.Add(threads)
+
 		for range threads {
 			wg.Go(func() {
 				runtime.LockOSThread()
+
 				defer runtime.UnlockOSThread()
+
 				started.Done()
 				<-probe
+
 				for _, p := range deniedProbes() {
 					if errno := p.call(); errno != unix.EPERM {
 						results <- p.name + " on a peer thread: errno " + errno.Error()
@@ -85,26 +95,31 @@ func TestBlockDangerousSyscalls_DeniesOnEveryThread(t *testing.T) {
 				}
 			})
 		}
+
 		started.Wait()
 
 		if err := seccomp.BlockDangerousSyscalls(); err != nil {
 			exectest.Failf("BlockDangerousSyscalls: %v", err)
 		}
+
 		close(probe)
 		wg.Wait()
 		close(results)
+
 		for r := range results {
 			exectest.Failf("want EPERM: %s", r)
 		}
 
 		// A thread created after the install inherits the filter.
 		done := make(chan unix.Errno)
+
 		go func() {
 			runtime.LockOSThread()
 			// Never unlocked: the thread exits with the goroutine,
 			// so the probe ran on a thread created for it.
 			done <- deniedProbes()[0].call()
 		}()
+
 		if errno := <-done; errno != unix.EPERM {
 			exectest.Failf("unshare on a new thread returned errno %v, want EPERM", errno)
 		}
@@ -119,15 +134,19 @@ func TestBlockDangerousSyscalls_ExecInheritsFilter(t *testing.T) {
 				os.Exit(3)
 			}
 		}
+
 		os.Exit(0)
 	}
+
 	exectest.RunInSubprocess(t, func() {
 		if err := seccomp.BlockDangerousSyscalls(); err != nil {
 			exectest.Failf("BlockDangerousSyscalls: %v", err)
 		}
 		// #nosec G204 -- re-executes the test binary (os.Args[0]) as the probe
 		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+t.Name()+"$")
+
 		cmd.Env = append(os.Environ(), seccompProbeEnv+"=1")
+
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			exectest.Failf("exec'd probe did not see EPERM from every denied syscall: %v\n%s", err, out)

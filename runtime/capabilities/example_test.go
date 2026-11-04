@@ -21,6 +21,7 @@ func ExampleDropAll() {
 	// restricted work on this thread. A process-wide drop must happen
 	// before the binary starts (systemd, container --cap-drop, launcher).
 	runtime.LockOSThread()
+
 	defer runtime.UnlockOSThread()
 
 	err := capabilities.DropAll()
@@ -48,6 +49,7 @@ func ExampleDropAllExcept() {
 	// The change applies to the calling OS thread only: keep the
 	// restricted work on this thread.
 	runtime.LockOSThread()
+
 	defer runtime.UnlockOSThread()
 
 	err := capabilities.DropAllExcept(capabilities.CAP_NET_BIND_SERVICE)
@@ -72,13 +74,16 @@ func ExampleDropAllExcept() {
 // names (case-insensitive, whitespace-tolerant) from YAML config.
 func ExampleParseName() {
 	names := []string{"CAP_NET_BIND_SERVICE", "cap_net_raw"}
+
 	keep := make([]capabilities.Cap, 0, len(names))
 	for _, name := range names {
 		c, err := capabilities.ParseName(name)
 		if err != nil {
 			log.Fatalf("capabilities: %v", err)
 		}
+
 		keep = append(keep, c)
 	}
+
 	_ = keep // ... pass to DropAllExcept or Apply.
 }

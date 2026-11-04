@@ -24,6 +24,7 @@ func Parse(s string) (Tag, error) {
 	if !ok || strings.TrimSpace(rest) != "" {
 		return Tag{}, fmt.Errorf("etag: parse %q: %w", s, ErrInvalidTag)
 	}
+
 	return t, nil
 }
 
@@ -36,28 +37,36 @@ func ParseList(s string) (tags []Tag, star bool, err error) {
 	if rest == "*" {
 		return nil, true, nil
 	}
+
 	for {
 		rest = strings.TrimLeft(rest, " \t")
 		if rest == "" {
 			break
 		}
+
 		t, after, ok := parseOne(rest)
 		if !ok {
 			return nil, false, fmt.Errorf("etag: parse list %q: %w", s, ErrInvalidTag)
 		}
+
 		tags = append(tags, t)
+
 		rest = strings.TrimLeft(after, " \t")
 		if rest == "" {
 			break
 		}
+
 		if rest[0] != ',' {
 			return nil, false, fmt.Errorf("etag: parse list %q: %w", s, ErrInvalidTag)
 		}
+
 		rest = rest[1:]
 	}
+
 	if len(tags) == 0 {
 		return nil, false, fmt.Errorf("etag: parse list %q: %w", s, ErrInvalidTag)
 	}
+
 	return tags, false, nil
 }
 
@@ -70,20 +79,24 @@ func parseOne(s string) (Tag, string, bool) {
 		weak = true
 		s = rest
 	}
+
 	if len(s) < 2 || s[0] != '"' {
 		return Tag{}, s, false
 	}
+
 	for i := 1; i < len(s); i++ {
 		switch c := s[i]; {
 		case c == '"':
 			if i == 1 {
 				return Tag{}, s, false // empty opaque-tag `""` is not representable
 			}
+
 			return Tag{value: s[1:i], weak: weak}, s[i+1:], true
 		case !isETagChar(c):
 			return Tag{}, s, false
 		}
 	}
+
 	return Tag{}, s, false // no closing quote
 }
 

@@ -121,6 +121,7 @@ func TestJSONAcceptsLegacyObjectForm(t *testing.T) {
 	t.Parallel()
 
 	var out doc
+
 	raw := `{"due":{"Year":2026,"Month":10,"Day":9},"opt":{"Year":0,"Month":0,"Day":0},"ptr":null,"note":"x"}`
 	require.NoError(t, json.Unmarshal([]byte(raw), &out))
 	require.Equal(t, doc{Due: civil.MustNew(2026, time.October, 9), Note: "x"}, out)

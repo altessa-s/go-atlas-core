@@ -24,6 +24,7 @@ func TestDependencies_Contains_Found(t *testing.T) {
 	if len(deps) == 0 {
 		t.Skip("no dependencies found")
 	}
+
 	first := deps[0]
 	require.True(t, deps.Contains(first.Path), "Contains(%q) = false, want true", first.Path)
 }
@@ -38,6 +39,7 @@ func TestDependencies_Get_Found(t *testing.T) {
 	if len(deps) == 0 {
 		t.Skip("no dependencies found")
 	}
+
 	first := deps[0]
 	got := deps.Get(first.Path)
 	require.NotNil(t, got, "Get(%q) = nil, want non-nil", first.Path)
@@ -77,6 +79,7 @@ func TestHomeDirHomeDriveAndPath(t *testing.T) {
 func TestGetEnvVarTildeExpansion(t *testing.T) {
 	saved := appinfo.EnvPrefix
 	appinfo.EnvPrefix = ""
+
 	t.Cleanup(func() { appinfo.EnvPrefix = saved })
 
 	t.Setenv(appinfo.EnvUserProfile, "")
@@ -92,6 +95,7 @@ func TestGetEnvVarTildeExpansion(t *testing.T) {
 func TestBinDirEnvOverride(t *testing.T) {
 	saved := appinfo.EnvPrefix
 	appinfo.EnvPrefix = ""
+
 	t.Cleanup(func() { appinfo.EnvPrefix = saved })
 
 	t.Setenv("BIN_DIR", "/custom/bin//")
@@ -103,6 +107,7 @@ func TestBinDirEnvOverride(t *testing.T) {
 func TestVarDirEnvOverride(t *testing.T) {
 	saved := appinfo.EnvPrefix
 	appinfo.EnvPrefix = ""
+
 	t.Cleanup(func() { appinfo.EnvPrefix = saved })
 
 	t.Setenv("VAR_DIR", "/custom/var//")
@@ -114,6 +119,7 @@ func TestVarDirEnvOverride(t *testing.T) {
 func TestEtcDirEnvOverride(t *testing.T) {
 	saved := appinfo.EnvPrefix
 	appinfo.EnvPrefix = ""
+
 	t.Cleanup(func() { appinfo.EnvPrefix = saved })
 
 	t.Setenv("ETC_DIR", "/custom/etc//")
@@ -126,6 +132,7 @@ func TestEtcDirEnvOverride(t *testing.T) {
 func TestEtcDirWithProject(t *testing.T) {
 	savedPrefix, savedProject, savedName := appinfo.EnvPrefix, appinfo.Project, appinfo.Name
 	appinfo.EnvPrefix, appinfo.Project, appinfo.Name = "", "MyProj", "MyApp"
+
 	t.Cleanup(func() {
 		appinfo.EnvPrefix, appinfo.Project, appinfo.Name = savedPrefix, savedProject, savedName
 	})
@@ -139,6 +146,7 @@ func TestEtcDirWithProject(t *testing.T) {
 func TestLibDirEnvOverride(t *testing.T) {
 	saved := appinfo.EnvPrefix
 	appinfo.EnvPrefix = ""
+
 	t.Cleanup(func() { appinfo.EnvPrefix = saved })
 
 	t.Setenv("LIB_DIR", "/custom/lib//")
@@ -151,6 +159,7 @@ func TestLibDirEnvOverride(t *testing.T) {
 func TestLibDirWithProject(t *testing.T) {
 	savedPrefix, savedProject, savedName := appinfo.EnvPrefix, appinfo.Project, appinfo.Name
 	appinfo.EnvPrefix, appinfo.Project, appinfo.Name = "", "MyProj", "MyApp"
+
 	t.Cleanup(func() {
 		appinfo.EnvPrefix, appinfo.Project, appinfo.Name = savedPrefix, savedProject, savedName
 	})
@@ -165,11 +174,13 @@ func TestLibDirWithProject(t *testing.T) {
 func TestMakeAllDirsSuccess(t *testing.T) {
 	saved := appinfo.EnvPrefix
 	appinfo.EnvPrefix = ""
+
 	t.Cleanup(func() { appinfo.EnvPrefix = saved })
 
 	base := t.TempDir()
 	varDir := filepath.Join(base, "var")
 	libDir := filepath.Join(base, "lib")
+
 	t.Setenv("VAR_DIR", varDir)
 	t.Setenv("LIB_DIR", libDir)
 
@@ -190,6 +201,7 @@ func TestMakeAllDirsSuccess(t *testing.T) {
 func TestMakeAllDirsError(t *testing.T) {
 	saved := appinfo.EnvPrefix
 	appinfo.EnvPrefix = ""
+
 	t.Cleanup(func() { appinfo.EnvPrefix = saved })
 
 	base := t.TempDir()
@@ -228,19 +240,26 @@ func TestEnvCachedConcurrentPopulate(t *testing.T) {
 		appinfo.ClearEnvCache()
 
 		results := make([]string, workers)
+
 		var ready sync.WaitGroup
 		ready.Add(workers)
+
 		start := make(chan struct{})
+
 		var done sync.WaitGroup
 		done.Add(workers)
+
 		for i := range workers {
 			go func(i int) {
 				defer done.Done()
+
 				ready.Done()
 				<-start
+
 				results[i] = appinfo.EnvCached(key)
 			}(i)
 		}
+
 		ready.Wait()
 		close(start)
 		done.Wait()
@@ -298,7 +317,9 @@ func main() {
 		"-o", binPath, ".",
 	)
 	buildCmd.Dir = modDir
+
 	buildCmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOPROXY=off")
+
 	out, err := buildCmd.CombinedOutput()
 	if err != nil {
 		t.Skipf("building throwaway module failed (environment cannot build it): %v\n%s", err, out)

@@ -25,7 +25,9 @@ func TestToSortedKeyValueSlice(t *testing.T) {
 
 func BenchmarkToSortedKeyValueSlice(b *testing.B) {
 	m := map[string]int{"c": 3, "a": 1, "b": 2}
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = maps.ToSortedKeyValueSlice(m)
 	}
@@ -38,11 +40,14 @@ func FuzzToSortedKeyValueSlice(f *testing.F) {
 		for _, k := range data {
 			m[k]++
 		}
+
 		got := maps.ToSortedKeyValueSlice(m)
 		require.Len(t, got, 2*len(m))
+
 		for i := 0; i < len(got); i += 2 {
 			k := got[i].(byte)
 			require.Equal(t, m[k], got[i+1])
+
 			if i > 0 {
 				require.Less(t, got[i-2].(byte), k)
 			}

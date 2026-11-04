@@ -25,6 +25,7 @@ type countingReader struct {
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += int64(n)
+
 	return n, err
 }
 
@@ -54,13 +55,16 @@ func TestReadAllLimited(t *testing.T) {
 			t.Parallel()
 
 			cr := &countingReader{r: strings.NewReader(tc.input)}
+
 			got, err := coreio.ReadAllLimited(cr, tc.limit)
 			if tc.exceeded {
 				require.ErrorIs(t, err, coreio.ErrReadLimitExceeded)
 			} else {
 				require.NoError(t, err)
 			}
+
 			require.Equal(t, tc.want, string(got))
+
 			if tc.limit >= 0 && tc.limit < math.MaxInt64 {
 				require.LessOrEqual(t, cr.n, tc.limit+1, "must read at most n+1 bytes")
 			}
@@ -91,7 +95,9 @@ func (r *dataAndErrorReader) Read(p []byte) (int, error) {
 	if r.done {
 		return 0, r.err
 	}
+
 	r.done = true
+
 	return copy(p, r.data), r.err
 }
 

@@ -112,6 +112,7 @@ func TestNew_MaxBytes(t *testing.T) {
 
 	t.Run("exactly at cap is allowed", func(t *testing.T) {
 		t.Parallel()
+
 		sp, err := spool.New(strings.NewReader(body), spool.WithMaxBytes(100))
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sp.Close() }) //nolint:errcheck // best-effort test cleanup
@@ -120,12 +121,14 @@ func TestNew_MaxBytes(t *testing.T) {
 
 	t.Run("over cap in memory path", func(t *testing.T) {
 		t.Parallel()
+
 		_, err := spool.New(strings.NewReader(body), spool.WithMaxBytes(99))
 		require.ErrorIs(t, err, spool.ErrTooLarge)
 	})
 
 	t.Run("over cap in spill path", func(t *testing.T) {
 		t.Parallel()
+
 		_, err := spool.New(strings.NewReader(body),
 			spool.WithMemThreshold(8),
 			spool.WithMaxBytes(50),
@@ -142,6 +145,7 @@ func TestNew_CloseRemovesTempFileAndIsIdempotent(t *testing.T) {
 
 	f, ok := sp.ReadSeeker.(interface{ Name() string })
 	require.True(t, ok, "expected a temp-file-backed spool")
+
 	name := f.Name()
 
 	require.NoError(t, sp.Close())

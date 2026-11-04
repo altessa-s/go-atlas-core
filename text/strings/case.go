@@ -36,6 +36,7 @@ func IsLowercase(s string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -59,15 +60,18 @@ func isCaseUnsafe(s string, asciiBadMin, asciiBadMax byte, fallback func(string)
 
 	// Fast path for ASCII-only strings
 	const asciiThreshold = 0x80 // Characters >= 0x80 are non-ASCII
+
 	bytes := ToBytesUnsafe(s)
 	for _, b := range bytes {
 		if b >= asciiThreshold {
 			return fallback(s)
 		}
+
 		if b >= asciiBadMin && b <= asciiBadMax {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -85,6 +89,7 @@ func IsUppercase(s string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -133,6 +138,7 @@ func IsTrimmed(s string) bool {
 	// For non-ASCII, use utf8 package to decode runes without allocation
 	firstRune, _ = utf8.DecodeRuneInString(s)
 	lastRune, _ = utf8.DecodeLastRuneInString(s)
+
 	return !unicode.IsSpace(firstRune) && !unicode.IsSpace(lastRune)
 }
 
@@ -159,6 +165,7 @@ func IsTrimmedUnsafe(s string) bool {
 
 	// Check the first byte for ASCII whitespace
 	const asciiThreshold = 0x80 // Characters >= 0x80 are non-ASCII
+
 	firstByte := bytes[0]
 	if firstByte < asciiThreshold { // ASCII
 		if IsASCIISpace(firstByte) {
@@ -180,6 +187,7 @@ func IsTrimmedUnsafe(s string) bool {
 
 	// Non-ASCII: decode last rune manually using unsafe access
 	lastRune, _ := utf8.DecodeLastRune(bytes)
+
 	return !unicode.IsSpace(lastRune)
 }
 
@@ -198,9 +206,11 @@ func TrimSuffixFast(s, suffix string) string {
 	if len(suffix) == 0 || len(s) < len(suffix) {
 		return s
 	}
+
 	if s[len(s)-len(suffix):] == suffix {
 		return s[:len(s)-len(suffix)]
 	}
+
 	return s
 }
 
@@ -219,8 +229,10 @@ func TrimPrefixFast(s, prefix string) string {
 	if len(prefix) == 0 || len(s) < len(prefix) {
 		return s
 	}
+
 	if s[:len(prefix)] == prefix {
 		return s[len(prefix):]
 	}
+
 	return s
 }

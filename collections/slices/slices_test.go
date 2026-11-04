@@ -159,6 +159,7 @@ func TestFilter(t *testing.T) {
 		for i := range large {
 			large[i] = i
 		}
+
 		got := coreslices.FilterParallel(large, even)
 		require.Equal(t, slices.Collect(coreslices.Filter(large, even)), got)
 	})
@@ -181,6 +182,7 @@ func TestFilter(t *testing.T) {
 
 func TestFilterLast_ReturnsElementAfterPredicate(t *testing.T) {
 	t.Parallel()
+
 	xs := []int{1}
 	got, ok := coreslices.FilterLast(xs, func(int) bool { xs[0] = 2; return true })
 	require.True(t, ok)
@@ -220,6 +222,7 @@ func TestAppendHelpers(t *testing.T) {
 
 	t.Run("AppendNonEmpty", func(t *testing.T) {
 		var s []any
+
 		s = coreslices.AppendNonEmpty(s, "k1", "v1")
 		s = coreslices.AppendNonEmpty(s, "k2", "")
 		require.Len(t, s, 2)

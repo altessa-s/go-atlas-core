@@ -24,27 +24,32 @@ func TestList(t *testing.T) {
 	for v := range coreslices.List[int](l) {
 		got = append(got, v)
 	}
+
 	want := []int{1, 2, 3}
 	require.True(t, slices.Equal(got, want), "List() = %v, want %v", got, want)
 }
 
 func TestList_Empty(t *testing.T) {
 	l := list.New()
+
 	count := 0
 	for range coreslices.List[int](l) {
 		count++
 	}
+
 	require.Equal(t, 0, count, "List(empty) yielded %d items", count)
 }
 
 func TestMap(t *testing.T) {
 	input := []int{1, 2, 3}
+
 	var got []string
 	for v := range coreslices.Map(input, func(i int) string {
 		return string(rune('a' + i - 1))
 	}) {
 		got = append(got, v)
 	}
+
 	want := []string{"a", "b", "c"}
 	require.True(t, slices.Equal(got, want), "Map() = %v, want %v", got, want)
 }
@@ -52,10 +57,12 @@ func TestMap(t *testing.T) {
 func TestFilterSeq(t *testing.T) {
 	input := []int{1, 2, 3, 4, 5}
 	seq := slices.Values(input)
+
 	var got []int
 	for v := range coreslices.FilterSeq(seq, func(i int) bool { return i%2 == 0 }) {
 		got = append(got, v)
 	}
+
 	want := []int{2, 4}
 	require.True(t, slices.Equal(got, want), "FilterSeq() = %v, want %v", got, want)
 }
@@ -63,10 +70,12 @@ func TestFilterSeq(t *testing.T) {
 func TestMapSeq(t *testing.T) {
 	input := []int{1, 2, 3}
 	seq := slices.Values(input)
+
 	var got []int
 	for v := range coreslices.MapSeq(seq, func(i int) int { return i * 10 }) {
 		got = append(got, v)
 	}
+
 	want := []int{10, 20, 30}
 	require.True(t, slices.Equal(got, want), "MapSeq() = %v, want %v", got, want)
 }
@@ -74,10 +83,12 @@ func TestMapSeq(t *testing.T) {
 func TestTake(t *testing.T) {
 	input := []int{1, 2, 3, 4, 5}
 	seq := slices.Values(input)
+
 	var got []int
 	for v := range coreslices.Take(seq, 3) {
 		got = append(got, v)
 	}
+
 	want := []int{1, 2, 3}
 	require.True(t, slices.Equal(got, want), "Take() = %v, want %v", got, want)
 }

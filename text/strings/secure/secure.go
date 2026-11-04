@@ -102,6 +102,7 @@ func initializeSecureStringStorage(ss *String, s string, fromPool bool) {
 		if fromPool {
 			ss.data = nil // Ensure heap storage is cleared for pooled instances
 		}
+
 		copy(ss.inline[:], s)
 	} else {
 		ss.useInlineStorage = false
@@ -136,6 +137,7 @@ func NewString(s string) *String {
 		ss.length = 0
 		ss.useInlineStorage = true
 		ss.originatesFromPool = true
+
 		return ss
 	}
 
@@ -150,6 +152,7 @@ func NewString(s string) *String {
 	if !ss.useInlineStorage {
 		ss.cleanup = runtime.AddCleanup(ss, cleanupSecureString, ss.data)
 	}
+
 	return ss
 }
 
@@ -178,6 +181,7 @@ func (ss *String) String() string {
 	if ss.useInlineStorage {
 		return string(ss.inline[:ss.length])
 	}
+
 	return string(ss.data)
 }
 
@@ -202,6 +206,7 @@ func (ss *String) StringUnsafe() string {
 	if ss.useInlineStorage {
 		return unsafe.String(&ss.inline[0], ss.length)
 	}
+
 	return unsafe.String(&ss.data[0], len(ss.data))
 }
 
@@ -227,6 +232,7 @@ func (ss *String) Bytes() []byte {
 	} else {
 		copy(result, ss.data)
 	}
+
 	return result
 }
 
@@ -250,6 +256,7 @@ func (ss *String) BytesUnsafe() []byte {
 	if ss.useInlineStorage {
 		return ss.inline[:ss.length]
 	}
+
 	return ss.data
 }
 
@@ -280,6 +287,7 @@ func (ss *String) Equal(other *String) bool {
 	if ss.length == 0 && other.length == 0 {
 		return true
 	}
+
 	if ss.length != other.length {
 		return false
 	}
@@ -327,6 +335,7 @@ func (ss *String) Clear() {
 			ZeroBytes(ss.data)
 			ss.data = nil
 		}
+
 		ss.length = 0
 	}
 
@@ -350,6 +359,7 @@ func (ss *String) GoString() string {
 	if ss.IsEmpty() {
 		return GoStringEmpty
 	}
+
 	return GoStringRedacted
 }
 
@@ -373,6 +383,7 @@ func ZeroBytes(data []byte) {
 		for i := range data {
 			data[i] = ZeroByte
 		}
+
 		return
 	}
 

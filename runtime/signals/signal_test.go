@@ -23,6 +23,7 @@ func TestSignal_ZeroTimeoutHandler_UsesGlobalCtx(t *testing.T) {
 	entry := s.newHandlerEntry(func(ctx context.Context, sig os.Signal) error {
 		close(started)
 		<-ctx.Done()
+
 		return nil
 	})
 

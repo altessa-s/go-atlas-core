@@ -42,6 +42,7 @@ func NewJSON(opts ...json.Options) *JSON {
 	if len(opts) == 0 {
 		return &JSON{}
 	}
+
 	return &JSON{opts: []json.Options{json.JoinOptions(opts...)}}
 }
 

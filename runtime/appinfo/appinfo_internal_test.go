@@ -19,6 +19,7 @@ import (
 func TestSemVersionNilSver(t *testing.T) {
 	saved := sver
 	sver = nil
+
 	t.Cleanup(func() { sver = saved })
 
 	require.Equal(t, &SemanticVersion{}, SemVersion())
@@ -32,6 +33,7 @@ func TestSemVersionNilSver(t *testing.T) {
 func TestAppVersionTemplateError(t *testing.T) {
 	saved := versionInfoTemplate
 	versionInfoTemplate = template.Must(template.New("version").Parse(`{{.program.NoSuchField}}`))
+
 	t.Cleanup(func() { versionInfoTemplate = saved })
 
 	require.Equal(t, "", AppVersion())

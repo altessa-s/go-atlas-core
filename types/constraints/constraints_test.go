@@ -28,6 +28,7 @@ func firstSigned[T constraints.Signed](vs ...T) T {
 	if len(vs) == 0 {
 		return zero
 	}
+
 	return vs[0]
 }
 
@@ -36,6 +37,7 @@ func firstUnsigned[T constraints.Unsigned](vs ...T) T {
 	if len(vs) == 0 {
 		return zero
 	}
+
 	return vs[0]
 }
 
@@ -44,6 +46,7 @@ func firstInteger[T constraints.Integer](vs ...T) T {
 	if len(vs) == 0 {
 		return zero
 	}
+
 	return vs[0]
 }
 
@@ -52,6 +55,7 @@ func firstFloat[T constraints.Float](vs ...T) T {
 	if len(vs) == 0 {
 		return zero
 	}
+
 	return vs[0]
 }
 
@@ -60,6 +64,7 @@ func firstNumbersString[T constraints.NumbersString](vs ...T) T {
 	if len(vs) == 0 {
 		return zero
 	}
+
 	return vs[0]
 }
 

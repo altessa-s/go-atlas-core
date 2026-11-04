@@ -71,6 +71,7 @@ func (g *HookGroup) OnShutdown(hook ShutdownHook) {
 func (g *HookGroup) Shutdown(ctx context.Context) error {
 	g.once.Do(func() {
 		var errs []error
+
 		g.mu.Lock()
 		hooks := g.hooks
 		g.mu.Unlock()
@@ -86,6 +87,7 @@ func (g *HookGroup) Shutdown(ctx context.Context) error {
 				fmt.Fprintf(os.Stderr, "shutdown hook error: %v\n", err)
 			}
 		}
+
 		g.err = errors.Join(errs...)
 	})
 

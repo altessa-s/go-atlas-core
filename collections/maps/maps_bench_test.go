@@ -15,6 +15,7 @@ func BenchmarkMerge(b *testing.B) {
 	sizes := []int{10, 100, 1000}
 	for _, size := range sizes {
 		src := make(map[string]int, size)
+
 		dst := make(map[string]int, size)
 		for i := range size {
 			src[fmt.Sprintf("k%d", i)] = i
@@ -51,11 +52,13 @@ func BenchmarkMergeWith(b *testing.B) {
 	sizes := []int{10, 100, 1000}
 	for _, size := range sizes {
 		src := make(map[string]int, size)
+
 		dst := make(map[string]int, size)
 		for i := range size {
 			src[fmt.Sprintf("k%d", i)] = i
 			dst[fmt.Sprintf("k%d", i)] = i * 2 // overlapping keys
 		}
+
 		resolve := func(_ string, s, d int) int { return s + d }
 
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
@@ -68,6 +71,7 @@ func BenchmarkMergeWith(b *testing.B) {
 
 func BenchmarkMergeAll(b *testing.B) {
 	const layerSize = 100
+
 	for _, numLayers := range []int{2, 5, 10} {
 		layers := make([]map[string]int, numLayers)
 		for i := range numLayers {
@@ -75,6 +79,7 @@ func BenchmarkMergeAll(b *testing.B) {
 			for j := range layerSize {
 				m[fmt.Sprintf("k%d", j)] = i*layerSize + j
 			}
+
 			layers[i] = m
 		}
 
@@ -128,6 +133,7 @@ func benchRecords(size int) []benchRecord {
 	for i := range size {
 		records[i] = benchRecord{ID: fmt.Sprintf("id-%d", i), Rank: i}
 	}
+
 	return records
 }
 
@@ -136,6 +142,7 @@ func benchStringMap(size int) map[string]int {
 	for i := range size {
 		m[fmt.Sprintf("k%d", i)] = i
 	}
+
 	return m
 }
 
@@ -145,6 +152,7 @@ func BenchmarkFromSlice(b *testing.B) {
 		records := benchRecords(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				m := coremaps.FromSlice(records, func(r benchRecord) string { return r.ID })
 				if len(m) != size {
@@ -161,6 +169,7 @@ func BenchmarkConvertMap(b *testing.B) {
 		input := benchStringMap(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				m := coremaps.ConvertMap(input, func(k string, v int) (int, string) { return v, k })
 				if len(m) != size {
@@ -177,6 +186,7 @@ func BenchmarkSwap(b *testing.B) {
 		input := benchStringMap(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				m := coremaps.Swap(input)
 				if len(m) != size {
@@ -194,6 +204,7 @@ func BenchmarkToKeyValueSlice(b *testing.B) {
 		input := benchStringMap(size)
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				kv := coremaps.ToKeyValueSlice(input)
 				if len(kv) != 2*size {

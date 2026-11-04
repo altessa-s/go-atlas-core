@@ -62,11 +62,14 @@ func resolveString[T ~string | ~*string](str T) (value string, ptr *string, isPt
 		if rv.Kind() == reflect.String {
 			return rv.String(), nil, false
 		}
+
 		ptr, _ = reflect.TypeAssert[*string](rv.Convert(reflect.TypeFor[*string]()))
 	}
+
 	if ptr == nil {
 		return "", nil, true
 	}
+
 	return *ptr, ptr, true
 }
 
@@ -109,9 +112,11 @@ func ToPtr[T interface{ ~string | ~*string }](str T) *string {
 	if strings.TrimSpace(v) == "" {
 		return nil
 	}
+
 	if isPtr {
 		return ptr
 	}
+
 	return &v
 }
 
@@ -127,6 +132,7 @@ func FromPtr(ptr *string) string {
 	if ptr == nil {
 		return ""
 	}
+
 	return *ptr
 }
 
@@ -156,8 +162,10 @@ func FromPtr(ptr *string) string {
 //	To[int]("invalid")  // 0
 func To[T constraints.Numbers](str string) T {
 	var t T
+
 	typ := reflect.TypeFor[T]()
 	kind := typ.Kind()
+
 	const bitsPerByte = 8
 	// Safe: Sizeof returns the size of type T, doesn't access memory
 	bitSize := int(unsafe.Sizeof(t) * bitsPerByte)
@@ -168,18 +176,21 @@ func To[T constraints.Numbers](str string) T {
 		if err != nil {
 			return t
 		}
+
 		return T(d)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		d, err := strconv.ParseUint(str, 10, bitSize)
 		if err != nil {
 			return t
 		}
+
 		return T(d)
 	case reflect.Float32, reflect.Float64:
 		d, err := strconv.ParseFloat(str, bitSize)
 		if err != nil {
 			return t
 		}
+
 		return T(d)
 	default:
 		// The type constraint ensures numeric kinds; keep a safe fallback.
@@ -207,6 +218,7 @@ func IsEmptyOrWhitespace(s string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -246,6 +258,7 @@ func ToBytesUnsafe(str string) []byte {
 	if len(str) == 0 {
 		return nil
 	}
+
 	return unsafe.Slice(unsafe.StringData(str), len(str))
 }
 
@@ -286,6 +299,7 @@ func FromBytesUnsafe(b []byte) string {
 	if len(b) == 0 {
 		return ""
 	}
+
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
@@ -327,6 +341,7 @@ func Contains(s, substr string, opts ContainsOptions) ContainsResult {
 		if opts.Count {
 			return ContainsResult{Found: true, Count: 1, Positions: []int{0}}
 		}
+
 		return ContainsResult{Found: true}
 	}
 
@@ -344,8 +359,11 @@ func Contains(s, substr string, opts ContainsOptions) ContainsResult {
 		return ContainsResult{Found: found}
 	}
 
-	var positions []int
-	var count int
+	var (
+		positions []int
+		count     int
+	)
+
 	start := 0
 
 	for {
@@ -372,6 +390,7 @@ func Contains(s, substr string, opts ContainsOptions) ContainsResult {
 		}
 
 		count++
+
 		if opts.Count {
 			positions = append(positions, actualPos)
 		}
@@ -499,6 +518,7 @@ func Concat(parts ...string) string {
 	if len(parts) == 0 {
 		return ""
 	}
+
 	if len(parts) == 1 {
 		return parts[0]
 	}
@@ -510,6 +530,7 @@ func Concat(parts ...string) string {
 	for _, part := range parts {
 		totalLen += len(part)
 	}
+
 	builder.Grow(totalLen)
 
 	for _, part := range parts {
@@ -534,6 +555,7 @@ func ConcatUnsafe(parts ...string) string {
 	if len(parts) == 0 {
 		return ""
 	}
+
 	if len(parts) == 1 {
 		return parts[0]
 	}

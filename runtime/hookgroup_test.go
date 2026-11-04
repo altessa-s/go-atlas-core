@@ -133,12 +133,14 @@ func TestHookGroup_ConcurrentRegistration(t *testing.T) {
 			group.OnShutdown(func(_ context.Context) error {
 				mu.Lock()
 				defer mu.Unlock()
+
 				count++
 
 				return nil
 			})
 		})
 	}
+
 	wg.Wait()
 
 	require.NoError(t, group.Shutdown(t.Context()))
@@ -157,6 +159,7 @@ func TestHookGroup_ConcurrentShutdown(t *testing.T) {
 	group.OnShutdown(func(_ context.Context) error {
 		mu.Lock()
 		defer mu.Unlock()
+
 		count++
 
 		return nil
@@ -168,10 +171,12 @@ func TestHookGroup_ConcurrentShutdown(t *testing.T) {
 			_ = group.Shutdown(t.Context())
 		})
 	}
+
 	wg.Wait()
 
 	mu.Lock()
 	defer mu.Unlock()
+
 	require.Equal(t, 1, count)
 }
 
@@ -197,18 +202,25 @@ func TestHookGroup_PassesContextToHooks(t *testing.T) {
 
 func TestHookGroup_PreservesError(t *testing.T) {
 	t.Parallel()
+
 	sentinel := errors.New("shutdown failed")
+
 	var group coreruntime.HookGroup
 	group.OnShutdown(func(context.Context) error { return sentinel })
+
 	results := make([]error, 8)
+
 	var wg sync.WaitGroup
 	for i := range results {
 		wg.Go(func() { results[i] = group.Shutdown(t.Context()) })
 	}
+
 	wg.Wait()
+
 	for _, err := range results {
 		require.ErrorIs(t, err, sentinel)
 		require.Same(t, results[0], err)
 	}
+
 	require.Same(t, results[0], group.Shutdown(t.Context()))
 }

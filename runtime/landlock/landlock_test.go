@@ -7,6 +7,7 @@
 // any platform without actually applying Landlock to the test process
 // (which would be irreversible and break every subsequent test in the
 // same binary).
+
 package landlock
 
 import (

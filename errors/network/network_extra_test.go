@@ -27,6 +27,7 @@ func TestIsConnectionRefused_SyscallErrorWrap(t *testing.T) {
 	if !network.IsConnectionRefused(opErr) {
 		t.Error("should detect ECONNREFUSED wrapped in *os.SyscallError inside *net.OpError")
 	}
+
 	if !network.IsConnectionRefused(&url.Error{Op: "Get", URL: "http://x", Err: opErr}) {
 		t.Error("should detect ECONNREFUSED through a *url.Error layer")
 	}
@@ -37,9 +38,11 @@ func TestIsURLError(t *testing.T) {
 	if !network.IsURLError(urlErr) {
 		t.Error("should detect url.Error")
 	}
+
 	if network.IsURLError(errors.New("plain")) {
 		t.Error("should not detect plain error")
 	}
+
 	if network.IsURLError(nil) {
 		t.Error("should not detect nil")
 	}
@@ -50,6 +53,7 @@ func TestIsCertUnknownAuthority(t *testing.T) {
 	if network.IsCertUnknownAuthority(errors.New("other")) {
 		t.Error("should not detect plain error")
 	}
+
 	if network.IsCertUnknownAuthority(nil) {
 		t.Error("should not detect nil")
 	}
@@ -70,6 +74,7 @@ func TestIsRequestTimeoutError_NonTimeout(t *testing.T) {
 	if network.IsRequestTimeoutError(nil) {
 		t.Error("should not detect nil")
 	}
+
 	if network.IsRequestTimeoutError(errors.New("plain")) {
 		t.Error("should not detect plain error")
 	}
@@ -79,6 +84,7 @@ func TestIsResourceRedirects_Nil(t *testing.T) {
 	if network.IsResourceRedirects(nil) {
 		t.Error("should not detect nil")
 	}
+
 	if network.IsResourceRedirects(errors.New("no redirects")) {
 		t.Error("should not detect non-redirect error")
 	}
@@ -94,6 +100,7 @@ func TestIsConnectionRefused_Nil(t *testing.T) {
 	if network.IsConnectionRefused(nil) {
 		t.Error("should not detect nil")
 	}
+
 	if network.IsConnectionRefused(errors.New("other")) {
 		t.Error("should not detect plain error")
 	}

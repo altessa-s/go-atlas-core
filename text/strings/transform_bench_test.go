@@ -44,6 +44,7 @@ func BenchmarkToSnakeCase(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if corestrings.ToSnakeCase(tc.in) == "" {
 					b.Fatal("empty result")
@@ -60,6 +61,7 @@ func BenchmarkToScreamingSnakeCase(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if corestrings.ToScreamingSnakeCase(tc.in) == "" {
 					b.Fatal("empty result")

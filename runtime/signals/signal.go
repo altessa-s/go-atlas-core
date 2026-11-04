@@ -226,6 +226,7 @@ func (s *Signal) addSignalHandler(entry handlerEntry, signals ...os.Signal) {
 		if _, ok := s.handlers[sig]; !ok {
 			s.handlers[sig] = make([]handlerEntry, 0)
 		}
+
 		s.handlers[sig] = append(s.handlers[sig], entry)
 	}
 }
@@ -236,6 +237,7 @@ func (s *Signal) addSignalHandler(entry handlerEntry, signals ...os.Signal) {
 func (s *Signal) addBroadcastHandler(entry handlerEntry) {
 	s.mx.Lock()
 	defer s.mx.Unlock()
+
 	s.broadcastHandlers = append(s.broadcastHandlers, entry)
 }
 
@@ -249,6 +251,7 @@ func (s *Signal) AddHandler(hdlr ContextHandler, signals ...os.Signal) *Signal {
 	}
 
 	s.addSignalHandler(s.newHandlerEntry(hdlr), signals...)
+
 	return s
 }
 
@@ -262,6 +265,7 @@ func (s *Signal) AddBroadcastHandler(h ContextHandler) *Signal {
 	}
 
 	s.addBroadcastHandler(s.newHandlerEntry(h))
+
 	return s
 }
 
@@ -284,6 +288,7 @@ func (s *Signal) AddHandlerWithPriority(hdlr ContextHandler, priority Priority, 
 	}
 
 	s.addSignalHandler(s.newPriorityHandlerEntry(hdlr, priority), signals...)
+
 	return s
 }
 
@@ -301,6 +306,7 @@ func (s *Signal) AddBroadcastHandlerWithPriority(h ContextHandler, priority Prio
 	}
 
 	s.addBroadcastHandler(s.newPriorityHandlerEntry(h, priority))
+
 	return s
 }
 
@@ -317,6 +323,7 @@ func (s *Signal) Start() *Signal {
 
 	// Then start receiving signals - goroutine is already running
 	signal.Notify(s.signalChannel, s.signals...)
+
 	return s
 }
 
@@ -366,6 +373,7 @@ func (s *Signal) Shutdown(ctx context.Context) error {
 
 	// Wait for graceful completion
 	done := make(chan struct{})
+
 	go func() {
 		s.wg.Wait()
 		close(done)
@@ -378,7 +386,9 @@ func (s *Signal) Shutdown(ctx context.Context) error {
 		if err := s.shutdownHooks(ctx); err != nil {
 			return err
 		}
+
 		s.globalCancel() // Cancel context after graceful completion
+
 		return nil
 	case <-ctx.Done():
 		// Timeout occurred: cancel the handler context FIRST so in-flight
@@ -387,6 +397,7 @@ func (s *Signal) Shutdown(ctx context.Context) error {
 		s.globalCancel()
 		// Still try to run hooks, best effort — the original ctx is expired.
 		s.shutdownHooks(context.Background()) //nolint:errcheck,contextcheck // best-effort during shutdown timeout, original ctx is expired
+
 		return coreerrs.Wrap(ctx.Err(), "shutdown timeout")
 	}
 }
@@ -420,6 +431,7 @@ func (s *Signal) signalsListener() {
 			case s.workerPool <- struct{}{}:
 				s.wg.Go(func() {
 					defer func() { <-s.workerPool }()
+
 					s.runHandlers(sig)
 				})
 			default:
@@ -460,9 +472,11 @@ func (s *Signal) runHandlers(sig os.Signal) {
 		for _, entry := range s.broadcastHandlers {
 			pq.addHandler(entry)
 		}
+
 		for _, entry := range sigHandlers {
 			pq.addHandler(entry)
 		}
+
 		s.mx.RUnlock()
 
 		handlers = pq.getHandlersInOrder()
@@ -471,6 +485,7 @@ func (s *Signal) runHandlers(sig os.Signal) {
 		handlers = make([]handlerEntry, 0, HandlerSliceInitialCapacity)
 		handlers = append(handlers, s.broadcastHandlers...)
 		handlers = append(handlers, sigHandlers...)
+
 		s.mx.RUnlock()
 
 		s.sortHandlers(handlers)
@@ -553,6 +568,7 @@ func (s *Signal) runHandlersParallelOptimized(handlers []handlerEntry, sig os.Si
 
 	// Wait for completion or shutdown
 	done := make(chan struct{})
+
 	go func() {
 		wg.Wait()
 		close(done)
@@ -567,9 +583,11 @@ func (s *Signal) runHandlersParallelOptimized(handlers []handlerEntry, sig os.Si
 		// detached from it and is canceled once either branch below fires.
 		graceCtx, cancel := context.WithCancel(context.WithoutCancel(s.globalCtx))
 		defer cancel()
+
 		graceOver := make(chan struct{})
 		go func() {
 			defer close(graceOver)
+
 			_ = s.clock.Sleep(graceCtx, ResponsiveTimeoutDuration)
 		}()
 
@@ -598,6 +616,7 @@ func (s *Signal) executeHandlerEntryOptimized(entry handlerEntry, sig os.Signal)
 		if err != nil {
 			s.safeCallErrorHandler(sig, err)
 		}
+
 		return
 	}
 

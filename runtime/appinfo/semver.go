@@ -27,6 +27,7 @@ func parseSemVer(v string) (*SemanticVersion, error) {
 	// Split into version and prerelease
 	parts = strings.SplitN(versionPart, "-", 2)
 	corePart := parts[0]
+
 	var prerelease []string
 	if len(parts) > 1 {
 		prerelease = strings.Split(parts[1], ".")

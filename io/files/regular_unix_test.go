@@ -23,6 +23,7 @@ func TestOpenRegular(t *testing.T) {
 	dir := t.TempDir()
 	regular := filepath.Join(dir, "a.yaml")
 	require.NoError(t, os.WriteFile(regular, []byte("x: 1\n"), 0o600))
+
 	fifo := filepath.Join(dir, "fifo")
 	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
 
@@ -34,10 +35,12 @@ func TestOpenRegular(t *testing.T) {
 	require.ErrorIs(t, err, files.ErrNotRegular)
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := files.OpenRegular(fifo)
 		done <- err
 	}()
+
 	select {
 	case err := <-done:
 		require.ErrorIs(t, err, files.ErrNotRegular)
@@ -54,6 +57,7 @@ func TestReadRegular(t *testing.T) {
 	dir := t.TempDir()
 	regular := filepath.Join(dir, "a.yaml")
 	require.NoError(t, os.WriteFile(regular, []byte("x: 1\n"), 0o600))
+
 	fifo := filepath.Join(dir, "fifo")
 	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
 
@@ -65,10 +69,12 @@ func TestReadRegular(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := files.ReadRegular(fifo)
 		done <- err
 	}()
+
 	select {
 	case err := <-done:
 		require.ErrorIs(t, err, files.ErrNotRegular)
@@ -108,6 +114,7 @@ func TestOpenRegularIn(t *testing.T) {
 // directory, with or without a trailing separator.
 func TestOpenRootDir(t *testing.T) {
 	t.Parallel()
+
 	dir := t.TempDir()
 	for _, path := range []string{dir, dir + string(filepath.Separator)} {
 		root, err := files.OpenRootDir(path)
@@ -120,14 +127,18 @@ func TestOpenRootDir(t *testing.T) {
 
 	fifo := filepath.Join(dir, "fifo")
 	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
+
 	done := make(chan error, 1)
+
 	go func() {
 		root, err := files.OpenRootDir(fifo)
 		if err == nil {
 			_ = root.Close()
 		}
+
 		done <- err
 	}()
+
 	select {
 	case err := <-done:
 		require.Error(t, err)

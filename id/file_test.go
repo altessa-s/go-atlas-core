@@ -27,6 +27,7 @@ func TestFile_GeneratesAndPersistsID(t *testing.T) {
 	// New provider instance should read the same value.
 	p2, err := NewFile(path)
 	require.NoError(t, err)
+
 	id2 := p2.ID()
 	require.Equal(t, id1, id2)
 
@@ -99,6 +100,7 @@ func TestMustNewFile_EmptyPathPanics(t *testing.T) {
 	defer func() {
 		require.NotNil(t, recover(), "expected panic for empty file path")
 	}()
+
 	MustNewFile("")
 }
 

@@ -36,9 +36,11 @@ const crashSegmentBytes = 8 << 10
 func recordPayload(id uint64) []byte {
 	p := make([]byte, 8+int(id%97)+1)
 	binary.LittleEndian.PutUint64(p, id)
+
 	for i := 8; i < len(p); i++ {
 		p[i] = byte(id) ^ byte(i)
 	}
+
 	return p
 }
 
@@ -47,7 +49,9 @@ func recordID(p []byte) (uint64, bool) {
 	if len(p) < 9 {
 		return 0, false
 	}
+
 	id := binary.LittleEndian.Uint64(p)
+
 	return id, bytes.Equal(p, recordPayload(id))
 }
 
@@ -62,26 +66,33 @@ func TestWALCrashRecovery(t *testing.T) {
 		runCrashChild(t, dir)
 		return
 	}
+
 	t.Parallel()
 
 	const iterations = 6
+
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o700))
+
 	var lastSynced uint64
+
 	for iter := range iterations {
 		synced := runAndKillChild(t, dir)
 		require.GreaterOrEqual(t, synced, lastSynced, "iteration %d: child reported fewer synced records than recovered before", iter)
+
 		if iter%2 == 1 {
 			appendTornRecord(t, dir)
 		}
 
 		w, recovered, err := wal.Open(dir, wal.WithMaxSegmentBytes(crashSegmentBytes))
 		require.NoError(t, err, "iteration %d", iter)
+
 		for i, r := range recovered {
 			id, ok := recordID(r.Payload)
 			require.True(t, ok, "iteration %d: corrupt record recovered at %+v", iter, r.Offset)
 			require.Equal(t, uint64(i+1), id, "iteration %d: recovered records are not a gap-free prefix", iter)
 		}
+
 		n := uint64(len(recovered))
 		require.GreaterOrEqual(t, n, synced, "iteration %d: records synced before the kill were lost", iter)
 		require.NoError(t, w.Close())
@@ -96,6 +107,7 @@ func TestWALCrashRecovery(t *testing.T) {
 func runAndKillChild(t *testing.T, dir string) uint64 {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestWALCrashRecovery$", "-test.count=1") //nolint:gosec // re-executes this test binary
+
 	cmd.Env = append(os.Environ(), crashChildDirEnv+"="+dir)
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
@@ -105,6 +117,7 @@ func runAndKillChild(t *testing.T, dir string) uint64 {
 	lines := make(chan uint64, 1024)
 	go func() {
 		defer close(lines)
+
 		sc := bufio.NewScanner(stdout)
 		for sc.Scan() {
 			if v, ok := strings.CutPrefix(sc.Text(), "synced "); ok {
@@ -116,14 +129,18 @@ func runAndKillChild(t *testing.T, dir string) uint64 {
 	}()
 
 	var synced uint64
+
 	select {
 	case id, ok := <-lines:
 		require.True(t, ok, "crash child exited before syncing anything")
+
 		synced = id
 	case <-time.After(10 * time.Second):
 		require.FailNow(t, "crash child made no progress within 10s")
 	}
+
 	kill := time.After(time.Duration(rand.IntN(200)) * time.Millisecond) //nolint:gosec // test jitter
+
 wait:
 	for {
 		select {
@@ -133,12 +150,15 @@ wait:
 			break wait
 		}
 	}
+
 	require.NoError(t, cmd.Process.Kill())
 	// Lines already in the pipe were printed after a completed Sync.
 	for id := range lines {
 		synced = max(synced, id)
 	}
+
 	_ = cmd.Wait() //nolint:errcheck // killed on purpose
+
 	return synced
 }
 
@@ -147,13 +167,17 @@ wait:
 func runCrashChild(t *testing.T, dir string) {
 	w, recovered, err := wal.Open(dir, wal.WithMaxSegmentBytes(crashSegmentBytes), wal.WithFsyncInterval(time.Millisecond))
 	require.NoError(t, err)
+
 	next := uint64(len(recovered)) + 1
+
 	deadline := time.Now().Add(time.Minute) // never outlive a lost parent
 	for ; time.Now().Before(deadline); next++ {
 		_, err := w.Append(recordPayload(next))
 		require.NoError(t, err)
+
 		if next%16 == 0 {
 			require.NoError(t, w.Sync())
+
 			_, err := fmt.Fprintf(os.Stdout, "synced %d\n", next)
 			require.NoError(t, err)
 		}
@@ -164,12 +188,14 @@ func runCrashChild(t *testing.T, dir string) {
 // disk to the newest segment, as a crash in the middle of a write would.
 func appendTornRecord(t *testing.T, dir string) {
 	t.Helper()
+
 	segs, err := filepath.Glob(filepath.Join(dir, "*.wal"))
 	require.NoError(t, err)
 	require.NotEmpty(t, segs)
 	slices.Sort(segs)
 	f, err := os.OpenFile(segs[len(segs)-1], os.O_WRONLY|os.O_APPEND, 0)
 	require.NoError(t, err)
+
 	var hdr [8]byte
 	binary.LittleEndian.PutUint32(hdr[:4], 64)
 	binary.LittleEndian.PutUint32(hdr[4:], 0xdeadbeef)

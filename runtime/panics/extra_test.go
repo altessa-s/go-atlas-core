@@ -38,6 +38,7 @@ func TestMustNonZero_Zero(t *testing.T) {
 			t.Error("MustNonZero(0) should panic")
 		}
 	}()
+
 	panics.MustNonZero(0, "must be nonzero")
 }
 
@@ -52,5 +53,6 @@ func TestMustNonZero_EmptyString(t *testing.T) {
 			t.Error("MustNonZero('') should panic")
 		}
 	}()
+
 	panics.MustNonZero("", "must be nonzero")
 }

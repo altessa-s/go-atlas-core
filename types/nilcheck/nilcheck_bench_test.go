@@ -16,25 +16,31 @@ func BenchmarkIsNilPlainNil(b *testing.B) {
 	for b.Loop() {
 		sink = nilcheck.IsNil(nil)
 	}
+
 	_ = sink
 }
 
 func BenchmarkIsNilNilPointer(b *testing.B) {
-	var p *string
-	var sink bool
+	var (
+		p    *string
+		sink bool
+	)
 	for b.Loop() {
 		sink = nilcheck.IsNil(p)
 	}
+
 	_ = sink
 }
 
 func BenchmarkIsNilNonNilPointer(b *testing.B) {
 	s := "value"
 	p := &s
+
 	var sink bool
 	for b.Loop() {
 		sink = nilcheck.IsNil(p)
 	}
+
 	_ = sink
 }
 
@@ -43,15 +49,18 @@ func BenchmarkIsNilString(b *testing.B) {
 	for b.Loop() {
 		sink = nilcheck.IsNil("hello")
 	}
+
 	_ = sink
 }
 
 func BenchmarkRequireNotNilHit(b *testing.B) {
 	s := "value"
+
 	var err error
 	for b.Loop() {
 		err = nilcheck.RequireNotNil(&s, "field")
 	}
+
 	_ = err
 }
 
@@ -60,6 +69,7 @@ func BenchmarkRequireNotNilMiss(b *testing.B) {
 	for b.Loop() {
 		err = nilcheck.RequireNotNil(nil, "field")
 	}
+
 	_ = err
 }
 
@@ -67,6 +77,7 @@ func BenchmarkRequireNotNilMiss(b *testing.B) {
 // runs per field, including the whitespace scan for *string.
 func BenchmarkIsEmptyValue(b *testing.B) {
 	blank := "   \t "
+
 	text := "value"
 	for _, tc := range []struct {
 		name string
@@ -80,6 +91,7 @@ func BenchmarkIsEmptyValue(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if nilcheck.IsEmptyValue(tc.v) != tc.want {
 					b.Fatalf("IsEmptyValue != %v", tc.want)
@@ -92,6 +104,7 @@ func BenchmarkIsEmptyValue(b *testing.B) {
 func BenchmarkCheckerChain(b *testing.B) {
 	v1 := "a"
 	v2 := 1
+
 	var err error
 	for b.Loop() {
 		err = nilcheck.NewChecker("Bench").
@@ -99,5 +112,6 @@ func BenchmarkCheckerChain(b *testing.B) {
 			Check(&v2, "i").
 			Error()
 	}
+
 	_ = err
 }

@@ -13,6 +13,7 @@ import (
 
 func BenchmarkParse(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if _, err := civil.Parse("2026-10-09"); err != nil {
 			b.Fatal(err)
@@ -22,7 +23,9 @@ func BenchmarkParse(b *testing.B) {
 
 func BenchmarkString(b *testing.B) {
 	d := civil.MustNew(2026, time.October, 9)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = d.String()
 	}
@@ -30,7 +33,9 @@ func BenchmarkString(b *testing.B) {
 
 func BenchmarkAddMonthsClamped(b *testing.B) {
 	d := civil.MustNew(2026, time.January, 31)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = d.AddMonthsClamped(13, 31)
 	}
@@ -38,7 +43,9 @@ func BenchmarkAddMonthsClamped(b *testing.B) {
 
 func BenchmarkDaysSince(b *testing.B) {
 	d, o := civil.MustNew(2026, time.October, 9), civil.MustNew(2000, time.January, 1)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = d.DaysSince(o)
 	}
@@ -47,7 +54,9 @@ func BenchmarkDaysSince(b *testing.B) {
 // BenchmarkOf measures truncating a zoned instant to its calendar date.
 func BenchmarkOf(b *testing.B) {
 	t := time.Date(2026, time.October, 9, 23, 59, 59, 0, time.FixedZone("UTC+3", 3*60*60))
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if !civil.Of(t).Valid() {
 			b.Fatal("invalid date")
@@ -59,7 +68,9 @@ func BenchmarkOf(b *testing.B) {
 // boundaries.
 func BenchmarkAddDays(b *testing.B) {
 	d := civil.MustNew(2026, time.December, 30)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if d.AddDays(400).Before(d) {
 			b.Fatal("date moved backwards")
@@ -70,7 +81,9 @@ func BenchmarkAddDays(b *testing.B) {
 // BenchmarkWeekday measures the day-of-week computation used by schedules.
 func BenchmarkWeekday(b *testing.B) {
 	d := civil.MustNew(2026, time.October, 9)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if d.Weekday() != time.Friday {
 			b.Fatal("unexpected weekday")
@@ -82,7 +95,9 @@ func BenchmarkWeekday(b *testing.B) {
 func BenchmarkIn(b *testing.B) {
 	d := civil.MustNew(2026, time.October, 9)
 	loc := time.FixedZone("UTC+3", 3*60*60)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if d.In(loc).IsZero() {
 			b.Fatal("zero time")
@@ -94,16 +109,20 @@ func BenchmarkIn(b *testing.B) {
 // text-based encoders (YAML, form values, map keys) go through.
 func BenchmarkTextRoundTrip(b *testing.B) {
 	d := civil.MustNew(2026, time.October, 9)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		text, err := d.MarshalText()
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		var got civil.Date
 		if err := got.UnmarshalText(text); err != nil {
 			b.Fatal(err)
 		}
+
 		if got != d {
 			b.Fatal("round trip mismatch")
 		}

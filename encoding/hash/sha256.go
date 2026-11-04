@@ -68,6 +68,7 @@ func SHA256HexString(s string) string {
 	// Zero-allocation conversion from string to []byte for hashing.
 	// Safe because sha256.Sum256 only reads from the slice.
 	b := unsafe.Slice(unsafe.StringData(s), len(s))
+
 	return SHA256HexBytes(b)
 }
 
@@ -98,6 +99,7 @@ func SHA256HexWithPrefix(prefix, s string) string {
 		// Safe because sha256.Sum256 only reads from the slice.
 		sum = sha256.Sum256(unsafe.Slice(unsafe.StringData(s), len(s)))
 	}
+
 	var dst [2 * sha256.Size]byte
 	hex.Encode(dst[:], sum[:])
 	// One allocation for the result: prefix + string(dst[:]) would allocate
@@ -106,6 +108,7 @@ func SHA256HexWithPrefix(prefix, s string) string {
 	out.Grow(len(prefix) + len(dst))
 	out.WriteString(prefix)
 	out.Write(dst[:])
+
 	return out.String()
 }
 
@@ -130,7 +133,9 @@ func SHA256HexWithSalt(data, salt []byte) string {
 	h := sha256.New()
 	h.Write(salt)
 	h.Write(data)
+
 	var sum [sha256.Size]byte
+
 	return hexString(h.Sum(sum[:0]))
 }
 
@@ -157,10 +162,13 @@ func SHA256HexStringWithSalt(s, salt string) string {
 	if salt != "" {
 		h.Write(unsafe.Slice(unsafe.StringData(salt), len(salt)))
 	}
+
 	if s != "" {
 		h.Write(unsafe.Slice(unsafe.StringData(s), len(s)))
 	}
+
 	var sum [sha256.Size]byte
+
 	return hexString(h.Sum(sum[:0]))
 }
 
@@ -215,5 +223,6 @@ func hexString(sum []byte) string {
 		hex.Encode(dst[:n], sum)
 		return string(dst[:n])
 	}
+
 	return hex.EncodeToString(sum)
 }

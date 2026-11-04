@@ -32,6 +32,7 @@ func TestRealSleep(t *testing.T) {
 
 	c := clock.Real()
 	start := time.Now()
+
 	require.NoError(t, c.Sleep(t.Context(), 5*time.Millisecond))
 	require.GreaterOrEqual(t, time.Since(start), 5*time.Millisecond)
 
@@ -44,6 +45,7 @@ func TestRealSleep(t *testing.T) {
 
 	short, stop := context.WithTimeout(t.Context(), time.Millisecond)
 	defer stop()
+
 	require.ErrorIs(t, c.Sleep(short, time.Hour), context.DeadlineExceeded)
 }
 
@@ -86,6 +88,7 @@ func TestFakeDrivesRetry(t *testing.T) {
 		if calls < 3 {
 			return context.DeadlineExceeded
 		}
+
 		return nil
 	},
 		retry.WithMaxAttempts(5),
@@ -101,6 +104,7 @@ func TestFakeConcurrent(t *testing.T) {
 	t.Parallel()
 
 	f := clock.NewFake(t0)
+
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
@@ -110,6 +114,7 @@ func TestFakeConcurrent(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 	require.Equal(t, t0.Add(800*time.Second), f.Now())
 }

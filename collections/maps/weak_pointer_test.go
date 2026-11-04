@@ -36,6 +36,7 @@ func TestMakeWeakRefNil(t *testing.T) {
 
 func TestWeakRefValue(t *testing.T) {
 	t.Parallel()
+
 	obj := &testhelpers.User{ID: 1, Name: "test"}
 	ref := coremaps.MakeWeakRef(obj)
 
@@ -46,6 +47,7 @@ func TestWeakRefValue(t *testing.T) {
 
 func TestWeakRefCollected(t *testing.T) {
 	t.Parallel()
+
 	ref := coremaps.MakeWeakRef(&testhelpers.User{ID: 1, Name: "test"})
 
 	// The object is unreachable; a few GC cycles are enough to collect it.
@@ -53,8 +55,10 @@ func TestWeakRefCollected(t *testing.T) {
 		if !ref.IsAlive() {
 			break
 		}
+
 		runtime.GC()
 	}
+
 	require.False(t, ref.IsAlive())
 	require.Nil(t, ref.Value())
 }

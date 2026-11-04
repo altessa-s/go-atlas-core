@@ -14,6 +14,7 @@ import (
 
 func TestPoolPutClearsTruncatedElements(t *testing.T) {
 	t.Parallel()
+
 	pool := coreslices.NewPool[*int](4)
 	buf := pool.Get()
 	*buf = append(*buf, new(1), new(2), new(3))

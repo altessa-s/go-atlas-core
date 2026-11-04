@@ -15,6 +15,7 @@ import (
 // inline-stored secret.
 func BenchmarkNewString_Clear(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		ss := secure.NewString("correct horse battery staple")
 		ss.Clear()
@@ -26,10 +27,12 @@ func BenchmarkNewString_Clear(b *testing.B) {
 func BenchmarkString_Equal(b *testing.B) {
 	x := secure.NewString("correct horse battery staple")
 	y := secure.NewString("correct horse battery staple")
+
 	b.Cleanup(x.Clear)
 	b.Cleanup(y.Clear)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = x.Equal(y)
 	}
@@ -38,6 +41,7 @@ func BenchmarkString_Equal(b *testing.B) {
 // BenchmarkEqual measures constant-time comparison of plain strings.
 func BenchmarkEqual(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = secure.Equal("correct horse battery staple", "correct horse battery stapl3")
 	}
@@ -47,7 +51,9 @@ func BenchmarkEqual(b *testing.B) {
 // run on every authenticated request.
 func BenchmarkPrefixMatch(b *testing.B) {
 	const header = "Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature"
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if !secure.PrefixMatch(header, "bearer ") {
 			b.Fatal("scheme not matched")
@@ -64,6 +70,7 @@ func BenchmarkSubstringMatch(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if !secure.SubstringMatch(tc.s, "secret-value") {
 					b.Fatal("substring not matched")
@@ -79,6 +86,7 @@ func BenchmarkZeroString(b *testing.B) {
 	s := string(buf)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		secure.ZeroString(s)
 	}

@@ -27,11 +27,13 @@ import (
 // so the child keeps it away from the other tests.
 func TestWALIntegration_PartialWriteIsRolledBack(t *testing.T) {
 	first := []byte("first record")
+
 	last := []byte("written after the limit is lifted")
 	if dir, ok := childDir(t); ok {
 		runPartialWriteChild(t, dir, first, last)
 		return
 	}
+
 	t.Parallel()
 	dir := privateDir(t)
 	out := runChild(t, dir, 0)
@@ -68,10 +70,12 @@ func runPartialWriteChild(t *testing.T, dir string, first, last []byte) {
 
 	// Raising the soft limit back up to the unchanged hard limit is allowed.
 	require.NoError(t, syscall.Setrlimit(syscall.RLIMIT_FSIZE, &limit))
+
 	off, err := w.Append(last)
 	require.NoError(t, err)
 	require.Equal(t, size, off.Position, "the next record starts where the failed one would have")
 	require.NoError(t, w.Close())
+
 	_, err = fmt.Fprintln(os.Stdout, "partial write rolled back")
 	require.NoError(t, err)
 }

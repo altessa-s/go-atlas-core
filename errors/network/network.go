@@ -27,7 +27,9 @@ func IsNetworkError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	_, ok := errors.AsType[net.Error](err) //nolint:errcheck // only checking ok
+
 	return ok
 }
 
@@ -80,7 +82,9 @@ func IsURLError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	_, ok := errors.AsType[*url.Error](err) //nolint:errcheck // only checking ok
+
 	return ok
 }
 
@@ -96,9 +100,11 @@ func IsResourceRedirects(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	if urlErr, ok := errors.AsType[*url.Error](err); ok && urlErr.Err != nil {
 		return redirectsErrorRe.MatchString(urlErr.Err.Error())
 	}
+
 	return false
 }
 
@@ -113,9 +119,11 @@ func IsUnsupportedProtocolScheme(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	if urlErr, ok := errors.AsType[*url.Error](err); ok && urlErr.Err != nil {
 		return schemeErrorRe.MatchString(urlErr.Err.Error())
 	}
+
 	return false
 }
 
@@ -132,10 +140,12 @@ func IsCertUnknownAuthority(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		_, found := errors.AsType[x509.UnknownAuthorityError](urlErr.Err) //nolint:errcheck // only checking found
 		return found
 	}
+
 	return false
 }
 
@@ -162,8 +172,10 @@ func IsConnectionRefused(err error) bool {
 			if syscallErr, ok := errors.AsType[syscall.Errno](netErr.Err); ok {
 				return errors.Is(syscallErr, syscall.ECONNREFUSED)
 			}
+
 			return false
 		}
+
 		return IsConnectionRefused(netErr.Unwrap())
 	}
 

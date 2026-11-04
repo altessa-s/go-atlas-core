@@ -96,6 +96,7 @@ func TestSHA256Hasher(t *testing.T) {
 
 	t.Run("single_write", func(t *testing.T) {
 		t.Parallel()
+
 		input := []byte("hello world")
 		h := hash.NewSHA256Hasher()
 		n, err := h.Write(input)
@@ -106,16 +107,19 @@ func TestSHA256Hasher(t *testing.T) {
 
 	t.Run("multi_write_equals_single", func(t *testing.T) {
 		t.Parallel()
+
 		h := hash.NewSHA256Hasher()
 		for _, p := range []string{"hello", " ", "world"} {
 			_, err := h.Write([]byte(p))
 			require.NoError(t, err)
 		}
+
 		require.Equal(t, hash.SHA256HexBytes([]byte("hello world")), h.SumHex())
 	})
 
 	t.Run("io_copy", func(t *testing.T) {
 		t.Parallel()
+
 		input := "hello world"
 		h := hash.NewSHA256Hasher()
 		_, err := io.Copy(h, strings.NewReader(input))
@@ -125,18 +129,19 @@ func TestSHA256Hasher(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
+
 		h := hash.NewSHA256Hasher()
 		require.Equal(t, hash.SHA256HexBytes(nil), h.SumHex())
 	})
 
 	t.Run("sum_hex_is_stable", func(t *testing.T) {
 		t.Parallel()
+
 		h := hash.NewSHA256Hasher()
 		_, err := h.Write([]byte("data"))
 		require.NoError(t, err)
 		require.Equal(t, h.SumHex(), h.SumHex(), "SumHex must not reset state")
 	})
-
 }
 
 func TestHexSum(t *testing.T) {
@@ -154,6 +159,7 @@ func TestHexSum(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			h := sha256.New()
 			h.Write([]byte(tc.input))
 			got := hash.HexSum(h)
@@ -164,9 +170,11 @@ func TestHexSum(t *testing.T) {
 
 	t.Run("matches_sha256_hasher", func(t *testing.T) {
 		t.Parallel()
+
 		input := "test data"
 		sh := hash.NewSHA256Hasher()
 		sh.Write([]byte(input))
+
 		stdH := sha256.New()
 		stdH.Write([]byte(input))
 		require.Equal(t, hash.HexSum(stdH), sh.SumHex())

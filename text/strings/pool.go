@@ -58,7 +58,9 @@ func GetStringBuilder() *strings.Builder {
 	if !ok {
 		builder = &strings.Builder{}
 	}
+
 	builder.Reset()
+
 	return builder
 }
 
@@ -83,5 +85,6 @@ func BuildString(buildFunc func(*strings.Builder)) string {
 	defer PutStringBuilder(builder)
 
 	buildFunc(builder)
+
 	return builder.String()
 }

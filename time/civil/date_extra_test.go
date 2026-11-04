@@ -34,10 +34,13 @@ func TestMustNewPanicsOnInvalidDate(t *testing.T) {
 			t.Parallel()
 
 			var recovered any
+
 			func() {
 				defer func() { recovered = recover() }()
+
 				civil.MustNew(tc.year, tc.month, tc.day)
 			}()
+
 			err, ok := recovered.(error)
 			require.True(t, ok, "MustNew must panic with an error, got %#v", recovered)
 			require.ErrorIs(t, err, civil.ErrInvalidDate)
@@ -49,6 +52,7 @@ func TestCompare(t *testing.T) {
 	t.Parallel()
 
 	base := civil.MustNew(2026, time.June, 15)
+
 	tests := []struct {
 		name  string
 		other civil.Date

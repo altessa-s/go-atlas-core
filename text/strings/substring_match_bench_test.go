@@ -36,7 +36,9 @@ func BenchmarkSubstringMatch(b *testing.B) {
 		haystack = "The quick brown fox jumps over the lazy dog"
 		needle   = "BROWN"
 	)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = corestrings.SubstringMatch(haystack, needle)
 	}
@@ -50,7 +52,9 @@ func BenchmarkSubstringMatch_ShorterHaystack(b *testing.B) {
 		haystack = "Hi"
 		needle   = "Hello, world!"
 	)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = corestrings.SubstringMatch(haystack, needle)
 	}

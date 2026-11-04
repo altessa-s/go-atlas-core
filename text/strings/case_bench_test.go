@@ -24,6 +24,7 @@ func BenchmarkIsLowercase(b *testing.B) {
 	for _, tc := range caseBenchInputs {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if !corestrings.IsLowercase(tc.lower) {
 					b.Fatal("lowercase input rejected")
@@ -37,6 +38,7 @@ func BenchmarkIsUppercase(b *testing.B) {
 	for _, tc := range caseBenchInputs {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if !corestrings.IsUppercase(tc.upper) {
 					b.Fatal("uppercase input rejected")
@@ -58,6 +60,7 @@ func BenchmarkIsTrimmed(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if corestrings.IsTrimmed(tc.in) != tc.want {
 					b.Fatalf("IsTrimmed(%q) != %v", tc.in, tc.want)
@@ -78,6 +81,7 @@ func BenchmarkIsEmptyOrWhitespace(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for b.Loop() {
 				if corestrings.IsEmptyOrWhitespace(tc.in) != tc.want {
 					b.Fatalf("IsEmptyOrWhitespace(%q) != %v", tc.in, tc.want)
@@ -89,7 +93,9 @@ func BenchmarkIsEmptyOrWhitespace(b *testing.B) {
 
 func BenchmarkTrimPrefixFast(b *testing.B) {
 	const in = "Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature"
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if corestrings.TrimPrefixFast(in, "Bearer ") == in {
 			b.Fatal("prefix not trimmed")

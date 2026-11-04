@@ -67,6 +67,7 @@ func TestMapFieldPath(t *testing.T) {
 
 	t.Run("re-roots and keeps the chain", func(t *testing.T) {
 		t.Parallel()
+
 		orig := errors.NewFieldError("base_url", "required")
 		err := fmt.Errorf("save: %w", std_errors.Join(errors.ErrConflict, orig))
 		mapped := errors.MapFieldPath(err, prefix("provider"))
@@ -84,6 +85,7 @@ func TestMapFieldPath(t *testing.T) {
 
 	t.Run("mapping composes", func(t *testing.T) {
 		t.Parallel()
+
 		err := errors.MapFieldPath(errors.MapFieldPath(errors.NewFieldError("name", "required"), prefix("bot")), prefix("req"))
 		fe, ok := std_errors.AsType[*errors.FieldError](err)
 		require.True(t, ok)
@@ -92,9 +94,11 @@ func TestMapFieldPath(t *testing.T) {
 
 	t.Run("unchanged without a field error", func(t *testing.T) {
 		t.Parallel()
+
 		plain := fmt.Errorf("%w: bad cursor", errors.ErrInvalidArgument)
 		require.Same(t, plain, errors.MapFieldPath(plain, prefix("x")))
 		require.NoError(t, errors.MapFieldPath(nil, prefix("x")))
+
 		fe := errors.NewFieldError("name", "required")
 		require.Same(t, fe, errors.MapFieldPath(fe, nil))
 	})

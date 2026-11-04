@@ -174,6 +174,7 @@ func TestInterner_String_CacheTiers(t *testing.T) {
 	for range 3 {
 		require.Equal(t, "tiered", interner.String("tiered"))
 	}
+
 	stats = interner.Stats()
 	require.Equal(t, uint64(3), stats.HotHits)
 	require.Equal(t, uint64(intern.HotCacheThreshold-1), stats.ColdHits)
@@ -207,6 +208,7 @@ func TestInterner_SizeAndLoadFactor(t *testing.T) {
 
 	interner.String("a")
 	require.GreaterOrEqual(t, interner.Size(), int64(1))
+
 	if interner.IsFull() {
 		require.GreaterOrEqual(t, interner.Size(), interner.MaxSize())
 	}
@@ -236,6 +238,7 @@ func TestResetDefault(t *testing.T) {
 	t.Cleanup(intern.ResetDefault)
 
 	intern.String("leak-check")
+
 	g := intern.Default()
 	require.False(t, g.IsEmpty(), "default interner should not be empty after String")
 

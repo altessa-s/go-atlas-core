@@ -45,7 +45,9 @@ func Process[T any](
 	if len(items) == 0 {
 		return nil
 	}
+
 	cfg := newOptions(opts...)
+
 	return processWithOptions(ctx, items, batchFunc[T]{item: fn}, cfg)
 }
 
@@ -62,6 +64,7 @@ func (f batchFunc[T]) call(ctx context.Context, items []T, idx int) error {
 	if f.index != nil {
 		return f.index(ctx, idx)
 	}
+
 	return f.item(ctx, items[idx])
 }
 
@@ -81,14 +84,17 @@ func processWithOptions[T any](
 
 	// Internal context to cancel all workers if stopOnError is true
 	gCtx := ctx
+
 	var cancel context.CancelFunc
 	if cfg.stopOnError {
 		gCtx, cancel = context.WithCancel(ctx)
 		defer cancel()
 	}
 
-	var once sync.Once
-	var firstErr error
+	var (
+		once     sync.Once
+		firstErr error
+	)
 
 	// Mutex for OnSuccess/OnError callbacks
 	var cbMx sync.Mutex
@@ -98,6 +104,7 @@ func processWithOptions[T any](
 		if err := fn.call(gCtx, items, idx); err != nil {
 			once.Do(func() {
 				firstErr = err
+
 				if cfg.stopOnError && cancel != nil {
 					cancel() // Stop other workers
 				}
@@ -120,8 +127,11 @@ func processWithOptions[T any](
 	// before every claim, regardless of stopOnError, so a claimed index is
 	// an item being processed and nothing is started past a cancellation.
 	n := len(items)
-	var next atomic.Int64
-	var wg sync.WaitGroup
+
+	var (
+		next atomic.Int64
+		wg   sync.WaitGroup
+	)
 	for range min(concurrency, n) {
 		wg.Go(func() {
 			for gCtx.Err() == nil {
@@ -129,10 +139,12 @@ func processWithOptions[T any](
 				if idx >= int64(n) {
 					return
 				}
+
 				handle(int(idx))
 			}
 		})
 	}
+
 	wg.Wait()
 
 	// Unclaimed items without a failure mean the caller's context was
@@ -140,6 +152,7 @@ func processWithOptions[T any](
 	if firstErr == nil && next.Load() < int64(n) {
 		return ctx.Err()
 	}
+
 	return firstErr
 }
 
@@ -180,8 +193,10 @@ func ProcessCollect[T, R any](
 		if fnErr != nil {
 			return fnErr
 		}
+
 		results[idx] = res
 		completed[idx] = true
+
 		return nil
 	}}, cfg)
 
@@ -193,6 +208,7 @@ func ProcessCollect[T, R any](
 	// Error path: compact results to only include successfully completed items,
 	// preserving the original order.
 	count := 0
+
 	for i := range n {
 		if completed[i] {
 			count++
@@ -204,10 +220,12 @@ func ProcessCollect[T, R any](
 		if cfg.stopOnError {
 			return results, coreerrs.Wrap(err, "batch processing failed")
 		}
+
 		return results, err
 	}
 
 	compacted := make([]R, 0, count)
+
 	for i := range n {
 		if completed[i] {
 			compacted = append(compacted, results[i])
@@ -217,6 +235,7 @@ func ProcessCollect[T, R any](
 	if cfg.stopOnError {
 		return compacted, coreerrs.Wrap(err, "batch processing failed")
 	}
+
 	return compacted, err
 }
 
@@ -230,6 +249,7 @@ func processSequential[T any](
 	cfg *options[T],
 ) error {
 	var firstErr error
+
 	for idx, item := range items {
 		// Checked before each call: a canceled context runs no further
 		// callback, and a run that finished every item stays a success.
@@ -237,6 +257,7 @@ func processSequential[T any](
 			if firstErr != nil {
 				return firstErr
 			}
+
 			return err
 		}
 		// Branch inline rather than through batchFunc.call: the sequential
@@ -247,13 +268,16 @@ func processSequential[T any](
 		} else {
 			err = fn.item(ctx, item)
 		}
+
 		if err != nil {
 			if cfg.onError != nil {
 				cfg.onError(item, err)
 			}
+
 			if cfg.stopOnError {
 				return err
 			}
+
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -261,6 +285,7 @@ func processSequential[T any](
 			cfg.onSuccess(item)
 		}
 	}
+
 	return firstErr
 }
 

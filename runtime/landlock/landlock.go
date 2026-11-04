@@ -98,6 +98,7 @@ func Apply(opts ...Option) error {
 	// errors still quote the caller's original input.
 	cleanPaths(o.readPaths)
 	cleanPaths(o.readWritePaths)
+
 	return apply(o.readPaths, o.readWritePaths)
 }
 
@@ -108,9 +109,11 @@ func validateOptions(o *options) error {
 	if err := validatePaths("read paths", o.readPaths); err != nil {
 		return err
 	}
+
 	if err := validatePaths("read-write paths", o.readWritePaths); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -119,10 +122,12 @@ func validatePaths(field string, paths []string) error {
 		if p == "" {
 			return fmt.Errorf("%w: %s[%d] is empty", ErrInvalidOption, field, i)
 		}
+
 		if !filepath.IsAbs(p) {
 			return fmt.Errorf("%w: %s[%d] %q is not an absolute path", ErrInvalidOption, field, i, p)
 		}
 	}
+
 	return nil
 }
 

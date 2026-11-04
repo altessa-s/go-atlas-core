@@ -21,6 +21,7 @@ func TestNetworkChecks(t *testing.T) {
 		if !network.IsNetworkError(netErr) {
 			t.Error("Should match net.Error")
 		}
+
 		if network.IsNetworkError(errors.New("plain")) {
 			t.Error("Should not match plain error")
 		}

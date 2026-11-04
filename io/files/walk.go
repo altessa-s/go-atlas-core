@@ -117,6 +117,7 @@ func (e Entry) Info() (fs.FileInfo, error) { return e.DirEntry.Info() }
 //	}
 func Walk(root string, opts ...WalkOption) iter.Seq2[Entry, error] {
 	o := newWalkOptions(opts...)
+
 	return func(yield func(Entry, error) bool) {
 		walkDir(root, 0, o, yield)
 	}
@@ -148,10 +149,12 @@ func walkDir(dir string, depth int, o *walkOptions, yield func(Entry, error) boo
 		if !ok {
 			return false
 		}
+
 		if descend && !walkDir(path, depth+1, o, yield) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -163,12 +166,15 @@ func (o *walkOptions) descendInto(path string, de fs.DirEntry, depth int, yield 
 	if o.maxDepth >= 0 && depth >= o.maxDepth {
 		return false, true
 	}
+
 	if de.IsDir() {
 		return true, true
 	}
+
 	if !o.followSymlinks || de.Type()&fs.ModeSymlink == 0 {
 		return false, true
 	}
+
 	info, statErr := os.Stat(path)
 	if statErr != nil {
 		// The consumer opted into WithFollowSymlinks, so they
@@ -186,6 +192,7 @@ func (o *walkOptions) descendInto(path string, de fs.DirEntry, depth int, yield 
 		return false, yield(Entry{Path: path, DirEntry: de},
 			coreerrs.WrapOperationWithContext(statErr, "stat symlink target", path))
 	}
+
 	return info.IsDir(), true
 }
 
@@ -197,11 +204,13 @@ func (o *walkOptions) matches(e Entry) bool {
 			return false
 		}
 	}
+
 	if o.types != 0 {
 		if o.types&e.Type() == 0 {
 			return false
 		}
 	}
+
 	return true
 }
 

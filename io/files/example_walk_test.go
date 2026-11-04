@@ -31,6 +31,7 @@ func ExampleWalk() {
 	}
 
 	var got []string
+
 	for entry, err := range files.Walk(root,
 		files.WithExtensions(".so"),
 		files.WithFileTypes(files.FileTypeRegular),
@@ -39,9 +40,12 @@ func ExampleWalk() {
 			fmt.Println("walk:", err)
 			return
 		}
+
 		got = append(got, entry.Name())
 	}
+
 	slices.Sort(got)
+
 	for _, name := range got {
 		fmt.Println(name)
 	}
@@ -64,6 +68,7 @@ func ExampleWalk_recursive() {
 		fmt.Println("setup:", err)
 		return
 	}
+
 	for _, p := range []string{"top.yaml", "sub/inner.yaml", "sub/skip.txt"} {
 		if err := os.WriteFile(filepath.Join(root, p), []byte("x"), 0o644); err != nil {
 			fmt.Println("setup:", err)
@@ -72,6 +77,7 @@ func ExampleWalk_recursive() {
 	}
 
 	var got []string
+
 	for entry, err := range files.Walk(root,
 		files.WithRecursive(),
 		files.WithExtensions(".yaml"),
@@ -81,10 +87,13 @@ func ExampleWalk_recursive() {
 			fmt.Println("walk:", err)
 			return
 		}
+
 		rel, _ := filepath.Rel(root, entry.Path)
 		got = append(got, filepath.ToSlash(rel))
 	}
+
 	slices.Sort(got)
+
 	for _, p := range got {
 		fmt.Println(p)
 	}

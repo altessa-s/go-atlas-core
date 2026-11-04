@@ -46,6 +46,7 @@ func TestIsNil(t *testing.T) {
 
 func TestIsNilValue(t *testing.T) {
 	var nilPtr *int = nil
+
 	rv := reflect.ValueOf(nilPtr)
 
 	require.True(t, nilcheck.IsNilValue(rv), "IsNilValue(nilPtr) should be true")

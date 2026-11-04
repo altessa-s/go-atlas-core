@@ -35,7 +35,9 @@ func (l *legacyString) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &v); err != nil {
 		return fmt.Errorf("redacted: unmarshal json: %w", err)
 	}
+
 	l.v = redacted.RedactedString(v)
+
 	return nil
 }
 
@@ -48,7 +50,9 @@ func (l *legacyURL) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &v); err != nil {
 		return fmt.Errorf("redacted: unmarshal json: %w", err)
 	}
+
 	l.v = redacted.URL(v)
+
 	return nil
 }
 
@@ -75,6 +79,7 @@ func requireSameMarshal(t *testing.T, marshal func(any) ([]byte, error), got, re
 	refOut, refErr := marshal(ref)
 	require.Equal(t, refErr == nil, err == nil, "error mismatch: %v vs %v", err, refErr)
 	require.Equal(t, string(refOut), string(out), "output must match the legacy MarshalJSON")
+
 	return out
 }
 
@@ -111,6 +116,7 @@ func TestRedactedString_MarshalJSONTo_NeverLeaks(t *testing.T) {
 		Map    map[string]redacted.RedactedString `json:"map"`
 		Quoted redacted.RedactedString            `json:"quoted,string"`
 	}
+
 	secret := redacted.RedactedString(plain)
 	in := cfg{
 		Plain:  secret,
@@ -143,9 +149,11 @@ func TestRedactedString_MarshalJSONTo_NeverLeaks(t *testing.T) {
 
 			var decoded map[string]any
 			require.NoError(t, jsonv2.Unmarshal(out, &decoded))
+
 			for _, key := range []string{"plain", "omit", "ptr", "any", "quoted"} {
 				require.Equal(t, expected, decoded[key], key)
 			}
+
 			require.Equal(t, []any{expected}, decoded["slice"])
 			require.Equal(t, map[string]any{"k": expected}, decoded["map"])
 		})
@@ -158,6 +166,7 @@ func TestRedactedString_MarshalJSONTo_OmitZero(t *testing.T) {
 	type cfg struct {
 		Token redacted.RedactedString `json:"token,omitzero"`
 	}
+
 	for _, codec := range jsonCodecs {
 		out, err := codec.marshal(cfg{})
 		require.NoError(t, err, codec.name)

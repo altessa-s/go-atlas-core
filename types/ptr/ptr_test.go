@@ -14,6 +14,7 @@ func TestWrapNonZero(t *testing.T) {
 	if ptr.WrapNonZero(0) != nil {
 		t.Error("WrapNonZero(0) should be nil")
 	}
+
 	if p := ptr.WrapNonZero(42); p == nil || *p != 42 {
 		t.Error("WrapNonZero(42) failed")
 	}
@@ -24,9 +25,11 @@ func TestUnwrap(t *testing.T) {
 	if ptr.Unwrap(&val) != 42 {
 		t.Error("Unwrap(&val) failed")
 	}
+
 	if ptr.Unwrap[int](nil) != 0 {
 		t.Error("Unwrap(nil) should be zero")
 	}
+
 	if ptr.Unwrap[int](nil, 123) != 123 {
 		t.Error("Unwrap(nil, default) failed")
 	}

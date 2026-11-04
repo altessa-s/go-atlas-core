@@ -39,6 +39,7 @@ func (c *Checker) Check(value any, depName string) *Checker {
 	if IsNil(value) {
 		c.errors = append(c.errors, fmt.Errorf("%s: %s is required", c.contextName, depName))
 	}
+
 	return c
 }
 
@@ -48,6 +49,7 @@ func (c *Checker) Error() error {
 	if len(c.errors) == 0 {
 		return nil
 	}
+
 	return c.errors[0]
 }
 

@@ -103,6 +103,7 @@ func FuzzSpoolTeeSeesEveryByte(f *testing.F) {
 		}
 
 		var teed bytes.Buffer
+
 		s, err := spool.New(bytes.NewReader(payload),
 			spool.WithMemThreshold(threshold), spool.WithTee(&teed))
 		require.NoError(t, err)
@@ -135,8 +136,10 @@ func FuzzSpoolRefusesOversizedInput(f *testing.F) {
 		if err != nil {
 			require.Greater(t, int64(len(payload)), maxBytes,
 				"a payload within the %d-byte cap was refused", maxBytes)
+
 			return
 		}
+
 		t.Cleanup(func() { _ = s.Close() })
 
 		require.LessOrEqual(t, int64(len(payload)), maxBytes,

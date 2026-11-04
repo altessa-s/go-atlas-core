@@ -79,9 +79,11 @@ func SubstringMatch(s, substr string) bool {
 	}
 
 	sLowerBytes := corestrings.ToBytesUnsafe(sLower)
+
 	found := 0
 	for i := 0; i <= len(sLowerBytes)-n; i++ {
 		found |= subtle.ConstantTimeCompare(sLowerBytes[i:i+n], subLower)
 	}
+
 	return found == 1
 }

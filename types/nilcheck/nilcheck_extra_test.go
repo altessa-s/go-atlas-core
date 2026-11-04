@@ -36,6 +36,7 @@ func TestIsNil_NillableKinds(t *testing.T) {
 		nilFunc  func()
 		typedNil error = (*nilcheck.RequiredError)(nil)
 	)
+
 	tests := []struct {
 		name  string
 		input any
@@ -68,6 +69,7 @@ func TestIsNotNilValue(t *testing.T) {
 		nilPtr   *int
 		nilIface error
 	)
+
 	tests := []struct {
 		name  string
 		input reflect.Value
@@ -106,6 +108,7 @@ func TestIsEmptyValue_StringPointers(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			s := tc.value
 			require.Equal(t, tc.want, nilcheck.IsEmptyValue(reflect.ValueOf(&s)))
 		})

@@ -34,6 +34,7 @@ func TestSet_RoundTripInSubprocess(t *testing.T) {
 		// Set and Enabled act on the calling thread only: keep the
 		// goroutine there so Enabled reads the thread Set changed.
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
 
 		// Pre-condition: read but do not assert. The CI runner may
@@ -55,6 +56,7 @@ func TestSet_RoundTripInSubprocess(t *testing.T) {
 		if err != nil {
 			exectest.Failf("Enabled() after Set: %v", err)
 		}
+
 		if !got {
 			exectest.Failf("Enabled() after Set returned false; " +
 				"expected true (kernel did not honor PR_SET_NO_NEW_PRIVS)")
@@ -68,18 +70,22 @@ func TestSet_RoundTripInSubprocess(t *testing.T) {
 func TestSet_IdempotentInSubprocess(t *testing.T) {
 	exectest.RunInSubprocess(t, func() {
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
 
 		if err := nonewprivs.Set(); err != nil {
 			exectest.Failf("first Set: %v", err)
 		}
+
 		if err := nonewprivs.Set(); err != nil {
 			exectest.Failf("second Set: %v", err)
 		}
+
 		got, err := nonewprivs.Enabled()
 		if err != nil {
 			exectest.Failf("Enabled after double Set: %v", err)
 		}
+
 		if !got {
 			exectest.Failf("Enabled() returned false after double Set")
 		}

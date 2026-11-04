@@ -37,9 +37,11 @@ func TestApply_NoFileTakesEffectInSubprocess(t *testing.T) {
 		if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &got); err != nil {
 			exectest.Failf("Getrlimit(RLIMIT_NOFILE): %v", err)
 		}
+
 		if got.Cur != want {
 			exectest.Failf("RLIMIT_NOFILE.Cur = %d, want %d", got.Cur, want)
 		}
+
 		if got.Max != want {
 			exectest.Failf("RLIMIT_NOFILE.Max = %d, want %d "+
 				"(Apply must pin Cur=Max so the soft limit cannot be raised back)",
@@ -62,6 +64,7 @@ func TestApply_DisableCoreDumpsTakesEffectInSubprocess(t *testing.T) {
 		if err := syscall.Getrlimit(syscall.RLIMIT_CORE, &got); err != nil {
 			exectest.Failf("Getrlimit(RLIMIT_CORE): %v", err)
 		}
+
 		if got.Cur != 0 || got.Max != 0 {
 			exectest.Failf("RLIMIT_CORE = (Cur=%d, Max=%d), want (0, 0)",
 				got.Cur, got.Max)
@@ -80,6 +83,7 @@ func TestApply_MultipleLimitsCompose(t *testing.T) {
 			wantNofile = 512
 			wantFsize  = 1 << 20 // 1 MiB
 		)
+
 		err := rlimits.Apply(
 			rlimits.WithMaxOpenFiles(wantNofile),
 			rlimits.WithMaxFileSizeBytes(wantFsize),
@@ -93,18 +97,23 @@ func TestApply_MultipleLimitsCompose(t *testing.T) {
 		if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &nofile); err != nil {
 			exectest.Failf("Getrlimit(NOFILE): %v", err)
 		}
+
 		if err := syscall.Getrlimit(syscall.RLIMIT_FSIZE, &fsize); err != nil {
 			exectest.Failf("Getrlimit(FSIZE): %v", err)
 		}
+
 		if err := syscall.Getrlimit(syscall.RLIMIT_CORE, &core); err != nil {
 			exectest.Failf("Getrlimit(CORE): %v", err)
 		}
+
 		if nofile.Cur != wantNofile {
 			exectest.Failf("NOFILE.Cur = %d, want %d", nofile.Cur, wantNofile)
 		}
+
 		if fsize.Cur != wantFsize {
 			exectest.Failf("FSIZE.Cur = %d, want %d", fsize.Cur, wantFsize)
 		}
+
 		if core.Cur != 0 {
 			exectest.Failf("CORE.Cur = %d, want 0 (DisableCoreDumps not honored)",
 				core.Cur)

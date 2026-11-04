@@ -32,9 +32,11 @@ func MergeDeep(src, dst map[string]any) map[string]any {
 	if len(src) == 0 && len(dst) == 0 {
 		return nil
 	}
+
 	if len(src) == 0 {
 		return deepCopyMap(dst)
 	}
+
 	if len(dst) == 0 {
 		return deepCopyMap(src)
 	}
@@ -46,6 +48,7 @@ func MergeDeep(src, dst map[string]any) map[string]any {
 		if _, inSrc := src[k]; inSrc {
 			continue // handled in the src pass below
 		}
+
 		if nested, ok := v.(map[string]any); ok {
 			result[k] = deepCopyMap(nested)
 		} else {
@@ -57,6 +60,7 @@ func MergeDeep(src, dst map[string]any) map[string]any {
 	for k, srcVal := range src {
 		dstVal, inDst := dst[k]
 		srcMap, srcIsMap := srcVal.(map[string]any)
+
 		if inDst {
 			dstMap, dstIsMap := dstVal.(map[string]any)
 			if srcIsMap && dstIsMap {
@@ -64,6 +68,7 @@ func MergeDeep(src, dst map[string]any) map[string]any {
 				continue
 			}
 		}
+
 		if srcIsMap {
 			result[k] = deepCopyMap(srcMap)
 		} else {
@@ -85,5 +90,6 @@ func deepCopyMap(m map[string]any) map[string]any {
 			result[k] = v
 		}
 	}
+
 	return result
 }

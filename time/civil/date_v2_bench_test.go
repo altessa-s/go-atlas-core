@@ -53,6 +53,7 @@ func BenchmarkJSONCodecs(b *testing.B) {
 		} {
 			b.Run("op=Marshal/codec="+codec.name+"/impl="+impl.name, func(b *testing.B) {
 				b.ReportAllocs()
+
 				for b.Loop() {
 					if _, err := codec.marshal(impl.val); err != nil {
 						b.Fatal(err)
@@ -61,6 +62,7 @@ func BenchmarkJSONCodecs(b *testing.B) {
 			})
 			b.Run("op=Unmarshal/codec="+codec.name+"/impl="+impl.name, func(b *testing.B) {
 				b.ReportAllocs()
+
 				out := impl.out()
 				for b.Loop() {
 					if err := codec.unmarshal(input, out); err != nil {

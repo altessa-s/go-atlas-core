@@ -43,6 +43,7 @@ func TestApply_RestrictsAccessInSubprocess(t *testing.T) {
 		// The domain lands on the calling thread only: keep the
 		// goroutine there so the reads below run restricted.
 		runtime.LockOSThread()
+
 		defer runtime.UnlockOSThread()
 
 		if !landlock.Supported() {
@@ -69,6 +70,7 @@ func TestApply_RestrictsAccessInSubprocess(t *testing.T) {
 		if err := os.WriteFile(insideFile, []byte("ok"), 0o644); err != nil {
 			exectest.Failf("WriteFile(insideFile): %v", err)
 		}
+
 		outsideFile := filepath.Join(denied, "out.txt")
 		if err := os.WriteFile(outsideFile, []byte("nope"), 0o644); err != nil {
 			exectest.Failf("WriteFile(outsideFile): %v", err)
@@ -113,6 +115,7 @@ func TestApply_RestrictsAccessInSubprocess(t *testing.T) {
 				"Landlock did not enforce the strict allowlist on path %q",
 				outsideFile)
 		}
+
 		if !errors.Is(err, os.ErrPermission) {
 			exectest.Failf("ReadFile outside allowlist returned %v, "+
 				"want a permission-denied error (Landlock should produce EACCES)", err)

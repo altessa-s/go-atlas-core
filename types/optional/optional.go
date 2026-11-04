@@ -49,6 +49,7 @@ func Of[T any](v T, ok bool) Optional[T] {
 	if !ok {
 		return Optional[T]{}
 	}
+
 	return Optional[T]{value: v, present: true}
 }
 
@@ -80,6 +81,7 @@ func (o Optional[T]) OrDefault(def T) T {
 	if !o.present {
 		return def
 	}
+
 	return o.value
 }
 
@@ -90,6 +92,7 @@ func (o Optional[T]) OrElse(fn func() T) T {
 	if !o.present {
 		return fn()
 	}
+
 	return o.value
 }
 
@@ -99,6 +102,7 @@ func FromPtr[T any](ptr *T) Optional[T] {
 	if ptr == nil {
 		return None[T]()
 	}
+
 	return Some(*ptr)
 }
 
@@ -108,5 +112,6 @@ func ToPtr[T any](opt Optional[T]) *T {
 	if v, ok := opt.Get(); ok {
 		return &v
 	}
+
 	return nil
 }

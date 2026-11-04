@@ -31,6 +31,7 @@ func TestEnvCached(t *testing.T) {
 
 	// Change env but cache should still return old value.
 	t.Setenv("TEST_APPINFO_CACHED", "new_val")
+
 	v2 := EnvCached("TEST_APPINFO_CACHED")
 	require.Equal(t, "cached_val", v2)
 }
@@ -38,6 +39,7 @@ func TestEnvCached(t *testing.T) {
 func TestClearEnvCache(t *testing.T) {
 	ClearEnvCache()
 	t.Setenv("TEST_APPINFO_CLEAR", "original")
+
 	_ = EnvCached("TEST_APPINFO_CLEAR")
 
 	ClearEnvCache()
@@ -75,6 +77,7 @@ func TestHomeDir(t *testing.T) {
 	if home == "" {
 		t.Skip("HOME not set")
 	}
+
 	require.Equal(t, byte('/'), home[0], "expected absolute path, got %q", home)
 }
 
@@ -82,6 +85,7 @@ func TestHomeDir(t *testing.T) {
 // parallel.
 func TestEnvKeyPrefix(t *testing.T) {
 	saved := EnvPrefix
+
 	t.Cleanup(func() { EnvPrefix = saved })
 
 	tests := []struct {
@@ -114,9 +118,11 @@ func TestEnvKeyPrefix(t *testing.T) {
 // parallel.
 func TestGetEnvVarUsesKeyPrefix(t *testing.T) {
 	saved := EnvPrefix
+
 	t.Cleanup(func() { EnvPrefix = saved })
 
 	t.Setenv("APPINFO_KEYPFX_CONFIG", "value")
+
 	for _, prefix := range []string{"APPINFO_KEYPFX", "APPINFO_KEYPFX_", "appinfo-keypfx"} {
 		EnvPrefix = prefix
 		require.Equal(t, "value", GetEnvVar("config"), "prefix %q", prefix)

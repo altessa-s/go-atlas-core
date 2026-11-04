@@ -13,45 +13,55 @@ import (
 
 func BenchmarkString(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink string
 	for b.Loop() {
 		sink = s.String()
 	}
+
 	_ = sink
 }
 
 func BenchmarkGoString(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink string
 	for b.Loop() {
 		sink = s.GoString()
 	}
+
 	_ = sink
 }
 
 func BenchmarkLogValue(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink slog.Value
 	for b.Loop() {
 		sink = s.LogValue()
 	}
+
 	_ = sink
 }
 
 func BenchmarkExpose(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink string
 	for b.Loop() {
 		sink = s.Expose()
 	}
+
 	_ = sink
 }
 
 func BenchmarkIsEmpty(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink bool
 	for b.Loop() {
 		sink = s.IsEmpty()
 	}
+
 	_ = sink
 }

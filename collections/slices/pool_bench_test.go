@@ -13,7 +13,9 @@ import (
 func BenchmarkPoolReuse(b *testing.B) {
 	pool := coreslices.NewPool[*int](64)
 	value := new(1)
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		buf := pool.Get()
 		*buf = append(*buf, value)

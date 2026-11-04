@@ -156,11 +156,14 @@ func Open(dir string, opts ...Option) (*WAL, []Record, error) {
 	if dir == "" {
 		return nil, nil, errors.New("wal: dir is required")
 	}
+
 	resolved := newOptions(opts...)
+
 	mode := dirMode
 	if resolved.insecurePermissions {
 		mode = 0o755
 	}
+
 	if err := os.MkdirAll(dir, mode); err != nil {
 		return nil, nil, coreerrs.Wrap(err, "wal: mkdir")
 	}
@@ -205,12 +208,14 @@ func (w *WAL) recover() ([]Record, error) {
 			return nil, err
 		}
 	}
+
 	var recovered []Record
 	for _, sf := range segs {
 		if recovered, err = w.recoverSegment(sf, recovered); err != nil {
 			return nil, err
 		}
 	}
+
 	return recovered, nil
 }
 
@@ -226,20 +231,27 @@ func listSegments(dir string) ([]segFile, error) {
 	if err != nil {
 		return nil, coreerrs.Wrap(err, "wal: read dir")
 	}
+
 	var segs []segFile
+
 	for _, e := range entries {
 		name := e.Name()
+
 		idStr, ok := strings.CutSuffix(name, fileSuffix)
 		if !ok {
 			continue
 		}
+
 		id, parseErr := strconv.ParseUint(idStr, 10, 64)
 		if parseErr != nil {
 			continue
 		}
+
 		segs = append(segs, segFile{id: id, path: filepath.Join(dir, name)})
 	}
+
 	slices.SortFunc(segs, func(a, b segFile) int { return cmp.Compare(a.id, b.id) })
+
 	return segs, nil
 }
 
@@ -251,6 +263,7 @@ func (w *WAL) recoverSegment(sf segFile, recovered []Record) ([]Record, error) {
 	if readErr != nil {
 		return nil, readErr
 	}
+
 	if len(recs) == 0 {
 		// Empty / corrupt-from-start segment: remove it. Log
 		// failures (EACCES, EBUSY, read-only mount) rather than
@@ -262,6 +275,7 @@ func (w *WAL) recoverSegment(sf segFile, recovered []Record) ([]Record, error) {
 				slog.Any("error", rmErr),
 			)
 		}
+
 		return recovered, nil
 	}
 	// Truncate trailing torn record(s).
@@ -270,21 +284,25 @@ func (w *WAL) recoverSegment(sf segFile, recovered []Record) ([]Record, error) {
 			return nil, coreerrs.Wrapf(err, "wal: truncate %s", sf.path)
 		}
 	}
+
 	ref := &segmentRef{id: sf.id, path: sf.path}
 	ref.size.Store(validSize)
 	ref.records.Store(int64(len(recs)))
 	ref.unacked.Store(int64(len(recs)))
 	w.sealed = append(w.sealed, ref)
 	w.totalSz.Add(validSize)
+
 	if sf.id >= w.nextID {
 		w.nextID = sf.id + 1
 	}
+
 	for _, r := range recs {
 		recovered = append(recovered, Record{
 			Offset:  Offset{SegmentID: sf.id, Position: r.position},
 			Payload: r.payload,
 		})
 	}
+
 	return recovered, nil
 }
 
@@ -295,12 +313,15 @@ func validatePath(path string, directory, insecure bool) error {
 	if err != nil {
 		return coreerrs.Wrap(err, "wal: stat path")
 	}
+
 	if (directory && !info.IsDir()) || (!directory && !info.Mode().IsRegular()) {
 		return coreerrs.Wrap(os.ErrInvalid, "wal: expected directory or regular segment")
 	}
+
 	if !insecure && runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return coreerrs.Wrapf(ErrInsecurePermissions, "wal: %s has permissions %04o", path, info.Mode().Perm())
 	}
+
 	return nil
 }
 
@@ -330,24 +351,30 @@ func readSegment(path string) ([]rawRecord, int64, error) {
 			// EOF (clean) or partial header (torn write): stop.
 			break
 		}
+
 		length := binary.LittleEndian.Uint32(hdr[0:4])
 		crc := binary.LittleEndian.Uint32(hdr[4:8])
+
 		if length == 0 || length > maxRecordBytes {
 			// Implausible length, treat as corruption.
 			break
 		}
+
 		payload := make([]byte, length)
 		if _, err := io.ReadFull(f, payload); err != nil {
 			// Torn write.
 			break
 		}
+
 		if crc32.ChecksumIEEE(payload) != crc {
 			// Corruption.
 			break
 		}
+
 		recs = append(recs, rawRecord{position: offset, payload: payload})
 		offset += int64(recordHeaderSize) + int64(length)
 	}
+
 	return recs, offset, nil
 }
 
@@ -361,15 +388,19 @@ func (w *WAL) openNewActiveLocked() error {
 	w.nextID++
 	name := fmt.Sprintf("%020d%s", id, fileSuffix)
 	path := filepath.Join(w.dir, name)
+
 	mode := fileMode
 	if w.opts.insecurePermissions {
 		mode = 0o644
 	}
+
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 	if err != nil {
 		return coreerrs.Wrap(err, "wal: open active")
 	}
+
 	w.active = &segmentRef{id: id, path: path, file: f}
+
 	return nil
 }
 
@@ -388,12 +419,15 @@ func (w *WAL) Append(payload []byte) (Offset, error) {
 	if len(payload) == 0 {
 		return Offset{}, ErrEmptyPayload
 	}
+
 	if len(payload) > maxRecordBytes {
 		return Offset{}, ErrPayloadTooLarge
 	}
+
 	if w.closed.Load() {
 		return Offset{}, ErrClosed
 	}
+
 	if w.opts.maxBytes > 0 && w.totalSz.Load() > w.opts.maxBytes {
 		return Offset{}, ErrFull
 	}
@@ -408,17 +442,20 @@ func (w *WAL) Append(payload []byte) (Offset, error) {
 	if w.closed.Load() {
 		return Offset{}, ErrClosed
 	}
+
 	if w.active == nil || w.active.file == nil {
 		return Offset{}, ErrClosed
 	}
 
 	b, gen := w.cur, w.curGen
 	idx := b.add(payload, crc)
+
 	for w.doneGen < gen {
 		if !w.flushing {
 			w.flushLocked()
 			continue
 		}
+
 		w.flushed.Wait()
 	}
 
@@ -426,6 +463,7 @@ func (w *WAL) Append(payload []byte) (Offset, error) {
 	if b.refs--; b.refs == 0 {
 		putAppendBatch(b)
 	}
+
 	return off, err
 }
 
@@ -449,15 +487,18 @@ func (w *WAL) flushLocked() {
 		seg := w.active
 		if seg.size.Load()+b.size(i) > w.opts.maxSegmentBytes && seg.records.Load() > 0 {
 			w.mu.Lock()
+
 			err := w.sealActiveLocked()
 			if err == nil {
 				err = w.openNewActiveLocked()
 			}
 			w.mu.Unlock()
+
 			if err != nil {
 				b.fail(i, b.len(), err)
 				break
 			}
+
 			continue
 		}
 		// Take the longest run of records that fits the segment.
@@ -470,7 +511,9 @@ func (w *WAL) flushLocked() {
 
 		f := seg.file
 		w.wmu.Unlock()
+
 		n, err := f.Write(b.buf[b.starts[i]:b.starts[j]])
+
 		w.wmu.Lock()
 
 		if err != nil {
@@ -479,13 +522,16 @@ func (w *WAL) flushLocked() {
 			w.mu.Unlock()
 			b.fail(i, j, err)
 			i = j
+
 			continue
 		}
+
 		pos := seg.size.Load()
 		for k := i; k < j; k++ {
 			b.offs[k] = Offset{SegmentID: seg.id, Position: pos}
 			pos += b.size(k)
 		}
+
 		written := int64(j - i)
 		seg.records.Add(written)
 		seg.unacked.Add(written)
@@ -512,14 +558,18 @@ func (w *WAL) rollbackLocked(seg *segmentRef, n int, err error) error {
 		if truncErr := seg.file.Truncate(seg.size.Load()); truncErr != nil {
 			_ = seg.file.Close()
 			seg.file = nil
+
 			return coreerrs.Wrapf(err, "wal: write record (truncate rollback failed: %v)", truncErr)
 		}
+
 		if _, seekErr := seg.file.Seek(seg.size.Load(), io.SeekStart); seekErr != nil {
 			_ = seg.file.Close()
 			seg.file = nil
+
 			return coreerrs.Wrapf(err, "wal: write record (seek rollback failed: %v)", seekErr)
 		}
 	}
+
 	return coreerrs.Wrap(err, "wal: write record")
 }
 
@@ -530,15 +580,19 @@ func (w *WAL) sealActiveLocked() error {
 	if seg == nil {
 		return nil
 	}
+
 	if seg.file != nil {
 		if err := seg.file.Sync(); err != nil {
 			return coreerrs.Wrap(err, "wal: final sync")
 		}
+
 		if err := seg.file.Close(); err != nil {
 			return coreerrs.Wrap(err, "wal: close")
 		}
+
 		seg.file = nil
 	}
+
 	if seg.unacked.Load() > 0 {
 		w.sealed = append(w.sealed, seg)
 	} else {
@@ -547,7 +601,9 @@ func (w *WAL) sealActiveLocked() error {
 		w.removeAckedSegment(seg.path)
 		w.totalSz.Add(-seg.size.Load())
 	}
+
 	w.active = nil
+
 	return nil
 }
 
@@ -558,6 +614,7 @@ func (w *WAL) Ack(offset Offset) {
 	if offset.IsZero() || w.closed.Load() {
 		return
 	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -565,14 +622,17 @@ func (w *WAL) Ack(offset Offset) {
 		w.active.ack(offset.Position)
 		return
 	}
+
 	for i, s := range w.sealed {
 		if s.id == offset.SegmentID {
 			s.ack(offset.Position)
+
 			if s.unacked.Load() <= 0 {
 				w.removeAckedSegment(s.path)
 				w.totalSz.Add(-s.size.Load())
 				w.sealed = slices.Delete(w.sealed, i, i+1)
 			}
+
 			return
 		}
 	}
@@ -593,6 +653,7 @@ func (w *WAL) removeAckedSegment(path string) {
 func (w *WAL) fsyncLoop() {
 	tick, stop := w.opts.fsyncTicker(w.opts.fsyncInterval)
 	defer stop()
+
 	for {
 		select {
 		case <-w.fsyncDone:
@@ -606,6 +667,7 @@ func (w *WAL) fsyncLoop() {
 
 func (w *WAL) fsyncOnce() {
 	w.mu.Lock()
+
 	var (
 		f  *os.File
 		id uint64
@@ -615,9 +677,11 @@ func (w *WAL) fsyncOnce() {
 		id = w.active.id
 	}
 	w.mu.Unlock()
+
 	if f == nil {
 		return
 	}
+
 	if err := f.Sync(); err != nil {
 		// The active segment may have been rotated between capturing f and
 		// calling Sync: Append/sealActiveLocked syncs and closes the old
@@ -627,6 +691,7 @@ func (w *WAL) fsyncOnce() {
 		w.mu.Lock()
 		rotated := w.active == nil || w.active.file != f
 		w.mu.Unlock()
+
 		if rotated && errors.Is(err, os.ErrClosed) {
 			return
 		}
@@ -640,6 +705,7 @@ func (w *WAL) fsyncOnce() {
 			slog.Uint64("segment_id", id),
 			slog.Any("error", err),
 		)
+
 		return
 	}
 	// Success — clear any previous error so transient failures don't
@@ -656,6 +722,7 @@ func (w *WAL) Faulted() error {
 	if p := w.lastFsyncErr.Load(); p != nil {
 		return *p
 	}
+
 	return nil
 }
 
@@ -663,9 +730,11 @@ func (w *WAL) Faulted() error {
 func (w *WAL) Sync() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	if w.active == nil || w.active.file == nil {
 		return nil
 	}
+
 	return w.active.file.Sync()
 }
 
@@ -695,6 +764,7 @@ func (w *WAL) Close() error {
 
 	w.wmu.Lock()
 	defer w.wmu.Unlock()
+
 	w.mu.Lock()
 	w.closed.Store(true)
 	w.mu.Unlock()
@@ -703,18 +773,22 @@ func (w *WAL) Close() error {
 	for w.flushing {
 		w.flushed.Wait()
 	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	var errs []error
+
 	if w.active != nil {
 		if w.active.file != nil {
 			if err := w.active.file.Sync(); err != nil {
 				errs = append(errs, coreerrs.Wrap(err, "wal: final sync"))
 			}
+
 			if err := w.active.file.Close(); err != nil {
 				errs = append(errs, coreerrs.Wrap(err, "wal: final close"))
 			}
+
 			w.active.file = nil
 		}
 		// If everything in the active segment was already acked, drop the
@@ -723,10 +797,12 @@ func (w *WAL) Close() error {
 			if err := os.Remove(w.active.path); err != nil && !errors.Is(err, os.ErrNotExist) {
 				errs = append(errs, coreerrs.Wrapf(err, "wal: remove %s", w.active.path))
 			}
+
 			w.totalSz.Add(-w.active.size.Load())
 			w.active = nil
 		}
 	}
+
 	return errors.Join(errs...)
 }
 
@@ -734,15 +810,18 @@ func (w *WAL) Close() error {
 func (w *WAL) Stats() Stats {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	s := Stats{TotalBytes: w.totalSz.Load()}
 	for _, seg := range w.sealed {
 		s.Pending += seg.unacked.Load()
 	}
+
 	if w.active != nil {
 		s.Pending += w.active.unacked.Load()
 		s.Segments = 1 + len(w.sealed)
 	} else {
 		s.Segments = len(w.sealed)
 	}
+
 	return s
 }

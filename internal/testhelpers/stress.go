@@ -23,13 +23,16 @@ const DefaultStressDuration = 30 * time.Second
 // that does not parse as a positive duration fails the test.
 func StressDuration(tb testing.TB) time.Duration {
 	tb.Helper()
+
 	v := os.Getenv(StressDurationEnv)
 	if v == "" {
 		return DefaultStressDuration
 	}
+
 	d, err := time.ParseDuration(v)
 	if err != nil || d <= 0 {
 		tb.Fatalf("%s=%q: want a positive Go duration such as 10s", StressDurationEnv, v)
 	}
+
 	return d
 }

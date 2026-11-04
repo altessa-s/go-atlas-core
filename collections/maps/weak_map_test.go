@@ -30,7 +30,7 @@ func TestWeakMap_GC(t *testing.T) {
 	require.Equal(t, 1, v.ID)
 
 	// Remove our reference to the object
-	val = nil
+	val = nil //nolint:ineffassign // drops the test's strong reference before the GC rounds
 
 	// Trigger GC. We may need several rounds to ensure it's collected.
 	for range 5 {
@@ -46,16 +46,19 @@ func TestWeakMap_GC(t *testing.T) {
 
 func TestWeakMap_ThreadSafety(t *testing.T) {
 	m := coremaps.NewWeakMap[int, testhelpers.User]()
+
 	const count = 1000
 
 	// Concurrent writes
 	done := make(chan bool)
+
 	for i := range 10 {
 		go func(id int) {
 			for j := range count {
 				val := &testhelpers.User{ID: j, Name: "test"}
 				m.Set(id*count+j, val)
 			}
+
 			done <- true
 		}(i)
 	}

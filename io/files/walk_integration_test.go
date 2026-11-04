@@ -41,20 +41,24 @@ import (
 func realTree(t *testing.T) string {
 	t.Helper()
 	base := t.TempDir()
+
 	root := filepath.Join(base, "root")
 	for _, dir := range []string{"outside", "root/.hiddendir", "root/sub/deep"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(base, dir), 0o700))
 	}
+
 	for _, file := range []string{"outside/secret.txt", "root/a.txt", "root/.hidden.txt", "root/.hiddendir/inner.txt",
 		"root/sub/b.txt", "root/sub/deep/c.txt"} {
 		require.NoError(t, os.WriteFile(filepath.Join(base, file), []byte(file), 0o600))
 	}
+
 	links := map[string]string{"loop": ".", "self": "self", "dangling": "missing", "outside": "../outside", "link.txt": "sub/b.txt"}
 	for name, target := range links {
 		if err := os.Symlink(target, filepath.Join(root, name)); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
 	}
+
 	return root
 }
 
@@ -67,22 +71,31 @@ type walkResult struct {
 
 func walkTree(t *testing.T, root string, opts ...files.WalkOption) walkResult {
 	t.Helper()
+
 	res := walkResult{errs: make(map[string]error)}
+
 	for entry, err := range files.Walk(root, opts...) {
 		rel := ""
+
 		if entry.Path != "" {
 			var relErr error
+
 			rel, relErr = filepath.Rel(root, entry.Path)
 			require.NoError(t, relErr)
+
 			rel = filepath.ToSlash(rel)
 		}
+
 		if err != nil {
 			res.errs[rel] = err
 			continue
 		}
+
 		res.paths = append(res.paths, rel)
 	}
+
 	slices.Sort(res.paths)
+
 	return res
 }
 
@@ -118,6 +131,7 @@ func TestWalkIntegration_FollowSymlinks(t *testing.T) {
 	require.Contains(t, got.paths, "loop/sub/b.txt")
 	require.Contains(t, got.paths, "loop/loop/a.txt")
 	require.Contains(t, got.paths, "sub/deep/c.txt")
+
 	for _, p := range got.paths {
 		require.LessOrEqual(t, strings.Count(p, "/"), 2, "%s is deeper than the bound", p)
 	}
@@ -135,9 +149,11 @@ func TestWalkIntegration_FollowSymlinks(t *testing.T) {
 // is refused.
 func TestWalkIntegration_UnreadableEntries(t *testing.T) {
 	t.Parallel()
+
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("needs POSIX permissions enforced for the current user")
 	}
+
 	root := t.TempDir()
 	locked := filepath.Join(root, "locked")
 	require.NoError(t, os.Mkdir(locked, 0o700))

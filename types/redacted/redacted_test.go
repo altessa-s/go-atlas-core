@@ -69,6 +69,7 @@ func TestRedactedString_SlogTextHandler(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	s := redacted.RedactedString(plain)
 
@@ -83,6 +84,7 @@ func TestRedactedString_SlogJSONHandler(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
 	s := redacted.RedactedString(plain)
 

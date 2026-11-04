@@ -106,6 +106,7 @@ func apply(readPaths, readWritePaths []string) (retErr error) {
 		// can still match ErrUnsupported via errors.Is.
 		return err
 	}
+
 	if abi < abiV1 {
 		return fmt.Errorf("%w: kernel reports ABI version %d", ErrUnsupported, abi)
 	}
@@ -113,6 +114,7 @@ func apply(readPaths, readWritePaths []string) (retErr error) {
 	// Pin for steps 2-7: prctl and restrict_self must hit the same
 	// OS thread. See the function comment for the failure policy.
 	runtime.LockOSThread()
+
 	nnpSet := false
 	defer func() {
 		if retErr == nil || !nnpSet {
@@ -132,6 +134,7 @@ func apply(readPaths, readWritePaths []string) (retErr error) {
 	if setErr := nonewprivs.Set(); setErr != nil {
 		return fmt.Errorf("%w: %w", ErrFailed, setErr)
 	}
+
 	nnpSet = true
 
 	read, write := accessMasks(abi)
@@ -147,6 +150,7 @@ func apply(readPaths, readWritePaths []string) (retErr error) {
 			return fmt.Errorf("%w: add read rule %q: %w", ErrFailed, path, err)
 		}
 	}
+
 	for _, path := range readWritePaths {
 		if err := addPathRule(rulesetFd, path, read|write); err != nil {
 			return fmt.Errorf("%w: add read-write rule %q: %w", ErrFailed, path, err)
@@ -159,6 +163,7 @@ func apply(readPaths, readWritePaths []string) (retErr error) {
 			ErrFailed, err,
 		)
 	}
+
 	return nil
 }
 
@@ -187,6 +192,7 @@ func ABIVersion() (int, error) {
 	if errno != 0 {
 		return 0, fmt.Errorf("%w: %w", ErrUnsupported, errno)
 	}
+
 	return int(r1), nil
 }
 
@@ -195,10 +201,12 @@ func ABIVersion() (int, error) {
 // set; older kernels skip it.
 func accessMasks(abi int) (read, write uint64) {
 	read = readAccessMask
+
 	write = writeAccessMask
 	if abi >= abiV3 {
 		write |= unix.LANDLOCK_ACCESS_FS_TRUNCATE
 	}
+
 	return read, write
 }
 
@@ -207,6 +215,7 @@ func createRuleset(handledAccessFs uint64) (int, error) {
 	attr := unix.LandlockRulesetAttr{
 		Handled_access_fs: handledAccessFs,
 	}
+
 	r1, _, errno := unix.Syscall(
 		unix.SYS_LANDLOCK_CREATE_RULESET,
 		uintptr(unsafe.Pointer(&attr)), // #nosec G103 -- required by landlock_create_ruleset(2) ABI; attr lives on the stack for the syscall duration
@@ -216,6 +225,7 @@ func createRuleset(handledAccessFs uint64) (int, error) {
 	if errno != 0 {
 		return -1, errno
 	}
+
 	return int(r1), nil
 }
 
@@ -235,6 +245,7 @@ func addPathRule(rulesetFd int, path string, accessMask uint64) error {
 		Allowed_access: accessMask,
 		Parent_fd:      int32(pathFd),
 	}
+
 	_, _, errno := unix.Syscall6(
 		unix.SYS_LANDLOCK_ADD_RULE,
 		uintptr(rulesetFd),
@@ -245,6 +256,7 @@ func addPathRule(rulesetFd int, path string, accessMask uint64) error {
 	if errno != 0 {
 		return errno
 	}
+
 	return nil
 }
 
@@ -263,5 +275,6 @@ func restrictSelf(rulesetFd int) error {
 	if errno != 0 {
 		return errno
 	}
+
 	return nil
 }

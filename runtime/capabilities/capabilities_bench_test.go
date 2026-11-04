@@ -15,6 +15,7 @@ func BenchmarkParseNameHit(b *testing.B) {
 	for b.Loop() {
 		sink, _ = capabilities.ParseName("CAP_NET_BIND_SERVICE")
 	}
+
 	_ = sink
 }
 
@@ -23,15 +24,18 @@ func BenchmarkParseNameMiss(b *testing.B) {
 	for b.Loop() {
 		_, err = capabilities.ParseName("CAP_NOT_A_REAL_CAP")
 	}
+
 	_ = err
 }
 
 func BenchmarkCapString(b *testing.B) {
 	c := capabilities.CAP_NET_BIND_SERVICE
+
 	var sink string
 	for b.Loop() {
 		sink = c.String()
 	}
+
 	_ = sink
 }
 
@@ -41,10 +45,12 @@ func BenchmarkSetsHas(b *testing.B) {
 		capabilities.Effective,
 		capabilities.Permitted,
 	)
+
 	var sink bool
 	for b.Loop() {
 		sink = s.Has(capabilities.CAP_NET_BIND_SERVICE)
 	}
+
 	_ = sink
 }
 
@@ -56,5 +62,6 @@ func BenchmarkSetsWith(b *testing.B) {
 			capabilities.Effective,
 		)
 	}
+
 	_ = sink
 }

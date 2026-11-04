@@ -33,6 +33,7 @@ func TestDo(t *testing.T) {
 			if calls < 3 {
 				return errors.New("fail")
 			}
+
 			return nil
 		},
 			retry.WithMaxAttempts(3),
@@ -58,6 +59,7 @@ func TestDo(t *testing.T) {
 
 	t.Run("NoDelayAfterLastAttempt", func(t *testing.T) {
 		t.Parallel()
+
 		for _, maxAttempts := range []int{0, 2} {
 			calls, delays, retries := 0, 0, 0
 			failErr := errors.New("fail")
@@ -198,6 +200,7 @@ func TestExponential_Jitter(t *testing.T) {
 
 	t.Run("WithJitter_Bounds", func(t *testing.T) {
 		base := time.Second
+
 		fn := retry.Exponential(base, retry.WithExponentialFactor(1), retry.WithExponentialJitter(0.5))
 		for range 100 {
 			d := fn(0, nil)
@@ -209,15 +212,18 @@ func TestExponential_Jitter(t *testing.T) {
 
 	t.Run("WithJitter_NonDeterministic", func(t *testing.T) {
 		fn := retry.Exponential(time.Second, retry.WithExponentialFactor(2), retry.WithExponentialJitter(0.5))
+
 		seen := make(map[time.Duration]struct{})
 		for range 100 {
 			seen[fn(3, nil)] = struct{}{}
 		}
+
 		require.GreaterOrEqual(t, len(seen), 2, "jitter should produce varying delays")
 	})
 
 	t.Run("JitterCappedAtMaxDelay", func(t *testing.T) {
 		maxDelay := 3 * time.Second
+
 		fn := retry.Exponential(
 			time.Second,
 			retry.WithExponentialMaxDelay(maxDelay),
@@ -232,6 +238,7 @@ func TestExponential_Jitter(t *testing.T) {
 
 	t.Run("JitterAboveOneClamped", func(t *testing.T) {
 		base := time.Second
+
 		fn := retry.Exponential(base, retry.WithExponentialFactor(1), retry.WithExponentialJitter(5.0))
 		for range 100 {
 			d := fn(0, nil)
@@ -280,6 +287,7 @@ func TestPolicy(t *testing.T) {
 			if calls < 3 {
 				return errors.New("fail")
 			}
+
 			return nil
 		})
 		require.NoError(t, err)
@@ -292,6 +300,7 @@ func TestPolicy(t *testing.T) {
 			retry.WithNextDelay(func(int, error) time.Duration { return time.Nanosecond }),
 		)
 		wantErr := errors.New("fail")
+
 		for range 2 {
 			calls := 0
 			err := p.Do(t.Context(), func(ctx context.Context) error {

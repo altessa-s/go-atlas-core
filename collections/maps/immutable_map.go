@@ -121,6 +121,7 @@ func (m *ImmutableMap[K, V]) Get(key K) (V, bool) {
 			if m.keys[slot] == key {
 				return m.vals[slot], true
 			}
+
 			mask &= mask - 1
 		}
 
@@ -136,6 +137,7 @@ func (m *ImmutableMap[K, V]) Get(key K) (V, bool) {
 	}
 
 	var zero V
+
 	return zero, false
 }
 
@@ -158,13 +160,16 @@ func (m *ImmutableMap[K, V]) All() iter.Seq2[K, V] {
 			if word == allEmpty {
 				continue
 			}
+
 			base := g << groupShift
+
 			filled := ^word & hiBits
 			for filled != 0 {
 				slot := base + (bits.TrailingZeros64(filled) >> groupShift)
 				if !yield(m.keys[slot], m.vals[slot]) {
 					return
 				}
+
 				filled &= filled - 1
 			}
 		}
@@ -178,13 +183,16 @@ func (m *ImmutableMap[K, V]) Keys() iter.Seq[K] {
 			if word == allEmpty {
 				continue
 			}
+
 			base := g << groupShift
+
 			filled := ^word & hiBits
 			for filled != 0 {
 				slot := base + (bits.TrailingZeros64(filled) >> groupShift)
 				if !yield(m.keys[slot]) {
 					return
 				}
+
 				filled &= filled - 1
 			}
 		}
@@ -198,13 +206,16 @@ func (m *ImmutableMap[K, V]) Values() iter.Seq[V] {
 			if word == allEmpty {
 				continue
 			}
+
 			base := g << groupShift
+
 			filled := ^word & hiBits
 			for filled != 0 {
 				slot := base + (bits.TrailingZeros64(filled) >> groupShift)
 				if !yield(m.vals[slot]) {
 					return
 				}
+
 				filled &= filled - 1
 			}
 		}
@@ -249,6 +260,7 @@ func (m *ImmutableMap[K, V]) insert(key K, value V) {
 				m.vals[slot] = value
 				return
 			}
+
 			mask &= mask - 1
 		}
 
@@ -262,6 +274,7 @@ func (m *ImmutableMap[K, V]) insert(key K, value V) {
 			m.keys[slot] = key
 			m.vals[slot] = value
 			m.len++
+
 			return
 		}
 
@@ -283,6 +296,7 @@ func (m *ImmutableMap[K, V]) insert(key K, value V) {
 func matchByte(word uint64, needle byte) uint64 {
 	broadcast := uint64(needle) * loBits
 	diff := word ^ broadcast
+
 	return (diff - loBits) & ^diff & hiBits
 }
 

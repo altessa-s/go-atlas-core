@@ -38,15 +38,19 @@ func (w *failingWriter) Write(p []byte) (int, error) {
 	if len(p) > w.limit {
 		n := w.limit
 		w.limit = 0
+
 		return n, w.err
 	}
+
 	w.limit -= len(p)
+
 	return len(p), nil
 }
 
 // requireNoSpillFiles checks that dir holds no leftover spill file.
 func requireNoSpillFiles(tb testing.TB, dir string) {
 	tb.Helper()
+
 	files, err := filepath.Glob(filepath.Join(dir, "spool-*"))
 	require.NoError(tb, err)
 	require.Empty(tb, files, "a failed New must remove its spill file")
@@ -72,10 +76,12 @@ func TestNew_SourceErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
+
 			opts := []spool.Option{spool.WithMemThreshold(16), spool.WithTempDir(dir), spool.WithMaxBytes(tc.maxSize)}
 			if tc.tee {
 				opts = append(opts, spool.WithTee(io.Discard))
 			}
+
 			sp, err := spool.New(failingReader(tc.data, errSource), opts...)
 			require.ErrorIs(t, err, errSource)
 			require.Nil(t, sp)
@@ -88,6 +94,7 @@ func TestNew_TeeErrors(t *testing.T) {
 	t.Parallel()
 
 	errTee := errors.New("tee failed")
+
 	tests := []struct {
 		name  string
 		limit int

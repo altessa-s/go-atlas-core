@@ -20,6 +20,7 @@ func Compose(parts ...string) string {
 	var scratch [20]byte // the decimal digits of a uint64
 
 	size := 0
+
 	for _, part := range parts {
 		digits := strconv.AppendUint(scratch[:0], uint64(len(part)), 10)
 		size += len(digits) + 1 + len(part)
@@ -27,11 +28,13 @@ func Compose(parts ...string) string {
 
 	var b strings.Builder
 	b.Grow(size)
+
 	for _, part := range parts {
 		b.Write(strconv.AppendUint(scratch[:0], uint64(len(part)), 10))
 		b.WriteByte(':')
 		b.WriteString(part)
 	}
+
 	return b.String()
 }
 
@@ -40,11 +43,13 @@ func Compose(parts ...string) string {
 // long queries. The layout is frozen: callers persist digests (data/idempotency stores them as request fingerprints).
 func Digest(parts ...[]byte) []byte {
 	h := sha256.New()
+
 	var n [8]byte
 	for _, p := range parts {
 		binary.BigEndian.PutUint64(n[:], uint64(len(p)))
 		h.Write(n[:])
 		h.Write(p)
 	}
+
 	return h.Sum(nil)
 }

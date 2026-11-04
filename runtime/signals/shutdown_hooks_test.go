@@ -22,6 +22,7 @@ import (
 // process-wide.
 func TestSignal_Shutdown_RunsInjectedShutdownHooks(t *testing.T) {
 	errHooks := errors.New("hooks failed")
+
 	var calls atomic.Int32
 
 	s := signals.New(
@@ -45,8 +46,10 @@ func TestSignal_Shutdown_RunsInjectedShutdownHooks(t *testing.T) {
 // process-wide.
 func TestSignal_ShutdownTimeout_RunsInjectedShutdownHooks(t *testing.T) {
 	var calls atomic.Int32
+
 	started := make(chan struct{})
 	release := make(chan struct{})
+
 	t.Cleanup(func() { close(release) })
 
 	s := signals.New(
@@ -60,6 +63,7 @@ func TestSignal_ShutdownTimeout_RunsInjectedShutdownHooks(t *testing.T) {
 	s.AddHandler(func(context.Context, os.Signal) error {
 		close(started)
 		<-release
+
 		return nil
 	}, syscall.SIGUSR2)
 	s.Start()

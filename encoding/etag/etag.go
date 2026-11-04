@@ -35,6 +35,7 @@ func Strong(value string) Tag {
 	if value == "" {
 		return Tag{}
 	}
+
 	return Tag{value: value}
 }
 
@@ -45,6 +46,7 @@ func Weak(value string) Tag {
 	if value == "" {
 		return Tag{}
 	}
+
 	return Tag{value: value, weak: true}
 }
 
@@ -62,6 +64,7 @@ func FromModTime(size int64, mod time.Time) Tag {
 	buf = strconv.AppendInt(buf, size, 16)
 	buf = append(buf, '-')
 	buf = strconv.AppendInt(buf, mod.UnixNano(), 16)
+
 	return Tag{value: string(buf), weak: true}
 }
 
@@ -83,9 +86,11 @@ func (t Tag) String() string {
 	if t.value == "" {
 		return ""
 	}
+
 	if t.weak {
 		return `W/"` + t.value + `"`
 	}
+
 	return `"` + t.value + `"`
 }
 

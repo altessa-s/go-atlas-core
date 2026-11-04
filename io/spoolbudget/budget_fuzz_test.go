@@ -35,6 +35,7 @@ func FuzzBudgetIsFullyReleased(f *testing.F) {
 		if limit <= 0 || limit > 1<<20 {
 			t.Skip("limits outside the plausible range say nothing about the accounting")
 		}
+
 		if maxBytes <= 0 || maxBytes > limit {
 			t.Skip("a per-spool cap must be positive and fit the budget, as Spool documents")
 		}
@@ -48,6 +49,7 @@ func FuzzBudgetIsFullyReleased(f *testing.F) {
 				// reservation must still have been returned.
 				continue
 			}
+
 			require.NoError(t, sp.Close())
 		}
 
@@ -74,6 +76,7 @@ func FuzzCloseIsIdempotent(f *testing.F) {
 		if limit <= 0 || limit > 1<<20 {
 			t.Skip("limits outside the plausible range say nothing about the accounting")
 		}
+
 		if maxBytes <= 0 || maxBytes > limit {
 			t.Skip("a per-spool cap must be positive and fit the budget, as Spool documents")
 		}
@@ -111,6 +114,7 @@ func FuzzDisabledBudgetImposesNoBound(f *testing.F) {
 		if limit > 0 {
 			t.Skip("this target is about the disabled budget")
 		}
+
 		if maxBytes < 0 || maxBytes > 1<<20 {
 			t.Skip("an implausible cap says nothing about the disabled path")
 		}
@@ -122,8 +126,10 @@ func FuzzDisabledBudgetImposesNoBound(f *testing.F) {
 		if err != nil {
 			require.Positive(t, maxBytes, "a spool with no cap was refused")
 			require.Greater(t, int64(len(payload)), maxBytes)
+
 			return
 		}
+
 		require.NoError(t, sp.Close())
 		require.NoError(t, sp.Close(), "Close must stay safe to repeat")
 	})

@@ -13,16 +13,20 @@ import (
 
 func BenchmarkMarshalJSONTo(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink []byte
+
 	for b.Loop() {
 		out, _ := json.Marshal(s)
 		sink = out
 	}
+
 	_ = sink
 }
 
 func BenchmarkUnmarshalJSONFrom(b *testing.B) {
 	data := []byte(`"super-secret"`)
+
 	var s redacted.RedactedString
 	for b.Loop() {
 		_ = json.Unmarshal(data, &s)
@@ -31,30 +35,39 @@ func BenchmarkUnmarshalJSONFrom(b *testing.B) {
 
 func BenchmarkMarshalYAML(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink any
+
 	for b.Loop() {
 		out, _ := s.MarshalYAML()
 		sink = out
 	}
+
 	_ = sink
 }
 
 func BenchmarkMarshalText(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink []byte
+
 	for b.Loop() {
 		out, _ := s.MarshalText()
 		sink = out
 	}
+
 	_ = sink
 }
 
 func BenchmarkMarshalBSONValue(b *testing.B) {
 	s := redacted.RedactedString("super-secret")
+
 	var sink []byte
+
 	for b.Loop() {
 		_, out, _ := s.MarshalBSONValue()
 		sink = out
 	}
+
 	_ = sink
 }

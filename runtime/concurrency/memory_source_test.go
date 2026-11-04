@@ -15,6 +15,7 @@ import (
 
 func TestMemorySource(t *testing.T) {
 	t.Parallel()
+
 	for _, tc := range []struct {
 		name  string
 		mb    uint64
@@ -29,11 +30,13 @@ func TestMemorySource(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			source := func() (uint64, bool) { return tc.mb << 20, tc.known }
 			fn := concurrency.MemoryAwareConcurrency(100, 500, 1000, concurrency.WithAvailableMemory(source))
 			require.Equal(t, tc.want, fn())
 		})
 	}
+
 	unknown := func() (uint64, bool) { return 0, false }
 	adaptive := concurrency.AdaptiveConcurrency(100, 500, nil, 0, concurrency.WithAvailableMemory(unknown))
 	require.Equal(t, concurrency.DefaultLimitFunc(), adaptive())
@@ -72,6 +75,7 @@ func TestAdaptiveConcurrency_Factors(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			source := func() (uint64, bool) { return tc.availableMB << 20, tc.known }
 			load := func() float64 { return tc.load }
 			fn := concurrency.AdaptiveConcurrency(tc.memoryLowMB, 500, load, tc.loadThreshold, concurrency.WithAvailableMemory(source))

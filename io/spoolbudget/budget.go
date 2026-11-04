@@ -31,6 +31,7 @@ func New(limitBytes int64) *Budget {
 	if limitBytes <= 0 {
 		return nil
 	}
+
 	return &Budget{sem: semaphore.NewWeighted(limitBytes), limit: limitBytes}
 }
 
@@ -39,6 +40,7 @@ func (b *Budget) Limit() int64 {
 	if b == nil {
 		return 0
 	}
+
 	return b.limit
 }
 
@@ -56,6 +58,7 @@ func (s *BudgetedSpool) Close() error {
 		s.release()
 		s.release = nil
 	}
+
 	return s.Spool.Close()
 }
 
@@ -80,16 +83,20 @@ func (b *Budget) Spool(ctx context.Context, r io.Reader, maxBytes int64, opts ..
 			return nil, coreerrs.WrapOperation(aerr, "reserve spool disk budget")
 		}
 	}
+
 	if maxBytes > 0 {
 		opts = append(opts, spool.WithMaxBytes(maxBytes))
 	}
+
 	sp, err := spool.New(r, opts...)
 	if err != nil {
 		if reserve {
 			b.sem.Release(maxBytes)
 		}
+
 		return nil, err
 	}
+
 	if !reserve {
 		return &BudgetedSpool{Spool: sp}, nil
 	}
@@ -99,5 +106,6 @@ func (b *Budget) Spool(ctx context.Context, r io.Reader, maxBytes int64, opts ..
 	if excess := maxBytes - held; excess > 0 {
 		b.sem.Release(excess)
 	}
+
 	return &BudgetedSpool{Spool: sp, release: func() { b.sem.Release(held) }}, nil
 }

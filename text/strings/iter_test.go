@@ -30,11 +30,13 @@ func randomSplitString(r *rand.Rand, maxTokens int) string {
 	for range r.IntN(maxTokens + 1) {
 		b.WriteString(splitSeqTokens[r.IntN(len(splitSeqTokens))])
 	}
+
 	return b.String()
 }
 
 func requireSplitSeqMatchesSplit(t testing.TB, s string, opts corestrings.SplitOptions) {
 	t.Helper()
+
 	want := corestrings.Split(s, opts)
 	got := slices.Collect(corestrings.SplitSeq(s, opts))
 	require.Equal(t, want, got, "s=%q opts=%+v", s, opts)
@@ -207,6 +209,7 @@ func TestSplitSeq_EarlyStop(t *testing.T) {
 			got = append(got, part)
 			break
 		}
+
 		require.Len(t, got, 1, "opts=%+v", opts)
 	}
 }

@@ -19,7 +19,9 @@ import (
 func makeBenchTree(b *testing.B, depth, width int) string {
 	b.Helper()
 	root := b.TempDir()
+
 	var build func(dir string, level int)
+
 	build = func(dir string, level int) {
 		for i := range width {
 			name := fmt.Sprintf("file_%d.so", i)
@@ -27,24 +29,30 @@ func makeBenchTree(b *testing.B, depth, width int) string {
 				b.Fatal(err)
 			}
 		}
+
 		if level >= depth {
 			return
 		}
+
 		sub := filepath.Join(dir, "sub")
 		if err := os.Mkdir(sub, 0o755); err != nil {
 			b.Fatal(err)
 		}
+
 		build(sub, level+1)
 	}
 	build(root, 0)
+
 	return root
 }
 
 func BenchmarkWalk_Flat(b *testing.B) {
 	root := makeBenchTree(b, 0, 64)
 	b.ReportAllocs()
+
 	for b.Loop() {
 		var n int
+
 		for entry, err := range files.Walk(root,
 			files.WithExtensions(".so"),
 			files.WithFileTypes(files.FileTypeRegular),
@@ -52,9 +60,11 @@ func BenchmarkWalk_Flat(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+
 			_ = entry
 			n++
 		}
+
 		if n != 64 {
 			b.Fatalf("expected 64 entries, got %d", n)
 		}
@@ -64,8 +74,10 @@ func BenchmarkWalk_Flat(b *testing.B) {
 func BenchmarkWalk_Recursive(b *testing.B) {
 	root := makeBenchTree(b, 4, 16)
 	b.ReportAllocs()
+
 	for b.Loop() {
 		var n int
+
 		for entry, err := range files.Walk(root,
 			files.WithRecursive(),
 			files.WithExtensions(".so"),
@@ -74,9 +86,11 @@ func BenchmarkWalk_Recursive(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+
 			_ = entry
 			n++
 		}
+
 		if n == 0 {
 			b.Fatal("expected non-zero entries")
 		}
@@ -86,11 +100,13 @@ func BenchmarkWalk_Recursive(b *testing.B) {
 func BenchmarkWalk_NoFilters(b *testing.B) {
 	root := makeBenchTree(b, 4, 16)
 	b.ReportAllocs()
+
 	for b.Loop() {
 		for entry, err := range files.Walk(root, files.WithRecursive()) {
 			if err != nil {
 				b.Fatal(err)
 			}
+
 			_ = entry
 		}
 	}

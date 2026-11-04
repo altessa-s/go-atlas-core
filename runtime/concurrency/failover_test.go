@@ -48,6 +48,7 @@ func sources(cs ...*countingSource) []concurrency.Source[string] {
 	for _, c := range cs {
 		out = append(out, c.source())
 	}
+
 	return out
 }
 
@@ -67,6 +68,7 @@ func TestFirst(t *testing.T) {
 
 	t.Run("first source admitted", func(t *testing.T) {
 		t.Parallel()
+
 		p1, p2 := okSource("p1", "a"), okSource("p2", "b")
 		res, err := concurrency.First(t.Context(), sources(p1, p2), nil)
 		require.NoError(t, err)
@@ -78,6 +80,7 @@ func TestFirst(t *testing.T) {
 
 	t.Run("fetch failure and rejection then success", func(t *testing.T) {
 		t.Parallel()
+
 		p1, p2, p3 := errSource("p1", errFetch), okSource("p2", "stale"), okSource("p3", "fresh")
 		res, err := concurrency.First(t.Context(), sources(p1, p2, p3), rejectByValue)
 		require.NoError(t, err)
@@ -92,12 +95,15 @@ func TestFirst(t *testing.T) {
 
 	t.Run("accept receives the source name", func(t *testing.T) {
 		t.Parallel()
+
 		var seen []string
+
 		accept := func(name, _ string) error {
 			seen = append(seen, name)
 			if name == "p1" {
 				return errInvalid
 			}
+
 			return nil
 		}
 		res, err := concurrency.First(t.Context(), sources(okSource("p1", "x"), okSource("p2", "y")), accept)
@@ -108,6 +114,7 @@ func TestFirst(t *testing.T) {
 
 	t.Run("all sources skipped", func(t *testing.T) {
 		t.Parallel()
+
 		p1, p2, p3 := errSource("p1", errFetch), okSource("p2", "stale"), okSource("p3", "invalid")
 		res, err := concurrency.First(t.Context(), sources(p1, p2, p3), rejectByValue)
 		require.ErrorIs(t, err, concurrency.ErrAllFailed)
@@ -133,6 +140,7 @@ func TestFirst(t *testing.T) {
 		t.Parallel()
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
+
 		p1 := okSource("p1", "a")
 		res, err := concurrency.First(ctx, sources(p1), nil)
 		require.ErrorIs(t, err, context.Canceled)
@@ -160,6 +168,7 @@ func TestFirst(t *testing.T) {
 
 	t.Run("per-source timeout with live context is a skip", func(t *testing.T) {
 		t.Parallel()
+
 		p1 := errSource("p1", fmt.Errorf("http: %w", context.DeadlineExceeded))
 		res, err := concurrency.First(t.Context(), sources(p1, okSource("p2", "ok")), nil)
 		require.NoError(t, err)
@@ -171,6 +180,7 @@ func TestFirst(t *testing.T) {
 
 func TestSourceErrorNil(t *testing.T) {
 	t.Parallel()
+
 	var se *concurrency.SourceError
 	require.Empty(t, se.Error())
 	require.NoError(t, se.Unwrap())
@@ -182,6 +192,7 @@ func TestCanceled(t *testing.T) {
 
 	canceledCtx, cancel := context.WithCancel(t.Context())
 	cancel()
+
 	expiredCtx, cancelDeadline := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 	t.Cleanup(cancelDeadline)
 

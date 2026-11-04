@@ -15,6 +15,7 @@ var truncateInput = strings.Repeat("Привет, world! ", 64)
 
 func BenchmarkTruncateRunes(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = corestrings.TruncateRunes(truncateInput, 200, "…")
 	}
@@ -22,6 +23,7 @@ func BenchmarkTruncateRunes(b *testing.B) {
 
 func BenchmarkTruncateBytes(b *testing.B) {
 	b.ReportAllocs()
+
 	for b.Loop() {
 		_ = corestrings.TruncateBytes(truncateInput, 500, "…")
 	}

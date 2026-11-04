@@ -42,6 +42,7 @@ func FromVersion(version int64) Tag {
 	if version < 0 {
 		return Tag{}
 	}
+
 	return Tag{value: strconv.FormatInt(version, 10), weak: true}
 }
 
@@ -53,10 +54,12 @@ func (t Tag) Version() (int64, error) {
 	if !t.weak || !canonicalDecimal(t.value) {
 		return 0, ErrNotVersion
 	}
+
 	v, err := strconv.ParseInt(t.value, 10, 64)
 	if err != nil {
 		return 0, ErrNotVersion
 	}
+
 	return v, nil
 }
 
@@ -66,11 +69,13 @@ func canonicalDecimal(s string) bool {
 	if s == "" || (s[0] == '0' && len(s) > 1) {
 		return false
 	}
+
 	for i := range len(s) {
 		if s[i] < '0' || s[i] > '9' {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -86,16 +91,20 @@ func ParseVersion(s string, opts ...VersionOption) (int64, error) {
 	if s == "" {
 		return 0, ErrMissing
 	}
+
 	o := newVersionOptions(opts...)
+
 	tag, err := Parse(s)
 	if err != nil || tag.String() != s {
 		// Malformed, or not the exact rendering (surrounding whitespace).
 		return 0, ErrMalformed
 	}
+
 	v, err := tag.Version()
 	if err != nil || v == math.MaxInt64 || (v == 0 && !o.singleton) {
 		return 0, ErrMalformed
 	}
+
 	return v, nil
 }
 
@@ -110,8 +119,10 @@ func CheckVersion(s string, current int64, opts ...VersionOption) error {
 	if err != nil {
 		return err
 	}
+
 	if v != current {
 		return ErrMismatch
 	}
+
 	return nil
 }

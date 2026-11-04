@@ -125,10 +125,12 @@ func init() {
 			switch {
 			case setting.Key == "vcs.revision" && Commit == "":
 				Commit = setting.Value
+
 				const commitPrefixLength = 6
 				if len(Commit) >= commitPrefixLength {
 					Commit = Commit[0:commitPrefixLength]
 				}
+
 				Commit = strings.ToUpper(Commit)
 			case setting.Key == "vcs.time" && BuildTime == "":
 				BuildTime = setting.Value
@@ -257,6 +259,7 @@ func EnvLabel() string {
 	if IsStandalone {
 		return StandaloneLabel
 	}
+
 	return NonStandaloneLabel
 }
 
@@ -330,10 +333,12 @@ func AppVersion() string {
 		"envLabel":  EnvLabel(),
 		"envPrefix": EnvPrefix,
 	}
+
 	var buf bytes.Buffer
 	if err := versionInfoTemplate.ExecuteTemplate(&buf, "version", m); err != nil {
 		return ""
 	}
+
 	return strings.TrimSpace(buf.String())
 }
 
@@ -369,6 +374,7 @@ func (d Dependencies) Contains(path string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -380,6 +386,7 @@ func (d Dependencies) Get(path string) *Dependency {
 			return dep
 		}
 	}
+
 	return nil
 }
 
