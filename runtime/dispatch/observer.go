@@ -35,7 +35,8 @@ type Observer interface {
 	WorkerStarted()
 	WorkerStopped()
 	// WALSize reports the bytes currently held by the WAL across all
-	// segments. It is sampled once per flushed batch.
+	// segments. It is sampled once per flushed batch and once per failed
+	// sink attempt.
 	WALSize(bytes int64)
 }
 

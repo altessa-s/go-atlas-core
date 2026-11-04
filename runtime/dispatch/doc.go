@@ -22,16 +22,19 @@
 //
 // # Workers
 //
-// Worker goroutines drain the channel, build batches up to BatchSize or
-// FlushInterval, and call Sink.StoreBatch. On success, the corresponding WAL
-// records are acked; once all records in a sealed segment are acked, the
-// segment file is removed.
+// Without WAL, worker goroutines drain the channel, build batches up to
+// BatchSize or FlushInterval, and call Sink.StoreBatch. With WAL, durable
+// workers claim up to BatchSize unacknowledged records straight from the WAL
+// when woken or on FlushInterval, decode them via Codec and call
+// Sink.StoreBatch; on success the records are acked, and once all records in
+// a sealed segment are acked the segment file is removed.
 //
 // # Recovery
 //
-// On Engine.Start, the WAL directory is scanned, every valid record is
-// decoded via Codec, and the records are pushed back into the worker queue
-// before any new Submit calls are accepted by the workers. Torn writes
+// On Engine.Start, the WAL directory is scanned and every valid record is
+// decoded via Codec to reject undecodable data early; the records stay in the
+// WAL, and durable workers claim them like any other pending record before
+// Submit accepts new items. Torn writes
 // (partial records left after a crash) are detected by CRC32 and discarded.
 //
 // # Durability guarantees
