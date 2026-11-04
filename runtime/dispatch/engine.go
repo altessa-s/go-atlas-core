@@ -101,8 +101,9 @@ func NewEngine[T any](sink Sink[T], opts ...Option[T]) (*Engine[T], error) {
 	return e, nil
 }
 
-// Start opens the WAL (if configured), replays any unflushed records by
-// pushing them through the worker queue, and launches the worker goroutines.
+// Start opens the WAL (if configured), checks that every unflushed record
+// decodes, and launches the worker goroutines; durable workers then deliver
+// the recovered records straight from the WAL.
 // It is an error to call Start more than once.
 func (e *Engine[T]) Start() error {
 	e.lifecycleMu.Lock()

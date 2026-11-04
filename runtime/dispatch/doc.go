@@ -32,9 +32,9 @@
 // # Recovery
 //
 // On Engine.Start, the WAL directory is scanned and every valid record is
-// decoded via Codec to reject undecodable data early; the records stay in the
-// WAL, and durable workers claim them like any other pending record before
-// Submit accepts new items. Torn writes
+// decoded via Codec to reject undecodable data early before Submit is opened;
+// the records stay in the WAL, and durable workers claim them after Start like
+// any other pending record. Torn writes
 // (partial records left after a crash) are detected by CRC32 and discarded.
 //
 // # Durability guarantees
