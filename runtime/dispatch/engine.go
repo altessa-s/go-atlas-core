@@ -74,6 +74,7 @@ func NewEngine[T any](sink Sink[T], opts ...Option[T]) (*Engine[T], error) {
 	if nilcheck.IsNil(sink) {
 		return nil, ErrSinkRequired
 	}
+
 	o := newOptions(opts...)
 	if nilcheck.IsNil(o.observer) {
 		o.observer = NoopObserver{}
@@ -108,25 +109,31 @@ func NewEngine[T any](sink Sink[T], opts ...Option[T]) (*Engine[T], error) {
 func (e *Engine[T]) Start() error {
 	e.lifecycleMu.Lock()
 	defer e.lifecycleMu.Unlock()
+
 	if e.closed.Load() {
 		return ErrEngineClosed
 	}
+
 	if !e.started.CompareAndSwap(false, true) {
 		return ErrAlreadyStarted
 	}
+
 	if e.opts.walEnabled {
 		w, recovered, err := wal.Open(e.opts.walDir, e.opts.walOpts...)
 		if err != nil {
 			return err
 		}
+
 		e.log = w
 		for _, record := range recovered {
 			if _, err := e.codec.Decode(record.Payload); err != nil {
 				return errors.Join(fmt.Errorf("%w: %w", ErrReplayDecode, err), w.Close())
 			}
 		}
+
 		e.obs.ItemsReplayed(len(recovered))
 	}
+
 	for range e.opts.workers {
 		// Long-lived batching workers have queue/drain semantics; Process is
 		// intended for finite slices and does not provide this lifecycle.
@@ -136,7 +143,9 @@ func (e *Engine[T]) Start() error {
 			e.wg.Go(e.worker)
 		}
 	}
+
 	e.ready.Store(true)
+
 	return nil
 }
 
@@ -177,27 +186,36 @@ func (e *Engine[T]) Enqueue(item T) (Submission, error) {
 	if !e.ready.Load() || e.closed.Load() {
 		return Rejected, ErrEngineClosed
 	}
+
 	e.submitMu.RLock()
 	defer e.submitMu.RUnlock()
+
 	if e.closed.Load() {
 		return Rejected, ErrEngineClosed
 	}
+
 	if e.log != nil {
 		payload, err := e.codec.Encode(item)
 		if err != nil {
 			e.obs.EncodeFailed()
 			e.dropItem(item)
+
 			return Rejected, err
 		}
+
 		if _, err := e.log.Append(payload); err != nil {
 			e.obs.WALAppendFailed()
 			e.dropItem(item)
+
 			return Rejected, err
 		}
+
 		e.obs.ItemEnqueued()
 		e.notifyWorker()
+
 		return Logged, nil
 	}
+
 	if e.opts.backPressure {
 		select {
 		case e.submitted <- item:
@@ -207,6 +225,7 @@ func (e *Engine[T]) Enqueue(item T) (Submission, error) {
 			return Rejected, ErrEngineClosed
 		}
 	}
+
 	select {
 	case e.submitted <- item:
 		e.obs.ItemEnqueued()
@@ -220,6 +239,7 @@ func (e *Engine[T]) Enqueue(item T) (Submission, error) {
 func (e *Engine[T]) dropItem(item T) {
 	e.dropped.Add(1)
 	e.obs.ItemDropped()
+
 	if e.opts.onDrop != nil {
 		e.opts.onDrop(item)
 	}
@@ -242,33 +262,44 @@ func (e *Engine[T]) Shutdown(ctx context.Context) error {
 		e.lifecycleMu.Unlock()
 		return nil
 	}
+
 	close(e.done)
 	// Closing admission wakes blocked producers before waiting for their locks.
 	e.submitMu.Lock()
 	close(e.drainDone)
 	e.submitMu.Unlock()
 	e.lifecycleMu.Unlock()
+
 	finished := make(chan struct{})
+
 	go func() { e.wg.Wait(); close(finished) }()
+
 	var errs []error
+
 	select {
 	case <-finished:
 	case <-ctx.Done():
 		e.shutdownCancel()
+
 		errs = append(errs, ctx.Err())
 	}
+
 	e.shutdownCancel()
+
 	if e.log != nil {
 		if pending := e.log.Stats().Pending; pending > 0 {
 			errs = append(errs, fmt.Errorf("%w: %d records", ErrBacklog, pending))
 		}
+
 		if err := e.log.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
+
 	if err := e.lastError.Load(); err != nil {
 		errs = append(errs, *err)
 	}
+
 	return errors.Join(errs...)
 }
 
@@ -277,6 +308,7 @@ func (e *Engine[T]) worker() {
 	defer e.obs.WorkerStopped()
 
 	batch := make([]T, 0, e.opts.batchSize)
+
 	ticker := time.NewTicker(e.opts.flushInterval)
 	defer ticker.Stop()
 
@@ -284,9 +316,11 @@ func (e *Engine[T]) worker() {
 		if len(batch) == 0 {
 			return
 		}
+
 		if err := e.storeBatch(batch, nil); err != nil {
 			e.lastError.Store(&err)
 		}
+
 		clear(batch)
 		batch = batch[:0]
 	}
@@ -330,6 +364,7 @@ func (e *Engine[T]) observeWALSize() {
 	if e.log == nil {
 		return
 	}
+
 	e.obs.WALSize(e.log.Stats().TotalBytes)
 }
 
@@ -338,7 +373,9 @@ func (e *Engine[T]) observeWALSize() {
 func (e *Engine[T]) storeBatch(items []T, offsets []wal.Offset) error {
 	start := time.Now()
 	defer func() { e.obs.BatchDone(time.Since(start)) }()
+
 	const backoffFactor = 2
+
 	nextDelay := coreretry.Exponential(
 		e.opts.retryBackoff,
 		coreretry.WithExponentialMaxDelay(e.opts.retryMaxBackoff),
@@ -348,29 +385,37 @@ func (e *Engine[T]) storeBatch(items []T, offsets []wal.Offset) error {
 	for attempt := 0; ; attempt++ {
 		ctx, cancel := corecontext.ApplyTimeout(e.shutdownCtx, e.opts.storeTimeout)
 		err := e.sink.StoreBatch(ctx, items)
+
 		cancel()
+
 		if err == nil {
 			if e.log != nil {
 				for _, off := range offsets {
 					e.log.Ack(off)
 				}
 			}
+
 			return nil
 		}
+
 		e.obs.BatchStoreFailed(len(items))
 		// Refresh the WAL size on every failed attempt: during a sink outage
 		// the backlog keeps growing while no batch completes.
 		e.observeWALSize()
+
 		if e.shutdownCtx.Err() != nil || ((e.log == nil || e.closed.Load()) && attempt >= e.opts.retryAttempts) {
 			return err
 		}
+
 		e.opts.logger.Warn("dispatch: retrying sink batch", slog.Any("error", err), slog.Int("items", len(items)))
 		// Saturate the exponent; MaxDelay bounds long outages without overflow.
 		const maxBackoffExponent = 30
+
 		backoff := nextDelay(min(attempt, maxBackoffExponent), err)
 		if backoff <= 0 {
 			backoff = DefaultRetryBackoff
 		}
+
 		timer := time.NewTimer(backoff)
 		select {
 		case <-timer.C:

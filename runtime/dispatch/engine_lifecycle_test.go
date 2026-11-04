@@ -151,6 +151,7 @@ func TestEngine_WALSizeReportedOnFlush(t *testing.T) {
 
 	stopCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
+
 	require.NoError(t, e.Shutdown(stopCtx))
 }
 
@@ -180,6 +181,7 @@ func TestEngine_RetryWithJitterStillDelivers(t *testing.T) {
 
 	stopCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
+
 	require.NoError(t, e.Shutdown(stopCtx))
 
 	require.Equal(t, []int{42}, sink.snapshot(), "item must survive jittered retries")
@@ -229,6 +231,7 @@ func TestEngine_ObserverRetryEvents(t *testing.T) {
 	t.Parallel()
 
 	const backoff = 20 * time.Millisecond
+
 	obs := &recordingObserver{}
 	e, err := dispatch.NewEngine[int](&fakeSink{failN: 2},
 		dispatch.WithObserver[int](obs),
@@ -243,6 +246,7 @@ func TestEngine_ObserverRetryEvents(t *testing.T) {
 	for i := range 3 {
 		require.True(t, e.Submit(i))
 	}
+
 	waitFor(t, 5*time.Second, func() bool { return obs.batches.Load() == 1 }, "batch never completed")
 	require.NoError(t, e.Shutdown(t.Context()))
 
@@ -273,6 +277,7 @@ func TestEngine_WALSizeReportedDuringOutage(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
+
 	_ = e.Shutdown(ctx) // The undelivered backlog is expected.
 }
 
@@ -289,8 +294,10 @@ func TestEngine_ObserverReplayAndAppendFailure(t *testing.T) {
 	require.NoError(t, first.Start())
 	require.True(t, first.Submit(1))
 	require.True(t, first.Submit(2))
+
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
+
 	_ = first.Shutdown(ctx) // Leaves both records in the WAL.
 
 	obs := &recordingObserver{}

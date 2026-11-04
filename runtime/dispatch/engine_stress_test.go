@@ -54,10 +54,13 @@ func (s *chaosSink) StoreBatch(_ context.Context, items []int) error {
 		s.mu.Lock()
 		s.failures++
 		s.mu.Unlock()
+
 		return errChaos
 	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	for _, id := range items {
 		if n := s.delivered[id]; n > s.allowance[id] {
 			s.t.Errorf("item %d delivered %d times with %d ambiguous failures and replays: duplicate beyond the at-least-once contract",
@@ -65,14 +68,18 @@ func (s *chaosSink) StoreBatch(_ context.Context, items []int) error {
 		} else if n > 0 {
 			s.dups++
 		}
+
 		s.delivered[id]++
 	}
+
 	if s.enabled.Load() && roll < 13 {
 		for _, id := range items {
 			s.allowance[id]++
 		}
+
 		return errChaos
 	}
+
 	return nil
 }
 
@@ -99,12 +106,15 @@ func TestStressDispatchWAL(t *testing.T) {
 	newEngine := func() *dispatch.Engine[int] {
 		w, recovered, err := wal.Open(dir)
 		require.NoError(t, err)
+
 		for _, r := range recovered {
 			id, err := intCodec{}.Decode(r.Payload)
 			require.NoError(t, err)
 			sink.allow(id)
 		}
+
 		require.NoError(t, w.Close())
+
 		e, err := dispatch.NewEngine[int](sink,
 			dispatch.WithWorkers[int](4),
 			dispatch.WithBatchSize[int](16),
@@ -116,12 +126,14 @@ func TestStressDispatchWAL(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.NoError(t, e.Start())
+
 		return e
 	}
 
 	for time.Now().Before(deadline) && !t.Failed() {
 		epochs++
 		e := newEngine()
+
 		var wg sync.WaitGroup
 		for range 8 {
 			wg.Go(func() {
@@ -131,42 +143,55 @@ func TestStressDispatchWAL(t *testing.T) {
 						if !errors.Is(err, dispatch.ErrEngineClosed) {
 							t.Errorf("Enqueue(%d): %v", id, err)
 						}
+
 						return
 					}
+
 					acceptMu.Lock()
 					accepted[id] = struct{}{}
 					acceptMu.Unlock()
 				}
 			})
 		}
+
 		time.Sleep(time.Duration(200+rand.IntN(800)) * time.Millisecond) //nolint:gosec // test jitter
+
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		err := e.Shutdown(ctx)
+
 		cancel()
 		wg.Wait()
+
 		if err != nil && !errors.Is(err, dispatch.ErrBacklog) && !errors.Is(err, errChaos) {
 			require.NoError(t, err, "epoch %d: unexpected Shutdown error", epochs)
 		}
+
 		require.Zero(t, e.Dropped(), "epoch %d: a WAL-backed engine dropped items", epochs)
 	}
+
 	require.False(t, t.Failed(), "invariant violated during the run")
 
 	sink.enabled.Store(false)
+
 	e := newEngine()
+
 	waitFor(t, time.Minute, func() bool { return e.WAL().Stats().Pending == 0 }, "backlog did not drain with a healthy sink")
 	require.NoError(t, e.Shutdown(t.Context()))
 
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
+
 	for id := range accepted {
 		if sink.delivered[id] == 0 {
 			require.FailNow(t, "accepted item lost", "item %d was accepted but never delivered", id)
 		}
 	}
+
 	for id := range sink.delivered {
 		if _, ok := accepted[id]; !ok {
 			require.FailNow(t, "rejected item delivered", "item %d was delivered but Enqueue never accepted it", id)
 		}
 	}
+
 	t.Logf("epochs=%d accepted=%d failures=%d duplicates=%d", epochs, len(accepted), sink.failures, sink.dups)
 }

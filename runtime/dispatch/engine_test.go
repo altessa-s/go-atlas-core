@@ -40,27 +40,34 @@ type fakeSink struct {
 
 func (f *fakeSink) StoreBatch(_ context.Context, items []int) error {
 	f.mu.Lock()
+
 	f.calls++
 	if f.failed < f.failN {
 		f.failed++
 		f.mu.Unlock()
+
 		return errors.New("transient")
 	}
+
 	if f.delay > 0 {
 		f.mu.Unlock()
 		time.Sleep(f.delay)
 		f.mu.Lock()
 	}
+
 	f.items = append(f.items, items...)
 	f.mu.Unlock()
+
 	return nil
 }
 
 func (f *fakeSink) snapshot() []int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	out := make([]int, len(f.items))
 	copy(out, f.items)
+
 	return out
 }
 
@@ -70,6 +77,7 @@ type intCodec struct{}
 func (intCodec) Encode(v int) ([]byte, error) {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(v))
+
 	return b, nil
 }
 
@@ -77,6 +85,7 @@ func (intCodec) Decode(b []byte) (int, error) {
 	if len(b) != 8 {
 		return 0, errors.New("bad length")
 	}
+
 	return int(binary.LittleEndian.Uint64(b)), nil //nolint:gosec
 }
 
@@ -96,6 +105,7 @@ func newRunningEngine(
 	opts ...dispatch.Option[int],
 ) *dispatch.Engine[int] {
 	tb.Helper()
+
 	base := []dispatch.Option[int]{
 		dispatch.WithBatchSize[int](10),
 		dispatch.WithFlushInterval[int](20 * time.Millisecond),
@@ -107,13 +117,16 @@ func newRunningEngine(
 	tb.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(tb.Context()), 2*time.Second)
 		defer cancel()
+
 		_ = eng.Shutdown(ctx)
 	})
+
 	return eng
 }
 
 func TestNewEngine_NilSink_ReturnsErrSinkRequired(t *testing.T) {
 	t.Parallel()
+
 	eng, err := dispatch.NewEngine[int](nil)
 	require.ErrorIs(t, err, dispatch.ErrSinkRequired)
 	require.Nil(t, eng)
@@ -138,6 +151,7 @@ func TestNewEngine_WithWALNoCodec_ReturnsErrCodecRequired(t *testing.T) {
 
 func TestEngine_Start_Twice_ReturnsErrAlreadyStarted(t *testing.T) {
 	t.Parallel()
+
 	eng, err := dispatch.NewEngine[int](&fakeSink{})
 	require.NoError(t, err)
 	require.NoError(t, eng.Start())
@@ -148,6 +162,7 @@ func TestEngine_Start_Twice_ReturnsErrAlreadyStarted(t *testing.T) {
 
 func TestEngine_Submit_BeforeStart_ReturnsFalse(t *testing.T) {
 	t.Parallel()
+
 	eng, err := dispatch.NewEngine[int](&fakeSink{})
 	require.NoError(t, err)
 	require.False(t, eng.Submit(1))
@@ -156,26 +171,31 @@ func TestEngine_Submit_BeforeStart_ReturnsFalse(t *testing.T) {
 func TestEngine_Submit_AfterShutdown_ReturnsFalse(t *testing.T) {
 	t.Parallel()
 	eng := newRunningEngine(t, &fakeSink{})
+
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
+
 	require.NoError(t, eng.Shutdown(ctx))
 	require.False(t, eng.Submit(1))
 }
 
 func TestEngine_Shutdown_Idempotent(t *testing.T) {
 	t.Parallel()
+
 	eng, err := dispatch.NewEngine[int](&fakeSink{})
 	require.NoError(t, err)
 	require.NoError(t, eng.Start())
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
+
 	require.NoError(t, eng.Shutdown(ctx))
 	require.NoError(t, eng.Shutdown(ctx), "second Shutdown must be a no-op and return nil")
 }
 
 func TestEngine_NoWAL_RoundTrip(t *testing.T) {
 	t.Parallel()
+
 	sink := &fakeSink{}
 	eng := newRunningEngine(t, sink)
 
@@ -185,6 +205,7 @@ func TestEngine_NoWAL_RoundTrip(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
+
 	require.NoError(t, eng.Shutdown(ctx))
 	require.Len(t, sink.snapshot(), 50)
 }
@@ -206,6 +227,7 @@ func TestEngine_WithWAL_RoundTripAndCleanup(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
+
 	require.NoError(t, eng.Shutdown(ctx))
 	require.Len(t, sink.snapshot(), 100)
 
@@ -256,6 +278,7 @@ func TestEngine_WAL_CrashRecovery(t *testing.T) {
 		// A timed-out drain retains the journal and stops the blocked callback.
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 		defer cancel()
+
 		err = eng.Shutdown(ctx)
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		require.ErrorIs(t, err, dispatch.ErrBacklog)
@@ -280,6 +303,7 @@ func TestEngine_WAL_CrashRecovery(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
+
 	require.NoError(t, eng2.Shutdown(ctx))
 	require.Len(t, sink2.snapshot(), 50)
 }
@@ -306,6 +330,7 @@ func TestEngine_RetriesAndAcks(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
+
 	require.NoError(t, eng.Shutdown(ctx))
 	require.Len(t, sink.snapshot(), 5)
 }
@@ -324,20 +349,24 @@ func (s *slowSink) StoreBatch(ctx context.Context, items []int) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+
 	s.mu.Lock()
 	s.seen = append(s.seen, items...)
 	s.mu.Unlock()
+
 	return nil
 }
 
 func TestEngine_Submit_BufferFull_Drops(t *testing.T) {
 	t.Parallel()
+
 	sink := &slowSink{release: make(chan struct{})}
 
 	var (
 		dropped  atomic.Int64
 		dropped1 atomic.Bool
 	)
+
 	eng := newRunningEngine(t, sink,
 		dispatch.WithBufferSize[int](1),
 		dispatch.WithBatchSize[int](1),
@@ -353,6 +382,7 @@ func TestEngine_Submit_BufferFull_Drops(t *testing.T) {
 	// First Submit lands (buffer size 1). Every subsequent Submit while
 	// the sink is blocked must drop.
 	eng.Submit(0)
+
 	for i := 1; i <= 100; i++ {
 		eng.Submit(i)
 	}
@@ -370,8 +400,11 @@ func TestEngine_Submit_BufferFull_Drops(t *testing.T) {
 
 func TestEngine_Submit_EncodeError_IsDrop(t *testing.T) {
 	t.Parallel()
+
 	sink := &fakeSink{}
+
 	var dropped atomic.Int64
+
 	eng := newRunningEngine(t, sink,
 		dispatch.WithWAL[int](filepath.Join(t.TempDir(), "wal"), errCodec{},
 			wal.WithFsyncInterval(time.Hour),
@@ -394,6 +427,7 @@ func TestEngine_Submit_EncodeError_IsDrop(t *testing.T) {
 
 func TestEngine_BackPressure_BlocksUntilDrain(t *testing.T) {
 	t.Parallel()
+
 	sink := &slowSink{release: make(chan struct{})}
 	eng := newRunningEngine(t, sink,
 		dispatch.WithBufferSize[int](1),
@@ -452,7 +486,9 @@ func TestEngine_BackPressure_BlocksUntilDrain(t *testing.T) {
 // refactor against accidentally returning a nil-joined-non-nil value.
 func TestEngine_Shutdown_WithWAL_NoError(t *testing.T) {
 	t.Parallel()
+
 	sink := &fakeSink{}
+
 	eng := newRunningEngine(t, sink,
 		dispatch.WithWAL[int](filepath.Join(t.TempDir(), "wal"), intCodec{},
 			wal.WithFsyncInterval(2*time.Millisecond),
@@ -464,6 +500,7 @@ func TestEngine_Shutdown_WithWAL_NoError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
+
 	require.NoError(t, eng.Shutdown(ctx))
 }
 
@@ -472,6 +509,7 @@ func TestEngine_Shutdown_WithWAL_NoError(t *testing.T) {
 // context error (possibly joined with a WAL close error).
 func TestEngine_Shutdown_CtxTimeout_ReturnsDeadlineErr(t *testing.T) {
 	t.Parallel()
+
 	sink := &slowSink{release: make(chan struct{})}
 	defer close(sink.release)
 
@@ -490,6 +528,7 @@ func TestEngine_Shutdown_CtxTimeout_ReturnsDeadlineErr(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
+
 	err = eng.Shutdown(ctx)
 	require.Error(t, err)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
@@ -516,6 +555,7 @@ func TestEngine_ShutdownWithActiveProducers(t *testing.T) {
 
 	// Producers hammer Submit until the test signals stop.
 	const producers = 8
+
 	var (
 		wg   sync.WaitGroup
 		stop atomic.Bool
@@ -534,6 +574,7 @@ func TestEngine_ShutdownWithActiveProducers(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
+
 	require.NoError(t, eng.Shutdown(ctx))
 
 	// We can't assert an exact count (drops are expected at high
@@ -547,10 +588,14 @@ func TestEngine_ShutdownWithActiveProducers(t *testing.T) {
 
 func TestNewEngineTypedNilDependencies(t *testing.T) {
 	t.Parallel()
+
 	var sink *fakeSink
+
 	_, err := dispatch.NewEngine[int](sink)
 	require.ErrorIs(t, err, dispatch.ErrSinkRequired)
+
 	var codec *intCodec
+
 	_, err = dispatch.NewEngine[int](&fakeSink{}, dispatch.WithWAL[int](t.TempDir(), codec))
 	require.ErrorIs(t, err, dispatch.ErrCodecRequired)
 }

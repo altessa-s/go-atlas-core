@@ -33,6 +33,7 @@ func (nopSink) StoreBatch(_ context.Context, _ []int) error { return nil }
 // timer, which keeps benchmarks deterministic.
 func newBenchEngine(b *testing.B, opts ...dispatch.Option[int]) *dispatch.Engine[int] {
 	b.Helper()
+
 	base := []dispatch.Option[int]{
 		dispatch.WithBatchSize[int](256),
 		dispatch.WithFlushInterval[int](time.Hour),
@@ -45,8 +46,10 @@ func newBenchEngine(b *testing.B, opts ...dispatch.Option[int]) *dispatch.Engine
 	b.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(b.Context(), 5*time.Second)
 		defer cancel()
+
 		_ = eng.Shutdown(ctx)
 	})
+
 	return eng
 }
 
@@ -57,6 +60,7 @@ func BenchmarkEngine_Submit_NoWAL(b *testing.B) {
 	eng := newBenchEngine(b)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		eng.Submit(1)
 	}
@@ -91,6 +95,7 @@ func BenchmarkEngine_Submit_WithWAL(b *testing.B) {
 	)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		eng.Submit(1)
 	}
@@ -118,6 +123,7 @@ func BenchmarkEngine_Submit_Drop(b *testing.B) {
 	b.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(b.Context(), time.Second)
 		defer cancel()
+
 		_ = eng.Shutdown(ctx)
 	})
 
@@ -127,6 +133,7 @@ func BenchmarkEngine_Submit_Drop(b *testing.B) {
 	eng.Submit(0)
 
 	b.ReportAllocs()
+
 	for b.Loop() {
 		eng.Submit(1)
 	}
@@ -167,19 +174,26 @@ func BenchmarkEngine_Submit_WithWAL_Contended(b *testing.B) {
 				mu      sync.Mutex
 				samples []time.Duration
 			)
+
 			b.ReportAllocs()
 			b.RunParallel(func(pb *testing.PB) {
 				local := make([]time.Duration, 0, 1024)
+
 				for i := 0; pb.Next(); i++ {
 					if i%64 != 0 {
 						eng.Submit(1)
 						continue
 					}
+
 					start := time.Now()
+
 					eng.Submit(1)
+
 					local = append(local, time.Since(start))
 				}
+
 				mu.Lock()
+
 				samples = append(samples, local...)
 				mu.Unlock()
 			})

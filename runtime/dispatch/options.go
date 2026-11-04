@@ -83,6 +83,7 @@ func WithWAL[T any](dir string, codec Codec[T], walOpts ...wal.Option) Option[T]
 		if codec == nil || dir == "" {
 			return
 		}
+
 		o.walEnabled = true
 		o.walDir = dir
 		o.walOpts = walOpts

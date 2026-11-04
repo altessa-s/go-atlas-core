@@ -32,6 +32,7 @@ func (s *recordSink) StoreBatch(_ context.Context, items []record) error {
 	s.mu.Lock()
 	s.items = append(s.items, items...)
 	s.mu.Unlock()
+
 	return nil
 }
 
@@ -50,6 +51,7 @@ func Example() {
 		fmt.Println("new engine:", err)
 		return
 	}
+
 	if err := eng.Start(); err != nil {
 		fmt.Println("start:", err)
 		return
@@ -63,6 +65,7 @@ func Example() {
 	// Graceful shutdown drains the queue.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+
 	if err := eng.Shutdown(ctx); err != nil {
 		fmt.Println("shutdown:", err)
 		return
@@ -71,7 +74,9 @@ func Example() {
 	// Results are observable on the sink. Sort for deterministic output.
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
+
 	sort.Slice(sink.items, func(i, j int) bool { return sink.items[i].ID < sink.items[j].ID })
+
 	for _, it := range sink.items {
 		fmt.Println(it.ID, it.Label)
 	}
