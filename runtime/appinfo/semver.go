@@ -7,55 +7,42 @@ package appinfo
 import (
 	"fmt"
 	"strings"
+
+	"github.com/altessa-s/go-atlas-core/semver"
 )
 
-// parseSemVer parses a semantic version string.
-// It supports basic SemVer 2.0.0 format: Major.Minor.Patch[-Prerelease][+Build]
-// Note: This is a simplified internal implementation to avoid external dependencies.
+// parseSemVer keeps historical ldflag values usable, including partial
+// versions and nonnumeric development labels.
 func parseSemVer(v string) (*SemanticVersion, error) {
+	if parsed, err := semver.Parse(v); err == nil {
+		return &SemanticVersion{Major: parsed.Major, Minor: parsed.Minor, Patch: parsed.Patch, Prerelease: parsed.Prerelease}, nil
+	}
+
 	if v == "" {
 		return nil, fmt.Errorf("empty version string")
 	}
 
-	// Remove 'v' prefix if present
-	v = strings.TrimPrefix(v, "v")
+	base, _, _ := strings.Cut(strings.TrimPrefix(v, "v"), "+")
+	core, pre, hasPre := strings.Cut(base, "-")
+	major, rest, hasMinor := strings.Cut(core, ".")
 
-	// Split into version and build metadata
-	parts := strings.SplitN(v, "+", 2)
-	versionPart := parts[0]
-
-	// Split into version and prerelease
-	parts = strings.SplitN(versionPart, "-", 2)
-	corePart := parts[0]
-
-	var prerelease []string
-	if len(parts) > 1 {
-		prerelease = strings.Split(parts[1], ".")
-	}
-
-	// Split core part into major, minor, patch
-	coreParts := strings.Split(corePart, ".")
-	if len(coreParts) < 1 || len(coreParts) > 3 {
+	minor, patch, hasPatch := strings.Cut(rest, ".")
+	if strings.Contains(patch, ".") {
 		return nil, fmt.Errorf("invalid version format: %s", v)
 	}
 
-	sv := &SemanticVersion{
-		Major:      coreParts[0],
-		Prerelease: prerelease,
+	if !hasMinor {
+		minor = "0"
 	}
 
-	if len(coreParts) > 1 {
-		sv.Minor = coreParts[1]
-	} else {
-		sv.Minor = "0"
+	if !hasPatch {
+		patch = "0"
 	}
 
-	const patchIndex = 2
-	if len(coreParts) > patchIndex {
-		sv.Patch = coreParts[2]
-	} else {
-		sv.Patch = "0"
+	result := &SemanticVersion{Major: major, Minor: minor, Patch: patch}
+	if hasPre {
+		result.Prerelease = strings.Split(pre, ".")
 	}
 
-	return sv, nil
+	return result, nil
 }

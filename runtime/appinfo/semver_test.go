@@ -38,6 +38,17 @@ func TestParseSemVer(t *testing.T) {
 			wantPatch: "0",
 		},
 		{
+			name:      "abbreviated prerelease",
+			in:        "v1.2-rc.1+local",
+			wantMajor: "1", wantMinor: "2", wantPatch: "0",
+			wantPre: []string{"rc", "1"},
+		},
+		{
+			name:      "legacy build label",
+			in:        "dev",
+			wantMajor: "dev", wantMinor: "0", wantPatch: "0",
+		},
+		{
 			name:       "invalid too many parts",
 			in:         "1.2.3.4",
 			shouldFail: true,
@@ -51,6 +62,8 @@ func TestParseSemVer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := parseSemVer(tt.in)
 			if tt.shouldFail {
 				require.Error(t, err, "expected error for input %q", tt.in)

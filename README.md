@@ -33,6 +33,7 @@ profile — so earlier toolchains cannot build it.
 | [io](./io)                   | Buffer pools, limited readers, file-system helpers, spooling, WAL                   |
 | [retry](./retry)             | Stdlib-only retry loop with pluggable delay policies                                |
 | [runtime](./runtime)         | Shutdown hooks, cycles, leak checks, concurrency, singleflight, dispatch, signals, sandboxing |
+| [semver](./semver)           | SemVer 2.0.0 parsing and precedence comparison                                       |
 | [text](./text)               | String manipulation, interning, secure storage, charsets                            |
 | [time](./time)               | Time formatting, calendar dates (`time/civil`), clocks (`time/clock`)               |
 | [types](./types)             | Bits, constraints, nil checks, optional, pointers, redacted strings, result         |

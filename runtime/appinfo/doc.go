@@ -8,6 +8,9 @@
 // All functions are read-only and thread-safe. Global variables are set during init
 // and should not be modified at runtime.
 //
+// Version checks use [github.com/altessa-s/go-atlas-core/semver] and also
+// accept historical build labels and abbreviated versions such as v1.2.
+//
 // # Build Configuration
 //
 // Values can be set via ldflags during build:

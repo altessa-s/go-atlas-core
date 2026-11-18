@@ -40,6 +40,8 @@ runtime-assignable variable.
 
 ## Version checks
 
+Build versions use [semver](../../semver/) with support for legacy labels and abbreviated versions such as `v1.2` (patch defaults to zero).
+
 | Function             | Description                                    |
 |----------------------|------------------------------------------------|
 | `IsRelease`          | Stable release (no pre-release identifiers)    |

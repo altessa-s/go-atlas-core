@@ -64,6 +64,7 @@ body:
         - runtime/seccomp
         - runtime/signals
         - runtime/singleflight
+        - semver
         - text
         - text/charset
         - text/strings
