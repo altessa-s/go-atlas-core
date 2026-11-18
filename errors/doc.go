@@ -8,6 +8,11 @@
 //
 // All functions are stateless and thread-safe.
 //
+// # Bounded traversal
+//
+// [Walk] visits wrapped and joined errors depth first with a shared visit budget.
+// [WalkFunc] accepts a custom child sequence for pruning or following private causes.
+//
 // # Context Errors
 //
 // The package provides utilities for checking standard context errors like context.Canceled

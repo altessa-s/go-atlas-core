@@ -4,8 +4,7 @@
 import "github.com/altessa-s/go-atlas-core/io/files"
 ```
 
-Package `files` provides utilities for file system checks, path resolution, and directory iteration. All functions are pure, thread-safe, and follow
-symlinks unless noted otherwise.
+Package `files` provides file system checks, path resolution, directory iteration, and atomic file replacement.
 
 ## Functions
 
@@ -16,6 +15,7 @@ symlinks unless noted otherwise.
 | `OpenRegular`          | Open a path only if it is a regular file, without blocking on a FIFO (`ErrNotRegular`) |
 | `OpenRegularIn`        | `OpenRegular` confined to an `os.Root` (no escape through a swapped symlink) |
 | `OpenRootDir`          | `os.OpenRoot` that refuses a non-directory (a FIFO) without blocking |
+| `WriteFileAtomic`      | Sync a temporary file with the specified permissions and rename it over the destination in an existing directory |
 | `ReadRegular`          | Read a whole file through `OpenRegular`                        |
 | `DirIsEmpty`           | Check whether a directory contains no entries                  |
 | `FindFile`             | Search for a file across multiple base directories             |
