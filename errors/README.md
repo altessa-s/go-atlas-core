@@ -7,6 +7,12 @@ import "github.com/altessa-s/go-atlas-core/errors"
 Package `errors` provides error classification and wrapping utilities. All functions are nil-safe and preserve the full error chain for `errors.Is` /
 `errors.As` unwrapping across any number of nested wrappers. Network, URL and TLS error classifiers live in [`errors/network`](network/).
 
+## Bounded traversal
+
+`Walk(err, budget, visit)` visits each node before its children, from left to right. Returning false from the visitor stops successfully. The walk
+returns false only when the budget prevents another visit. Shared causes count once per path and nil child slots also consume budget. Use `WalkFunc`
+to prune a subtree or enumerate private causes under the same budget.
+
 ## Wrapping
 
 | Function                   | Message format                                          |
