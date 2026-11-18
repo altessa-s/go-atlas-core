@@ -22,12 +22,20 @@ func WithExponentialFactor(v float64) ExponentialOption {
 
 // WithExponentialJitter sets the jitter option.
 //
-// jitter is the maximum fraction of the computed delay added as random
-// jitter (0.0–1.0); values above 1.0 are clamped to 1.0. Zero (the
+// jitter is the maximum fraction by which jitter varies the computed
+// delay (0.0–1.0); values above 1.0 are clamped to 1.0. Zero (the
 // default) gives deterministic delays.
 func WithExponentialJitter(v float64) ExponentialOption {
 	return func(o *exponentialOptions) {
 		o.jitter = v
+	}
+}
+
+// WithExponentialJitterMode selects how jitter varies the capped delay.
+// Unknown modes use [JitterAdditive].
+func WithExponentialJitterMode(v JitterMode) ExponentialOption {
+	return func(o *exponentialOptions) {
+		o.jitterMode = v
 	}
 }
 
@@ -47,7 +55,8 @@ func WithExponentialMaxDelay(v time.Duration) ExponentialOption {
 // defaultExponentialOptions returns the default values for exponentialOptions.
 func defaultExponentialOptions() *exponentialOptions {
 	return &exponentialOptions{
-		factor: DefaultExponentialFactor,
+		factor:     DefaultExponentialFactor,
+		jitterMode: JitterAdditive,
 	}
 }
 

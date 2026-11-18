@@ -22,8 +22,11 @@ type exponentialOptions struct {
 	// factor is the multiplier applied per attempt
 	// (delay = baseDelay * factor^attempt). Zero means [DefaultExponentialFactor].
 	factor float64 `opt:"ExponentialFactor" optgen:"default=DefaultExponentialFactor"`
-	// jitter is the maximum fraction of the computed delay added as random
-	// jitter (0.0–1.0); values above 1.0 are clamped to 1.0. Zero (the
+	// jitter is the maximum fraction by which jitter varies the computed
+	// delay (0.0–1.0); values above 1.0 are clamped to 1.0. Zero (the
 	// default) gives deterministic delays.
 	jitter float64 `opt:"ExponentialJitter"`
+	// WithExponentialJitterMode selects how jitter varies the capped delay.
+	// Unknown modes use [JitterAdditive].
+	jitterMode JitterMode `opt:"ExponentialJitterMode" optgen:"default=JitterAdditive"`
 }
