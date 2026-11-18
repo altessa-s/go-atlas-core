@@ -7,6 +7,8 @@
 // search, executable path resolution, and an iterator-based directory walker
 // with optional extension and file-type filtering.
 //
+// [WriteFileAtomic] syncs a replacement file before renaming it into place.
+//
 // Example:
 //
 //	if files.FileExists("/path/to/file.txt") {
