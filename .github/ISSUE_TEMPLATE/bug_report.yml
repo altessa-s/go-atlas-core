@@ -54,6 +54,7 @@ body:
         - runtime/capabilities
         - runtime/concurrency
         - runtime/cycle
+        - runtime/dispatch
         - runtime/helpers
         - runtime/internal/exectest
         - runtime/landlock

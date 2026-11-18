@@ -104,14 +104,15 @@ A `Policy` is immutable after construction and safe for concurrent use.
 
 ## Exponential backoff
 
-`Exponential(baseDelay, opts...)` returns a `NextDelayFunc` computing `baseDelay × factor^attempt`, capped and widened by random jitter as configured
+`Exponential(baseDelay, opts...)` returns a `NextDelayFunc` computing `baseDelay × factor^attempt`, capped and adjusted by random jitter as configured
 below. Build it once and reuse it: the returned function allocates nothing per call.
 
 | Option                    | Default                           | Description                                              |
 |---------------------------|-----------------------------------|----------------------------------------------------------|
 | `WithExponentialMaxDelay` | unbounded                         | Cap on the computed delay; non-positive values are ignored |
 | `WithExponentialFactor`   | `DefaultExponentialFactor` (1.5)  | Multiplier per attempt; zero means the default           |
-| `WithExponentialJitter`   | 0 (deterministic)                 | Up to this fraction (0–1, clamped) of extra random delay |
+| `WithExponentialJitter`   | 0 (deterministic)                 | Maximum jitter as a fraction of the capped delay (0–1)   |
+| `WithExponentialJitterMode` | `JitterAdditive`                | Additive jitter only increases the delay. `JitterSymmetric` can also shorten it. Unknown modes use additive jitter. |
 
 ```go
 backoff := retry.Exponential(100*time.Millisecond,

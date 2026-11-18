@@ -21,6 +21,10 @@
 //	    retry.WithNextDelay(retry.Exponential(500*time.Millisecond)),
 //	)
 //
+// [Exponential] uses deterministic delays by default. With jitter enabled,
+// [JitterAdditive] increases the delay and [JitterSymmetric] can also shorten it.
+// Select the mode with [WithExponentialJitterMode].
+//
 // # Deadlines and test clocks
 //
 // [WithStopBeforeDeadline] does not start a retry whose delay would reach the

@@ -230,20 +230,41 @@ func (cfg *options) interrupted(lastErr, err error) error {
 	return errors.Join(lastErr, err)
 }
 
+// JitterMode selects how [Exponential] varies a capped delay d by a fraction j.
+// In each formula, u is uniformly distributed in [0, 1).
+type JitterMode int
+
+const (
+	// JitterAdditive adds a random delay: d + d*j*u. It is the default.
+	JitterAdditive JitterMode = iota
+	// JitterSymmetric varies the delay in either direction: d * (1 + j*(2*u - 1)).
+	JitterSymmetric
+)
+
 // Exponential returns a [NextDelayFunc] that implements exponential
 // backoff with optional jitter, suitable for [WithNextDelay]:
 //
-//	delay(attempt) = min(maxDelay, baseDelay * factor^attempt + jitter)
+//	d = min(maxDelay, baseDelay * factor^attempt)
+//	delay(attempt) = clamp(jitterMode(d), 0, maxDelay)
 //
 // A zero or negative baseDelay yields 0 for every attempt, which stops [Do]
 // from retrying. [WithExponentialMaxDelay] caps the delay (unbounded by
 // default), [WithExponentialFactor] sets the multiplier (default
-// [DefaultExponentialFactor]) and [WithExponentialJitter] adds random jitter
-// (deterministic by default). The returned function is safe for concurrent
+// [DefaultExponentialFactor]) and [WithExponentialJitter] sets the jitter fraction
+// (zero by default). [WithExponentialJitterMode] selects [JitterAdditive]
+// or [JitterSymmetric]. The returned function is safe for concurrent
 // use.
 func Exponential(baseDelay time.Duration, opts ...ExponentialOption) NextDelayFunc {
-	o := newExponentialOptions(opts...)
-	maxDelay := o.maxDelay
+	return exponential(baseDelay, newExponentialOptions(opts...), rand.Float64) // #nosec G404 -- non-cryptographic retry jitter
+}
+
+func exponential(baseDelay time.Duration, o *exponentialOptions, sample func() float64) NextDelayFunc {
+	limit := time.Duration(math.MaxInt64)
+	if o.maxDelay > 0 {
+		limit = o.maxDelay
+	}
+
+	mode := o.jitterMode
 	factor := cmp.Or(o.factor, DefaultExponentialFactor)
 	jitter := min(o.jitter, 1.0)
 
@@ -266,30 +287,31 @@ func Exponential(baseDelay time.Duration, opts ...ExponentialOption) NextDelayFu
 		multiplier := math.Pow(factor, float64(attempt))
 
 		product := float64(baseDelay) * multiplier
+		d := limit
+
 		if math.IsInf(multiplier, 1) || product >= float64(math.MaxInt64) {
-			if maxDelay > 0 {
-				return maxDelay
+			if mode != JitterSymmetric {
+				return limit
 			}
-
-			return time.Duration(math.MaxInt64)
-		}
-
-		d := time.Duration(product)
-		if d <= 0 {
-			return 0
-		}
-
-		if maxDelay > 0 && d > maxDelay {
-			d = maxDelay
+		} else {
+			d = min(time.Duration(product), limit)
+			if d <= 0 {
+				return 0
+			}
 		}
 
 		if jitter > 0 {
-			limit := time.Duration(math.MaxInt64)
-			if maxDelay > 0 {
-				limit = maxDelay
+			u := sample()
+			if mode == JitterSymmetric {
+				delay := float64(d) * (1 + jitter*(2*u-1))
+				if delay >= float64(limit) {
+					return limit
+				}
+
+				return time.Duration(delay)
 			}
 
-			extra := float64(d) * jitter * rand.Float64() // #nosec G404 -- non-cryptographic jitter for retry backoff timing
+			extra := float64(d) * jitter * u
 			if extra >= float64(limit-d) {
 				return limit
 			}
