@@ -7,6 +7,7 @@ package panics
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -113,9 +114,7 @@ func TestPanicLoggerHandler_StringPanicUsesContextLogger(t *testing.T) {
 	savedCtxFn := loggerFromContext.Load()
 
 	t.Cleanup(func() {
-		if savedLogger != nil {
-			panicLogger.Store(savedLogger)
-		}
+		panicLogger.Store(savedLogger)
 
 		if savedCtxFn != nil {
 			loggerFromContext.Store(savedCtxFn)
@@ -143,9 +142,7 @@ func TestPanicLoggerHandler_NonStringPanicUsesGlobalLogger(t *testing.T) {
 	savedCtxFn := loggerFromContext.Load()
 
 	t.Cleanup(func() {
-		if savedLogger != nil {
-			panicLogger.Store(savedLogger)
-		}
+		panicLogger.Store(savedLogger)
 
 		if savedCtxFn != nil {
 			loggerFromContext.Store(savedCtxFn)
@@ -239,4 +236,76 @@ func TestHandleWithOpts(t *testing.T) {
 		panic("opts panic")
 	}()
 	require.Equal(t, "opts panic", captured)
+}
+
+func TestHandle_GlobalPanicReporting(t *testing.T) {
+	const secret = "private panic value"
+
+	originalHandlers := globalPanicHandlers.Load().(PanicHandlers)
+	originalLogger := slog.Default()
+	savedLogger := panicLogger.Swap(nil)
+	savedCtxFn := loggerFromContext.Swap(LoggerFromContextFunc(nil))
+
+	t.Cleanup(func() {
+		SetGlobalPanicHandlers(originalHandlers...)
+		slog.SetDefault(originalLogger)
+		panicLogger.Store(savedLogger)
+
+		if savedCtxFn != nil {
+			loggerFromContext.Store(savedCtxFn)
+		}
+	})
+
+	tests := []struct {
+		name string
+		opts *HandleOpts
+	}{
+		{name: "Handle defaults"},
+		{name: "HandleWithOpts defaults", opts: NewHandleOpts()},
+		{name: "raw opt-in", opts: &HandleOpts{LogRawErrors: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+
+			var globalReport, localReport any
+
+			SetGlobalPanicHandlers(panicLoggerHandler, func(_ context.Context, report any) {
+				globalReport = report
+			})
+			localHandler := func(_ context.Context, report any) { localReport = report }
+
+			if tt.opts == nil {
+				func() {
+					defer Handle(t.Context(), localHandler)
+
+					panic(secret)
+				}()
+			} else {
+				func() {
+					defer HandleWithOpts(t.Context(), tt.opts, localHandler)
+
+					panic(secret)
+				}()
+			}
+
+			var record map[string]any
+			require.NoError(t, json.Unmarshal(output.Bytes(), &record))
+			require.Equal(t, secret, localReport)
+
+			if tt.opts != nil && tt.opts.LogRawErrors {
+				require.Equal(t, secret, globalReport)
+				require.Equal(t, secret, record["panic"])
+				require.NotEmpty(t, record["stacktrace"])
+
+				return
+			}
+
+			require.Same(t, ErrRecoveredPanic, globalReport)
+			require.Equal(t, "recovered_panic", record["category"])
+			require.NotContains(t, record, "stacktrace")
+			require.NotContains(t, output.String(), secret)
+		})
+	}
 }

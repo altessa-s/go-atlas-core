@@ -45,6 +45,11 @@ panics.AddGlobalPanicHandler(func(ctx context.Context, r any) {
 Both must be deferred directly. Handlers are `PanicHandler` funcs (`func(ctx context.Context, r any)`); a re-thrown panic first runs the shutdown
 function — `runtime.RunShutdownHooks` by default, or the one set with `HandleOpts.SetShutdown` (e.g. a `runtime.HookGroup`'s `Shutdown`).
 
+Global handlers receive `ErrRecoveredPanic` by default, and the built-in logger emits the fixed category `recovered_panic`.
+Use `HandleWithOpts` with `&panics.HandleOpts{LogRawErrors: true}` to send the original value to global handlers and include the
+value and stack trace in the built-in log. Handlers passed directly to either function receive the original value, which also
+propagates if re-panic is enabled.
+
 ## Guarded channel sends
 
 | Function             | Description                                                                |

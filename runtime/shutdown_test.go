@@ -7,7 +7,6 @@ package runtime
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,7 +19,7 @@ func resetShutdownStateForTest(t *testing.T) {
 	t.Helper()
 	processHooks.mu.Lock()
 	processHooks.hooks = nil
-	processHooks.once = sync.Once{}
+	processHooks.done = nil
 	processHooks.mu.Unlock()
 }
 

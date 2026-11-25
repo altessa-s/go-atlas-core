@@ -34,6 +34,14 @@
 //	    log.Warn("subscriber channel closed during send")
 //	}
 //
+// # Panic reporting
+//
+// Global handlers receive [ErrRecoveredPanic] by default. The built-in logger
+// reports a fixed category. Set [HandleOpts.LogRawErrors] for a call to send
+// the panic value to global handlers and log the value and stack trace.
+// Handlers passed directly to Handle or HandleWithOpts receive the recovered
+// value. Enabling re-panic propagates that value to the caller.
+//
 // # Configuration
 //
 //   - SetReallyPanic(bool): Configure whether panics re-propagate after handling (default: false).

@@ -26,6 +26,16 @@ environment variable first, then falls back to file-based persistence.
 | `File`           | Provider that reads or generates a random ID persisted to a file on disk       |
 | `Static`         | Provider that always returns a caller-supplied constant string                 |
 
+## File persistence
+
+The file provider reads the first line of a regular file and trims surrounding whitespace. Empty first lines and lines longer than 64 KiB
+before the newline cause initialization to fail. On Unix, the provider opens the file without following a final symlink or waiting on a FIFO.
+On Windows, it rejects reparse points at the final path component.
+
+When the path is missing, the provider writes and syncs an ID in a temporary file in the same directory, then closes and hard-links it to the
+configured path. Concurrent initializers read the published winner's ID. Other publication failures are available through `PersistenceError`
+and leave the generated ID available in memory.
+
 ## Random IDs
 
 `NewHex(n)` returns `n` bytes of `crypto/rand` entropy as `2n` lowercase hex digits — for server-assigned resource IDs and one-off tokens such

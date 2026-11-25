@@ -8,12 +8,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"slices"
 	"sync"
 
 	coreerrs "github.com/altessa-s/go-atlas-core/errors"
 )
+
+// ErrShutdownHookPanic indicates that a shutdown hook panicked.
+var ErrShutdownHookPanic = errors.New("shutdown hook panicked")
+
+// UnfinishedHooksError reports which hooks had not finished when a shutdown
+// caller's context ended. Hooks are identified by their one-based registration
+// positions, from 1 through Remaining.
+type UnfinishedHooksError struct {
+	Remaining int
+	cause     error
+}
+
+// Error describes the unfinished hooks and why the wait ended.
+func (e *UnfinishedHooksError) Error() string {
+	return fmt.Sprintf("shutdown hooks 1 through %d did not finish: %v", e.Remaining, e.cause)
+}
+
+// Unwrap returns the context error that ended the wait.
+func (e *UnfinishedHooksError) Unwrap() error { return e.cause }
 
 // ShutdownHook is a function executed during application shutdown via
 // [RunShutdownHooks] or [HookGroup.Shutdown]. The provided context may carry a
@@ -44,10 +61,11 @@ type ShutdownHook func(ctx context.Context) error
 //	    return err
 //	}
 type HookGroup struct {
-	mu    sync.Mutex
-	hooks []ShutdownHook
-	once  sync.Once
-	err   error
+	mu        sync.Mutex
+	hooks     []ShutdownHook
+	done      chan struct{}
+	remaining int
+	err       error
 }
 
 // OnShutdown registers a hook to run when [HookGroup.Shutdown] is invoked.
@@ -60,38 +78,109 @@ func (g *HookGroup) OnShutdown(hook ShutdownHook) {
 	g.hooks = append(g.hooks, hook)
 }
 
-// Shutdown runs the group's hooks in LIFO order, at most once regardless of
-// how many times it is called. Every call returns the same result.
-// Errors are collected and joined via
-// [errors.Join]; a failing hook does not prevent the rest from running. Each
-// hook receives ctx, so a caller can bound the whole sequence with a deadline.
+// Shutdown runs the group's hooks in LIFO order at most once. The first caller's
+// context controls the sequence. When it ends, the active hook may continue
+// running. Hooks that have yet to be scheduled are skipped. The result includes
+// an [UnfinishedHooksError] if any hooks did not finish.
 //
-// Hooks registered after Shutdown starts are not run: the set is snapshotted
-// up front so a hook cannot extend the sequence it is part of.
+// A hook panic becomes [ErrShutdownHookPanic]. Errors are joined and returned,
+// and a failing hook does not prevent subsequent hooks from running.
+//
+// Concurrent callers can stop waiting using their own contexts. Once the
+// sequence ends, subsequent calls return its cached result. Hooks registered
+// after the sequence starts are skipped.
 func (g *HookGroup) Shutdown(ctx context.Context) error {
-	g.once.Do(func() {
-		var errs []error
-
-		g.mu.Lock()
-		hooks := g.hooks
+	g.mu.Lock()
+	if g.done != nil {
+		done := g.done
 		g.mu.Unlock()
 
-		for _, hook := range slices.Backward(hooks) {
-			if err := hook(ctx); err != nil {
-				// Collect and keep going: one broken hook must not strand the
-				// resources the others release.
-				errs = append(errs, coreerrs.Wrap(err, "shutdown hook failed"))
-				// This is the lowest runtime layer and has no logger, and the
-				// joined error may never be read on a panic or signal path, so
-				// stderr is the only place the failure is guaranteed to surface.
-				fmt.Fprintf(os.Stderr, "shutdown hook error: %v\n", err)
+		select {
+		case <-done:
+			return g.err
+		case <-ctx.Done():
+			g.mu.Lock()
+			defer g.mu.Unlock()
+
+			select {
+			case <-done:
+				return g.err
+			default:
+				if g.remaining == 0 {
+					return ctx.Err()
+				}
+
+				return &UnfinishedHooksError{Remaining: g.remaining, cause: ctx.Err()}
 			}
 		}
+	}
 
-		g.err = errors.Join(errs...)
-	})
+	g.done = make(chan struct{})
+	hooks := g.hooks
+	g.remaining = len(hooks)
+	g.mu.Unlock()
+
+	var errs []error
+
+	for remaining := len(hooks); remaining > 0; remaining-- {
+		err := ctx.Err()
+		finished := false
+
+		if err == nil {
+			err, finished = waitShutdownHook(ctx, hooks[remaining-1])
+		}
+
+		if !finished {
+			errs = append(errs, &UnfinishedHooksError{Remaining: remaining, cause: err})
+			break
+		}
+
+		if err != nil {
+			errs = append(errs, err)
+		}
+
+		g.mu.Lock()
+		g.remaining = remaining - 1
+		g.mu.Unlock()
+	}
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.err = errors.Join(errs...)
+	close(g.done)
 
 	return g.err
+}
+
+func waitShutdownHook(ctx context.Context, hook ShutdownHook) (error, bool) {
+	result := make(chan error, 1)
+
+	go func() {
+		// The buffer lets the hook report completion after its caller leaves.
+		err := ErrShutdownHookPanic
+
+		defer func() {
+			_ = recover()
+
+			result <- err
+		}()
+
+		err = coreerrs.Wrap(hook(ctx), "shutdown hook failed")
+	}()
+
+	select {
+	case err := <-result:
+		return err, true
+	case <-ctx.Done():
+		// Retain the result if the hook completed as cancellation arrived.
+		select {
+		case err := <-result:
+			return err, true
+		default:
+			return ctx.Err(), false
+		}
+	}
 }
 
 // processHooks is the implicit group behind [OnShutdown] and
@@ -108,12 +197,8 @@ func OnShutdown(hook ShutdownHook) {
 	processHooks.OnShutdown(hook)
 }
 
-// RunShutdownHooks executes all hooks registered via [OnShutdown] in LIFO order.
-// It is safe to call from multiple goroutines; hooks execute at most once regardless
-// of how many times this function is called. Errors from individual hooks are
-// collected and joined into a single error via [errors.Join]. A failing hook
-// does not prevent subsequent hooks from running. Each hook receives ctx, so
-// callers can enforce a deadline on the entire shutdown sequence.
+// RunShutdownHooks executes the process-wide hooks registered via [OnShutdown].
+// It has the same ordering, cancellation, and error behavior as [HookGroup.Shutdown].
 func RunShutdownHooks(ctx context.Context) error {
 	return processHooks.Shutdown(ctx)
 }
