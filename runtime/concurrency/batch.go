@@ -89,8 +89,13 @@ func recoverWorkerPanic(active *bool, class *string) {
 
 func notifyWorkerPanic(ctx context.Context, class string) {
 	// HandleWithOpts dispatches the sanitized class to the global handlers
-	// with re-panic disabled for this notification.
-	defer panics.HandleWithOpts(ctx, panics.NewHandleOpts().SetReallyPanic(false))
+	// with re-panic disabled for this notification. LogRawErrors forwards the
+	// class itself instead of the generic panics.ErrRecoveredPanic; the
+	// original panic value never reaches this call.
+	opts := panics.NewHandleOpts().SetReallyPanic(false)
+	opts.LogRawErrors = true
+
+	defer panics.HandleWithOpts(ctx, opts)
 
 	panic(class)
 }
