@@ -13,5 +13,5 @@ import (
 )
 
 func openIDFile(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	return os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0) // #nosec G304 -- caller-chosen service ID file path; symlinks refused by O_NOFOLLOW
 }
