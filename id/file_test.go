@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -132,23 +133,102 @@ func TestFile_PersistenceError_TriggersInitialization(t *testing.T) {
 	require.NotEmpty(t, p.ID(), "ID should be populated once initialization ran")
 }
 
-// TestFile_ReadLine_LineTooLong exercises the bufio.Scanner error branch in
-// readLine: a single line exceeding bufio.MaxScanTokenSize (64KB) with no
-// newline overflows the scanner's token buffer and Scan() stops with
-// bufio.ErrTooLong, distinct from the os.Open failure already covered by
-// TestFile_FileExistsButUnreadable_FailsFast.
-func TestFile_ReadLine_LineTooLong(t *testing.T) {
+func TestFile_FirstLine(t *testing.T) {
+	t.Parallel()
+
+	maxLine := strings.Repeat("a", maxIDLineBytes)
+	tests := []struct {
+		name    string
+		content string
+		want    string
+		wantErr error
+	}{
+		{name: "empty file", wantErr: errEmptyID},
+		{name: "blank first line", content: " \t\r\nvalid second line", wantErr: errEmptyID},
+		{name: "first line only", content: " ID \r\n" + maxLine + "extra", want: "ID"},
+		{name: "at limit without newline", content: maxLine, want: maxLine},
+		{name: "at limit with newline", content: maxLine + "\n", want: maxLine},
+		{name: "over limit without newline", content: maxLine + "a", wantErr: errIDLineTooLong},
+		{name: "over limit with newline", content: maxLine + "a\n", wantErr: errIDLineTooLong},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), ".sid")
+			require.NoError(t, os.WriteFile(path, []byte(tt.content), 0o600))
+
+			p := MustNewFile(path)
+			require.Equal(t, tt.want, p.ID())
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, p.Error(), tt.wantErr)
+
+				content, err := os.ReadFile(path)
+				require.NoError(t, err)
+				require.Equal(t, tt.content, string(content))
+
+				return
+			}
+
+			require.NoError(t, p.Error())
+		})
+	}
+}
+
+func TestFile_ConcurrentInitializersUsePublishedID(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
-	path := filepath.Join(dir, "service.id")
+	path := filepath.Join(dir, ".sid")
+	providers := make([]*File, 32)
+	start := make(chan struct{})
 
-	huge := strings.Repeat("a", 70*1024) // no trailing newline
-	require.NoError(t, os.WriteFile(path, []byte(huge), 0o600))
+	var wg sync.WaitGroup
 
-	p, err := NewFile(path)
+	for i := range providers {
+		providers[i] = MustNewFile(path)
+
+		wg.Go(func() {
+			<-start
+			providers[i].ID()
+		})
+	}
+
+	close(start)
+	wg.Wait()
+
+	published, err := os.ReadFile(path)
 	require.NoError(t, err)
+	require.Len(t, published, 32)
 
-	require.Empty(t, p.ID(), "ID should be empty when the existing file cannot be scanned")
-	require.Error(t, p.Error())
+	for _, p := range providers {
+		require.NoError(t, p.Error())
+		require.NoError(t, p.PersistenceError())
+		require.Equal(t, string(published), p.ID())
+	}
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+}
+
+func TestWriteLine_DoesNotReplaceExistingID(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".sid")
+	require.NoError(t, writeLine(path, "first"))
+	require.ErrorIs(t, writeLine(path, "second"), os.ErrExist)
+
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "first", string(content))
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
 }
 
 func TestFile_NoPersistenceError_WhenFileWritten(t *testing.T) {

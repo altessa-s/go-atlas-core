@@ -6,14 +6,13 @@ package runtime
 
 import (
 	"context"
-	"sync"
 	"testing"
 )
 
 func BenchmarkOnShutdown(b *testing.B) {
 	processHooks.mu.Lock()
 	processHooks.hooks = nil
-	processHooks.once = sync.Once{}
+	processHooks.done = nil
 	processHooks.mu.Unlock()
 
 	noop := func(_ context.Context) error { return nil }

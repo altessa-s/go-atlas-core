@@ -11,7 +11,7 @@ Package `runtime` provides shutdown hook registries — one process-wide, plus s
 | Function           | Description                                                     |
 |--------------------|-----------------------------------------------------------------|
 | `OnShutdown`       | Register a process-wide shutdown hook (LIFO order)              |
-| `RunShutdownHooks` | Execute all process-wide hooks exactly once; errors are joined  |
+| `RunShutdownHooks` | Run process-wide hooks at most once and return joined errors  |
 
 ## Key types
 
@@ -71,6 +71,11 @@ func (s *Subsystem) Stop(ctx context.Context) error {
 
 Hooks registered while `Shutdown` is running are not executed: the set is snapshotted up front, so a self-registering hook cannot extend the sequence it
 is part of.
+
+The first caller's context controls the sequence. On cancellation, shutdown returns the errors collected so far and an `UnfinishedHooksError`
+identifying the unfinished hooks by their one-based registration positions (1 through `Remaining`). A hook already running may finish later.
+Concurrent callers may stop waiting with their own contexts. A hook panic becomes `ErrShutdownHookPanic`, and shutdown continues with the next
+hook while the context allows it.
 
 ## Subpackages
 
