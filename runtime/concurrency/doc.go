@@ -27,8 +27,8 @@
 // both fixed limits and dynamic calculation via ConcurrencyLimitFunc.
 //
 // [Process] and [ProcessCollect] treat an item function's panic as an error
-// matching [ErrWorkerPanic]. The error carries a stack trace but omits the
-// panic value. [WithOnError] receives the error for that item, and
+// matching [ErrWorkerPanic]. The error includes the panic value's type,
+// which global panic handlers also receive. [WithOnError] receives the error, and
 // [WithStopOnError] applies as it does for returned errors.
 //
 // Example Batch Usage:

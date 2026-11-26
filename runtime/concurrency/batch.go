@@ -7,6 +7,7 @@ package concurrency
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -39,9 +40,13 @@ type TransformFunc[T, R any] func(ctx context.Context, item T) (R, error)
 // in the caller's goroutine.
 //
 // A panic in fn is handled as an item error wrapping [ErrWorkerPanic].
-// The error carries a stack trace in a [*panics.RecoveredError], which can
-// be retrieved with [errors.As]. A recovered panic is sent to [WithOnError]
-// when configured and obeys the same first-error policy as a returned error.
+// The error includes the panic value's type. Global panic handlers receive
+// that type as a string. [WithOnError] and [WithStopOnError] apply as they
+// do for returned errors.
+//
+// A call to [runtime.Goexit] in fn terminates its goroutine without an item
+// error or callback. In sequential mode the batch call does not return.
+// In parallel mode the worker exits and other workers can continue.
 //
 // Example:
 //
@@ -72,14 +77,22 @@ type batchFunc[T any] struct {
 	index func(ctx context.Context, idx int) error
 }
 
-func (f batchFunc[T]) call(ctx context.Context, item T, idx int) error {
-	return panics.RecoverError(ErrWorkerPanic, func() error {
-		if f.index != nil {
-			return f.index(ctx, idx)
-		}
+func recoverWorkerPanic(active *bool, class *string) {
+	// The callback alone is protected. Panics from hooks or context methods
+	// propagate as usual.
+	if *active {
+		// With panicnil=1, a nil panic is identified by the interrupted call.
+		// Goexit runs this defer too, but never returns to the loop's caller.
+		*class = fmt.Sprintf("%T", recover())
+	}
+}
 
-		return f.item(ctx, item)
-	})
+func notifyWorkerPanic(ctx context.Context, class string) {
+	// HandleWithOpts dispatches the sanitized class to the global handlers
+	// with re-panic disabled for this notification.
+	defer panics.HandleWithOpts(ctx, panics.NewHandleOpts().SetReallyPanic(false))
+
+	panic(class)
 }
 
 // processWithOptions is the shared implementation of [Process] and
@@ -113,25 +126,22 @@ func processWithOptions[T any](
 	// Mutex for OnSuccess/OnError callbacks
 	var cbMx sync.Mutex
 
-	handle := func(idx int) {
-		item := items[idx]
-		if err := fn.call(gCtx, item, idx); err != nil {
-			once.Do(func() {
-				firstErr = err
+	handleError := func(item T, err error, class string) {
+		once.Do(func() {
+			firstErr = err
 
-				if cfg.stopOnError && cancel != nil {
-					cancel() // Stop other workers
-				}
-			})
-
-			if cfg.onError != nil {
-				cbMx.Lock()
-				cfg.onError(item, err)
-				cbMx.Unlock()
+			if cancel != nil {
+				cancel() // Stop other workers
 			}
-		} else if cfg.onSuccess != nil {
+		})
+
+		if class != "" {
+			notifyWorkerPanic(gCtx, class)
+		}
+
+		if cfg.onError != nil {
 			cbMx.Lock()
-			cfg.onSuccess(item)
+			cfg.onError(item, err)
 			cbMx.Unlock()
 		}
 	}
@@ -143,19 +153,21 @@ func processWithOptions[T any](
 	n := len(items)
 
 	var (
-		next atomic.Int64
-		wg   sync.WaitGroup
+		next          atomic.Int64
+		wg            sync.WaitGroup
+		handleSuccess func(T)
 	)
+	if cfg.onSuccess != nil {
+		handleSuccess = func(item T) {
+			cbMx.Lock()
+			cfg.onSuccess(item)
+			cbMx.Unlock()
+		}
+	}
+
 	for range min(concurrency, n) {
 		wg.Go(func() {
-			for gCtx.Err() == nil {
-				idx := next.Add(1) - 1
-				if idx >= int64(n) {
-					return
-				}
-
-				handle(int(idx))
-			}
+			runParallelWorker(gCtx, items, fn, &next, handleError, handleSuccess)
 		})
 	}
 
@@ -170,12 +182,66 @@ func processWithOptions[T any](
 	return firstErr
 }
 
+func runParallelWorker[T any](
+	ctx context.Context,
+	items []T,
+	fn batchFunc[T],
+	next *atomic.Int64,
+	handleError func(T, error, string),
+	handleSuccess func(T),
+) {
+	var item T
+
+	run := func() (class string) {
+		active := false
+		defer recoverWorkerPanic(&active, &class)
+
+		for ctx.Err() == nil {
+			idx := next.Add(1) - 1
+			if idx >= int64(len(items)) {
+				break
+			}
+
+			item = items[idx]
+			active = true
+
+			var err error
+			if fn.index != nil {
+				err = fn.index(ctx, int(idx))
+			} else {
+				err = fn.item(ctx, item)
+			}
+
+			active = false
+
+			if err != nil {
+				handleError(item, err, "")
+			} else if handleSuccess != nil {
+				handleSuccess(item)
+			}
+		}
+
+		return ""
+	}
+
+	// Recovery unwinds run. The next invocation claims a fresh index.
+	for {
+		class := run()
+		if class == "" {
+			return
+		}
+
+		handleError(item, fmt.Errorf("%w (%s)", ErrWorkerPanic, class), class)
+	}
+}
+
 // ProcessCollect applies fn to every element of items concurrently
 // (like [Process]) and collects the transformed results into a slice
 // that preserves the original input order. It returns partial results
 // alongside the first error. A panic in fn is handled as an item error
 // wrapping [ErrWorkerPanic], with the same recovery and error policy as
-// [Process].
+// [Process]. If a parallel worker calls [runtime.Goexit] and the batch
+// returns nil error, its result slot holds the zero value of R.
 //
 // Internally, ProcessCollect processes item indices rather than wrapped
 // structs, writes results directly into a pre-allocated array by
@@ -263,33 +329,73 @@ func processSequential[T any](
 	fn batchFunc[T],
 	cfg *options[T],
 ) error {
-	var firstErr error
+	var (
+		idx      int
+		item     T
+		firstErr error
+	)
 
-	for idx, item := range items {
-		// Checked before each call: a canceled context runs no further
-		// callback, and a run that finished every item stays a success.
-		if err := ctx.Err(); err != nil {
-			if firstErr != nil {
-				return firstErr
-			}
-
-			return err
+	handleError := func(err error) {
+		if firstErr == nil {
+			firstErr = err
 		}
 
-		if err := fn.call(ctx, item, idx); err != nil {
-			if cfg.onError != nil {
-				cfg.onError(item, err)
+		if cfg.onError != nil {
+			cfg.onError(item, err)
+		}
+	}
+
+	run := func() (class string) {
+		active := false
+		defer recoverWorkerPanic(&active, &class)
+
+		for ; idx < len(items); idx++ {
+			if err := ctx.Err(); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+
+				break
 			}
 
-			if cfg.stopOnError {
-				return err
+			item = items[idx]
+			active = true
+
+			var err error
+			if fn.index != nil {
+				err = fn.index(ctx, idx)
+			} else {
+				err = fn.item(ctx, item)
 			}
 
-			if firstErr == nil {
-				firstErr = err
+			active = false
+
+			if err != nil {
+				handleError(err)
+
+				if cfg.stopOnError {
+					break
+				}
+			} else if cfg.onSuccess != nil {
+				cfg.onSuccess(item)
 			}
-		} else if cfg.onSuccess != nil {
-			cfg.onSuccess(item)
+		}
+
+		return ""
+	}
+
+	// Recovery unwinds run with idx still pointing to the failed item.
+	for ; idx < len(items); idx++ {
+		class := run()
+		if class == "" {
+			break
+		}
+
+		notifyWorkerPanic(ctx, class)
+		handleError(fmt.Errorf("%w (%s)", ErrWorkerPanic, class))
+
+		if cfg.stopOnError {
+			break
 		}
 	}
 

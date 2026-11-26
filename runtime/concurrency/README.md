@@ -42,13 +42,13 @@ goroutine, channel, or worker-pool overhead.
 
 - `WithStopOnError()` cancels the internal context on the first error; in-flight items may still finish, but no new items start. Only the first
   error is returned.
-- Without `WithStopOnError`, every item is still processed; the first error encountered is still the one returned.
+- Without `WithStopOnError`, processing continues after an item error and returns the first error encountered.
 - `WithOnSuccess` / `WithOnError` callbacks are invoked under a mutex, so mutating shared state from them is safe without external synchronization.
-- A panic in an item function becomes an item error matching `ErrWorkerPanic` via `errors.Is`, even with a single worker. Recover the stack
-  trace with `errors.As` into a `*panics.RecoveredError` and call `StackTrace()`. The error and trace omit the panic value, and recovery
-  bypasses the global panic handlers. The usual `WithOnError` and `WithStopOnError` behavior applies.
-- **`ProcessCollect` returns a result only for items that succeeded.** When any item's function returns an error or panics, the result slice is compacted to
-  the completed items — order is preserved among the survivors, but the slice is shorter than the input and its indices no longer match `items`.
+- A panic in an item function becomes an item error matching `ErrWorkerPanic` via `errors.Is`. The error includes the panic value's type,
+  which global panic handlers receive as a string. The usual `WithOnError` and `WithStopOnError` behavior applies.
+- When an item function returns an error or panics, `ProcessCollect` compacts the result slice to the completed items in input order.
+- `runtime.Goexit` terminates the goroutine without an item error or callback. A sequential batch call never returns in this case.
+  In parallel, the worker exits and other workers can continue. If `ProcessCollect` returns nil error, the exited worker's item has a zero-value result.
 
 That last rule decides how to signal failure from a `TransformFunc`. Returning `(value, error)` tells `ProcessCollect` to *discard* `value` on
 failure — correct for a fetch, where a failed item has no result worth keeping, and wrong whenever the returned value is itself the outcome you

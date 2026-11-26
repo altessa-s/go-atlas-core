@@ -7,6 +7,9 @@ package concurrency_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
@@ -98,16 +101,10 @@ func TestBatchWorkerPanic(t *testing.T) {
 
 					require.Equal(t, []int{1}, failures)
 					require.ElementsMatch(t, tc.want, successes)
-					require.EqualError(t, itemErr, "worker panicked")
 					require.ErrorIs(t, itemErr, concurrency.ErrWorkerPanic)
 					require.ErrorIs(t, err, concurrency.ErrWorkerPanic)
 					require.ErrorIs(t, err, itemErr)
 					require.NotErrorIs(t, err, payload)
-
-					var traced *panics.RecoveredError
-					require.ErrorAs(t, err, &traced)
-					require.Contains(t, traced.StackTrace(), "batch_panic_test.go")
-					require.NotContains(t, traced.StackTrace(), payload.Error())
 
 					if batch.collect {
 						require.Equal(t, tc.want, results)
@@ -116,4 +113,75 @@ func TestBatchWorkerPanic(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBatchWorkerPanicReportsClass(t *testing.T) {
+	t.Setenv("GODEBUG", "panicnil=1")
+	panics.SetReallyPanic(true)
+	t.Cleanup(func() { panics.SetReallyPanic(false) })
+
+	type reportKey struct{ _ byte }
+
+	key := new(reportKey)
+	reports := make(chan any, 8)
+	ctx := context.WithValue(t.Context(), key, reports)
+
+	panics.AddGlobalPanicHandler(func(c context.Context, value any) {
+		if ch, ok := c.Value(key).(chan any); ok {
+			ch <- value
+		}
+	})
+
+	for _, workers := range []int{1, 2} {
+		t.Run(strconv.Itoa(workers), func(t *testing.T) {
+			payload := errors.New("private worker panic value")
+			results, err := concurrency.ProcessCollect(ctx, []int{0, 1, 2, 3}, func(_ context.Context, item int) (int, error) {
+				switch item {
+				case 0:
+					panic(payload)
+				case 2:
+					panic(nil)
+				}
+
+				return item, nil
+			}, concurrency.WithConcurrency[int](workers))
+
+			require.ErrorIs(t, err, concurrency.ErrWorkerPanic)
+			require.Equal(t, []int{1, 3}, results)
+			require.Len(t, reports, 2)
+			require.ElementsMatch(t, []any{fmt.Sprintf("%T", payload), "<nil>"}, []any{<-reports, <-reports})
+		})
+	}
+
+	t.Run("Goexit/sequential", func(t *testing.T) {
+		var returned bool
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+
+			_ = concurrency.Process(ctx, []int{0}, func(context.Context, int) error {
+				runtime.Goexit()
+				return nil
+			})
+			returned = true
+		}()
+
+		<-done
+		require.False(t, returned)
+		require.Empty(t, reports)
+	})
+
+	t.Run("Goexit/parallel", func(t *testing.T) {
+		results, err := concurrency.ProcessCollect(ctx, []int{1, 2, 3}, func(_ context.Context, item int) (int, error) {
+			if item == 1 {
+				runtime.Goexit()
+			}
+
+			return item, nil
+		}, concurrency.WithConcurrency[int](2))
+		require.NoError(t, err)
+		require.Equal(t, []int{0, 2, 3}, results)
+		require.Empty(t, reports)
+	})
 }
