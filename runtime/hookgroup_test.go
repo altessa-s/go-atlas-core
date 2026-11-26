@@ -9,6 +9,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -223,4 +224,96 @@ func TestHookGroup_PreservesError(t *testing.T) {
 	}
 
 	require.Same(t, results[0], group.Shutdown(t.Context()))
+}
+
+func TestHookGroup_CancellationReportsUnfinishedHooks(t *testing.T) {
+	t.Parallel()
+
+	var group coreruntime.HookGroup
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	skipped := make(chan struct{}, 1)
+
+	t.Cleanup(func() { close(release) })
+
+	group.OnShutdown(func(context.Context) error {
+		skipped <- struct{}{}
+		return nil
+	})
+	group.OnShutdown(func(context.Context) error {
+		close(started)
+		<-release
+
+		return nil
+	})
+
+	firstFailure := errors.New("completed hook failed")
+
+	group.OnShutdown(func(context.Context) error { return firstFailure })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	result := make(chan error, 1)
+	go func() { result <- group.Shutdown(ctx) }()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown hook did not start")
+	}
+
+	waiterCtx, cancelWaiter := context.WithCancel(t.Context())
+	cancelWaiter()
+
+	waiterResult := make(chan error, 1)
+	go func() { waiterResult <- group.Shutdown(waiterCtx) }()
+
+	select {
+	case err := <-waiterResult:
+		var unfinished *coreruntime.UnfinishedHooksError
+		require.ErrorAs(t, err, &unfinished)
+		require.Equal(t, 2, unfinished.Remaining)
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("concurrent shutdown caller did not honor cancellation")
+	}
+
+	cancel()
+
+	select {
+	case err := <-result:
+		var unfinished *coreruntime.UnfinishedHooksError
+		require.ErrorAs(t, err, &unfinished)
+		require.Equal(t, 2, unfinished.Remaining)
+		require.ErrorIs(t, err, context.Canceled)
+		require.ErrorIs(t, err, firstFailure)
+		require.Same(t, err, group.Shutdown(t.Context()))
+		require.Empty(t, skipped)
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown waited for a hook that ignored its context")
+	}
+}
+
+func TestHookGroup_PanicReturnsSentinelAndContinues(t *testing.T) {
+	t.Parallel()
+
+	const secret = "private hook panic value"
+
+	var (
+		group coreruntime.HookGroup
+		ran   bool
+	)
+
+	group.OnShutdown(func(context.Context) error {
+		ran = true
+		return nil
+	})
+	group.OnShutdown(func(context.Context) error { panic(secret) })
+
+	err := group.Shutdown(t.Context())
+	require.ErrorIs(t, err, coreruntime.ErrShutdownHookPanic)
+	require.NotContains(t, err.Error(), secret)
+	require.True(t, ran)
 }

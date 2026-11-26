@@ -6,10 +6,11 @@ package id
 
 import (
 	"bufio"
-	"crypto/rand"
-	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -19,8 +20,9 @@ import (
 // File is a [Provider] that persists the Service ID to a file on disk.
 //
 // On the first call to [File.ID], the provider reads the first line of the
-// configured file. If the file does not exist or is empty, a new 128-bit
-// random hex ID is generated and written back for future process restarts.
+// configured regular file. The first line must be nonempty after trimming
+// whitespace and at most 64 KiB before the newline. A missing file is
+// atomically populated with a new 128-bit random hex ID.
 //
 // All methods are safe for concurrent use; initialization is guarded by a
 // [sync.Once]. Two categories of errors are tracked separately:
@@ -125,100 +127,104 @@ func (s *File) PersistenceError() error {
 // initializeID performs the one-time initialization of the ID.
 // This method is called exactly once by sync.Once, ensuring thread safety.
 func (s *File) initializeID() {
-	var id string
-
-	// First, try to read from existing file
-	if fileExists(s.filePath) {
-		existingID, err := readLine(s.filePath)
-		if err != nil {
-			// If the file exists but can't be read, fail fast to avoid silently changing service identity.
-			s.initErr = coreerrs.WrapOperation(err, "read ID file "+s.filePath)
-			return
-		}
-
-		if trimmed := strings.TrimSpace(existingID); trimmed != "" {
-			id = trimmed
-		}
+	id, err := readLine(s.filePath)
+	if err == nil {
+		s.id = id
+		return
 	}
 
-	// If no valid ID found in file, generate a new one
-	if id == "" {
-		// Generate 16 random bytes (128 bits of entropy)
-		// This is sufficient for a unique Service ID
-		b := make([]byte, 16)
-		if _, err := rand.Read(b); err != nil {
-			// Store error instead of panicking
-			s.initErr = coreerrs.WrapOperation(err, "generate random ID")
-			return
-		}
-
-		id = strings.ToUpper(hex.EncodeToString(b))
-
-		// Write the new ID to the file for future use.
-		// If this fails, we still use the ID for this process but track the error.
-		// Callers should check PersistenceError() to detect this condition.
-		if err := writeLine(s.filePath, id); err != nil {
-			s.persistErr = coreerrs.WrapOperation(err, "persist ID to "+s.filePath)
-		}
+	if !errors.Is(err, os.ErrNotExist) {
+		s.initErr = coreerrs.WrapOperation(err, "read ID file "+s.filePath)
+		return
 	}
 
-	// Cache the ID value (no mutex needed since sync.Once guarantees single execution)
+	id = strings.ToUpper(NewHex(idBytes))
+
+	err = writeLine(s.filePath, id)
+	if errors.Is(err, os.ErrExist) {
+		// Another initializer won the race. Use the ID it published.
+		id, err = readLine(s.filePath)
+		s.initErr = coreerrs.WrapOperation(err, "read ID file "+s.filePath)
+	} else {
+		s.persistErr = coreerrs.WrapOperation(err, "persist ID to "+s.filePath)
+	}
+
 	s.id = id
 }
 
-// writeLine writes a string to a file.
-// It creates the file if it doesn't exist, or truncates it if it does.
-// #nosec G304 -- filepath comes from trusted configuration
-func writeLine(filepath string, id string) error {
-	file, err := os.Create(filepath)
+// writeLine publishes a complete ID without replacing an existing file.
+func writeLine(path, id string) error {
+	file, err := os.CreateTemp(filepath.Dir(path), ".sid-*")
 	if err != nil {
-		return coreerrs.WrapOperation(err, "create file")
-	}
-	defer func() { _ = file.Close() }()
-
-	_, err = file.Write([]byte(id))
-	if err != nil {
-		return coreerrs.WrapOperation(err, "write to file")
+		return coreerrs.WrapOperation(err, "create temporary file")
 	}
 
-	return nil
+	defer func() {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+	}()
+
+	if _, err := file.WriteString(id); err != nil {
+		return coreerrs.WrapOperation(err, "write temporary file")
+	}
+
+	if err := file.Sync(); err != nil {
+		return coreerrs.WrapOperation(err, "sync temporary file")
+	}
+
+	if err := file.Close(); err != nil {
+		return coreerrs.WrapOperation(err, "close temporary file")
+	}
+
+	return os.Link(file.Name(), path)
 }
 
-// readLine reads the first line from a file.
-// It returns an empty string and an error if the file doesn't exist or can't be read.
-// #nosec G304 -- filepath comes from trusted configuration
-func readLine(filepath string) (string, error) {
-	file, err := os.Open(filepath)
+const (
+	idBytes        = 16
+	maxIDLineBytes = 64 << 10
+)
+
+var (
+	errNonRegularIDFile = errors.New("ID file must be a regular file")
+	errEmptyID          = errors.New("ID file has an empty first line")
+	errIDLineTooLong    = errors.New("ID file first line exceeds 64 KiB")
+)
+
+// readLine reads and validates the first line of an existing regular file.
+func readLine(path string) (string, error) {
+	file, err := openIDFile(path)
 	if err != nil {
 		return "", coreerrs.WrapOperation(err, "open file")
 	}
+
 	defer func() { _ = file.Close() }()
 
-	fileScanner := bufio.NewScanner(file)
-
-	var id string
-	if fileScanner.Scan() {
-		id = fileScanner.Text()
+	info, err := file.Stat()
+	if err != nil {
+		return "", coreerrs.WrapOperation(err, "stat file")
 	}
 
-	// Always check for scanner errors after iteration completes.
-	// Scan() returns false on EOF (normal) or on error - we must check which.
-	if err := fileScanner.Err(); err != nil {
-		return "", coreerrs.WrapOperation(err, "scan file")
+	if !info.Mode().IsRegular() {
+		return "", errNonRegularIDFile
+	}
+
+	reader := bufio.NewReaderSize(file, maxIDLineBytes+1)
+
+	line, err := reader.ReadSlice('\n')
+	if errors.Is(err, bufio.ErrBufferFull) {
+		return "", errIDLineTooLong
+	}
+
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", coreerrs.WrapOperation(err, "read first line")
+	}
+
+	id := strings.TrimSpace(string(line))
+	if id == "" {
+		return "", errEmptyID
 	}
 
 	return id, nil
-}
-
-// fileExists checks if a file exists and is accessible.
-func fileExists(name string) bool {
-	if _, err := os.Stat(name); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-
-	return true
 }
 
 // Runtime check to ensure that the File type implements the Provider interface.

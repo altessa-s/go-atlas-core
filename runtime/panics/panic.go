@@ -24,6 +24,10 @@ import (
 // the caller-supplied condition is true. Use [errors.Is] to check for it.
 var ErrInvalidArgument = errors.New("invalid argument")
 
+// ErrRecoveredPanic is the category passed to global handlers for a recovered
+// panic when raw reporting is disabled.
+var ErrRecoveredPanic = errors.New("recovered panic")
+
 // panicMsg is an internal helper function that panics with the text of msg.
 // It supports strings, pointers to strings and types defined over either. A
 // type switch matches only the predeclared string and *string, so defined types
@@ -133,7 +137,9 @@ var reallyPanic atomic.Bool
 
 // PanicHandler is a callback invoked by [Handle] and [HandleWithOpts] after
 // recovering from a panic. It receives the context of the panicking goroutine
-// and the recovered value. Handlers must not panic themselves.
+// and a panic report. Global handlers receive [ErrRecoveredPanic] by default.
+// Handlers passed directly receive the recovered value. Handlers must not
+// panic themselves.
 type PanicHandler func(ctx context.Context, r any)
 
 // PanicHandlers is a convenience alias for a slice of [PanicHandler] functions,
@@ -159,10 +165,14 @@ type HandleOpts struct {
 	// Pass a [runtime.HookGroup.Shutdown] method value to flush only a
 	// component's hooks instead of the process-wide ones.
 	Shutdown coreruntime.ShutdownHook
+
+	// LogRawErrors sends the raw panic value to global handlers and enables
+	// panic values and stack traces in the built-in logger for this call.
+	LogRawErrors bool
 }
 
 // NewHandleOpts creates a [HandleOpts] with all fields at their zero values
-// (i.e., the global settings apply). Use method chaining to override:
+// with sanitized global reporting. Use method chaining to override re-panic:
 //
 //	opts := panics.NewHandleOpts().SetReallyPanic(false)
 func NewHandleOpts() *HandleOpts {
@@ -239,9 +249,14 @@ const panicShutdownTimeout = 2 * time.Second
 // budget on the first routine panic and a later real shutdown would silently
 // skip all hooks.
 func processRecovery(ctx context.Context, r any, opts *HandleOpts, handler ...PanicHandler) {
+	var report any = ErrRecoveredPanic
+	if opts != nil && opts.LogRawErrors {
+		report = r
+	}
+
 	if handlers, ok := globalPanicHandlers.Load().(PanicHandlers); ok {
 		for _, fn := range handlers {
-			fn(ctx, r)
+			fn(ctx, report)
 		}
 	}
 
@@ -280,7 +295,7 @@ var globalPanicHandlers = atomic.Value{}
 // lock-free on the atomic.Value.
 var globalPanicHandlersMu sync.Mutex
 
-var panicLogger = atomic.Value{}
+var panicLogger atomic.Pointer[slog.Logger]
 var loggerFromContext = atomic.Value{} // stores LoggerFromContextFunc
 
 func init() {
@@ -341,8 +356,8 @@ func SetReallyPanic(ok bool) {
 }
 
 // SetLogger sets the [slog.Logger] used by the built-in panic handler for
-// logging recovered panics. If not called, the handler falls back to a
-// context-derived logger (see [SetLoggerFromContext]) and then [slog.Default].
+// logging recovered panics when there is no context-derived logger
+// (see [SetLoggerFromContext]). Pass nil to fall back to [slog.Default].
 // SetLogger is safe for concurrent use.
 func SetLogger(l *slog.Logger) {
 	panicLogger.Store(l)
@@ -365,18 +380,12 @@ func SetLoggerFromContext(fn LoggerFromContextFunc) {
 }
 
 // panicLoggerHandler is the default panic handler that logs the panic details.
-// It captures a stack trace and logs the panic value along with it.
+// It captures a stack trace when raw reporting is enabled.
 // The logger is selected in the following priority order:
 // 1. Logger from context (if SetLoggerFromContext was called)
 // 2. Global logger (if SetLogger was called)
 // 3. slog.Default()
 func panicLoggerHandler(ctx context.Context, r any) {
-	// Manually allocate stack trace buffer size to prevent excessively large logs.
-	const size = 64 << 10
-
-	stacktrace := make([]byte, size)
-	stacktrace = stacktrace[:runtime.Stack(stacktrace, false)]
-
 	logger := slog.Default()
 
 	// Try to get logger from context using the configured function
@@ -389,23 +398,24 @@ func panicLoggerHandler(ctx context.Context, r any) {
 	// Fall back to global logger if context logger is not available
 	if logger == slog.Default() {
 		if globalLogger := panicLogger.Load(); globalLogger != nil {
-			if l, ok := globalLogger.(*slog.Logger); ok {
-				logger = l
-			}
+			logger = globalLogger
 		}
 	}
 
-	panicString := ""
-	if str, ok := r.(string); ok {
-		panicString = str
-	} else {
+	if r == ErrRecoveredPanic {
+		logger.Error("observed a panic", "category", "recovered_panic")
+		return
+	}
+
+	const size = 64 << 10
+
+	stacktrace := make([]byte, size)
+	stacktrace = stacktrace[:runtime.Stack(stacktrace, false)]
+
+	panicString, ok := r.(string)
+	if !ok {
 		panicString = fmt.Sprintf("%#v", r)
 	}
 
-	attrs := []any{
-		"panic", panicString,
-		"stacktrace", string(stacktrace),
-	}
-
-	logger.Error("observed a panic", attrs...)
+	logger.Error("observed a panic", "panic", panicString, "stacktrace", string(stacktrace))
 }
