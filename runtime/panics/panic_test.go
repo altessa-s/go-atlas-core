@@ -15,6 +15,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRecoverError_IsolatesNilPanic(t *testing.T) {
+	t.Setenv("GODEBUG", "panicnil=1")
+
+	oldHandlers := globalPanicHandlers.Load().(PanicHandlers)
+	oldReallyPanic := reallyPanic.Load()
+
+	t.Cleanup(func() {
+		SetGlobalPanicHandlers(oldHandlers...)
+		SetReallyPanic(oldReallyPanic)
+	})
+
+	handlerCalled := false
+
+	SetGlobalPanicHandlers(func(context.Context, any) { handlerCalled = true })
+	SetReallyPanic(true)
+
+	cause := errors.New("callback panicked")
+	err := RecoverError(cause, func() error { panic(nil) })
+
+	require.ErrorIs(t, err, cause)
+	require.False(t, handlerCalled)
+}
+
 func TestSetGlobalPanicHandlers_StoresCopy(t *testing.T) {
 	h := func(context.Context, any) {}
 

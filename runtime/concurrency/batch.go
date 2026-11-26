@@ -6,11 +6,18 @@ package concurrency
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 
+	"github.com/altessa-s/go-atlas-core/runtime/panics"
+
 	coreerrs "github.com/altessa-s/go-atlas-core/errors"
 )
+
+// ErrWorkerPanic is the sentinel for a panic recovered from an item function
+// passed to [Process] or [ProcessCollect]. Match it with [errors.Is].
+var ErrWorkerPanic = errors.New("worker panicked")
 
 // ProcessFunc is the callback signature for [Process]. It receives a
 // context (which may be canceled on error when [WithStopOnError] is
@@ -30,6 +37,11 @@ type TransformFunc[T, R any] func(ctx context.Context, item T) (R, error)
 // If items is empty, nil is returned immediately. When the effective
 // concurrency is 1 (or there is only one item), processing is sequential
 // in the caller's goroutine.
+//
+// A panic in fn is handled as an item error wrapping [ErrWorkerPanic].
+// The error carries a stack trace in a [*panics.RecoveredError], which can
+// be retrieved with [errors.As]. A recovered panic is sent to [WithOnError]
+// when configured and obeys the same first-error policy as a returned error.
 //
 // Example:
 //
@@ -60,12 +72,14 @@ type batchFunc[T any] struct {
 	index func(ctx context.Context, idx int) error
 }
 
-func (f batchFunc[T]) call(ctx context.Context, items []T, idx int) error {
-	if f.index != nil {
-		return f.index(ctx, idx)
-	}
+func (f batchFunc[T]) call(ctx context.Context, item T, idx int) error {
+	return panics.RecoverError(ErrWorkerPanic, func() error {
+		if f.index != nil {
+			return f.index(ctx, idx)
+		}
 
-	return f.item(ctx, items[idx])
+		return f.item(ctx, item)
+	})
 }
 
 // processWithOptions is the shared implementation of [Process] and
@@ -101,7 +115,7 @@ func processWithOptions[T any](
 
 	handle := func(idx int) {
 		item := items[idx]
-		if err := fn.call(gCtx, items, idx); err != nil {
+		if err := fn.call(gCtx, item, idx); err != nil {
 			once.Do(func() {
 				firstErr = err
 
@@ -158,9 +172,10 @@ func processWithOptions[T any](
 
 // ProcessCollect applies fn to every element of items concurrently
 // (like [Process]) and collects the transformed results into a slice
-// that preserves the original input order. On error with
-// [WithStopOnError] set, partial results collected so far are returned
-// alongside the error.
+// that preserves the original input order. It returns partial results
+// alongside the first error. A panic in fn is handled as an item error
+// wrapping [ErrWorkerPanic], with the same recovery and error policy as
+// [Process].
 //
 // Internally, ProcessCollect processes item indices rather than wrapped
 // structs, writes results directly into a pre-allocated array by
@@ -260,16 +275,8 @@ func processSequential[T any](
 
 			return err
 		}
-		// Branch inline rather than through batchFunc.call: the sequential
-		// loop runs per item and the extra call is measurable on cheap work.
-		var err error
-		if fn.index != nil {
-			err = fn.index(ctx, idx)
-		} else {
-			err = fn.item(ctx, item)
-		}
 
-		if err != nil {
+		if err := fn.call(ctx, item, idx); err != nil {
 			if cfg.onError != nil {
 				cfg.onError(item, err)
 			}

@@ -26,6 +26,11 @@
 // configurable concurrency limits and error handling strategies. It supports
 // both fixed limits and dynamic calculation via ConcurrencyLimitFunc.
 //
+// [Process] and [ProcessCollect] treat an item function's panic as an error
+// matching [ErrWorkerPanic]. The error carries a stack trace but omits the
+// panic value. [WithOnError] receives the error for that item, and
+// [WithStopOnError] applies as it does for returned errors.
+//
 // Example Batch Usage:
 //
 //	items := []string{"a", "b", "c"}

@@ -8,6 +8,10 @@
 // All configuration functions use atomic operations and are thread-safe.
 // Handle and HandleWithOpts are safe to use concurrently.
 //
+// [RecoverError] runs a callback and converts a panic into a
+// [*RecoveredError] with a stack trace. It discards the panic value
+// and bypasses global panic handlers and re-panic settings.
+//
 // # Basic Usage
 //
 //	func riskyOperation(ctx context.Context) {

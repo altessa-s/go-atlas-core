@@ -44,7 +44,10 @@ goroutine, channel, or worker-pool overhead.
   error is returned.
 - Without `WithStopOnError`, every item is still processed; the first error encountered is still the one returned.
 - `WithOnSuccess` / `WithOnError` callbacks are invoked under a mutex, so mutating shared state from them is safe without external synchronization.
-- **`ProcessCollect` returns a result only for items that succeeded.** When any item's function returns an error, the result slice is compacted to
+- A panic in an item function becomes an item error matching `ErrWorkerPanic` via `errors.Is`, even with a single worker. Recover the stack
+  trace with `errors.As` into a `*panics.RecoveredError` and call `StackTrace()`. The error and trace omit the panic value, and recovery
+  bypasses the global panic handlers. The usual `WithOnError` and `WithStopOnError` behavior applies.
+- **`ProcessCollect` returns a result only for items that succeeded.** When any item's function returns an error or panics, the result slice is compacted to
   the completed items — order is preserved among the survivors, but the slice is shorter than the input and its indices no longer match `items`.
 
 That last rule decides how to signal failure from a `TransformFunc`. Returning `(value, error)` tells `ProcessCollect` to *discard* `value` on
