@@ -112,7 +112,8 @@ below. Build it once and reuse it: the returned function allocates nothing per c
 | `WithExponentialMaxDelay` | unbounded                         | Cap on the computed delay; non-positive values are ignored |
 | `WithExponentialFactor`   | `DefaultExponentialFactor` (1.5)  | Multiplier per attempt; zero means the default           |
 | `WithExponentialJitter`   | 0 (deterministic)                 | Maximum jitter as a fraction of the capped delay (0–1)   |
-| `WithExponentialJitterMode` | `JitterAdditive`                | Additive jitter only increases the delay. `JitterSymmetric` can also shorten it. Unknown modes use additive jitter. |
+| `WithExponentialJitterMode` | `JitterAdditive`                | Additive jitter only increases the delay. `JitterSymmetric` can also shorten it. `JitterFull` only shortens it: with jitter 1 the delay is uniform in [0, d) (full jitter), and at least 1ns. Unknown modes use additive jitter. |
+| `WithExponentialJitterSource` | `math/rand/v2`                | Source of the jitter samples, uniform in [0, 1); samples outside it are clamped. Set it for deterministic delays in tests. |
 
 ```go
 backoff := retry.Exponential(100*time.Millisecond,
@@ -120,3 +121,16 @@ backoff := retry.Exponential(100*time.Millisecond,
     retry.WithExponentialJitter(0.2),
 )
 ```
+
+Full jitter draws each delay below the capped exponential delay, which spreads the retries of many clients that failed together
+(`d` is `min(maxDelay, baseDelay × factor^attempt)`):
+
+```go
+backoff := retry.Exponential(100*time.Millisecond,
+    retry.WithExponentialMaxDelay(30*time.Second),
+    retry.WithExponentialJitter(1),
+    retry.WithExponentialJitterMode(retry.JitterFull), // uniform in [1ns, d)
+)
+```
+
+A delay of zero stops `Do`, so `JitterFull` never returns less than 1ns.
