@@ -29,4 +29,10 @@ type exponentialOptions struct {
 	// WithExponentialJitterMode selects how jitter varies the capped delay.
 	// Unknown modes use [JitterAdditive].
 	jitterMode JitterMode `opt:"ExponentialJitterMode" optgen:"default=JitterAdditive"`
+	// jitterSource draws the jitter samples. Nil means math/rand/v2; a sample outside [0, 1) is clamped into it.
+	jitterSource JitterSource `opt:"ExponentialJitterSource"`
 }
+
+// JitterSource returns samples uniform in [0, 1), the u of each [JitterMode] formula. A source shared between
+// goroutines must be safe for concurrent use.
+type JitterSource func() float64

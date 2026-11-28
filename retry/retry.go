@@ -239,6 +239,9 @@ const (
 	JitterAdditive JitterMode = iota
 	// JitterSymmetric varies the delay in either direction: d * (1 + j*(2*u - 1)).
 	JitterSymmetric
+	// JitterFull draws below the delay: d*(1 - j + j*u). With j = 1 it is full jitter, uniform in [0, d). The
+	// result is at least 1ns, because a zero delay stops [Do].
+	JitterFull
 )
 
 // Exponential returns a [NextDelayFunc] that implements exponential
@@ -251,11 +254,31 @@ const (
 // from retrying. [WithExponentialMaxDelay] caps the delay (unbounded by
 // default), [WithExponentialFactor] sets the multiplier (default
 // [DefaultExponentialFactor]) and [WithExponentialJitter] sets the jitter fraction
-// (zero by default). [WithExponentialJitterMode] selects [JitterAdditive]
-// or [JitterSymmetric]. The returned function is safe for concurrent
-// use.
+// (zero by default). [WithExponentialJitterMode] selects [JitterAdditive],
+// [JitterSymmetric] or [JitterFull], and [WithExponentialJitterSource] replaces
+// the random source of the jitter. The returned function is safe for concurrent
+// use when the source is.
 func Exponential(baseDelay time.Duration, opts ...ExponentialOption) NextDelayFunc {
-	return exponential(baseDelay, newExponentialOptions(opts...), rand.Float64) // #nosec G404 -- non-cryptographic retry jitter
+	o := newExponentialOptions(opts...)
+
+	sample := rand.Float64 // #nosec G404 -- non-cryptographic retry jitter
+	if source := o.jitterSource; source != nil {
+		sample = func() float64 { return unitSample(source()) }
+	}
+
+	return exponential(baseDelay, o, sample)
+}
+
+// unitSample clamps a jitter sample into [0, 1); NaN becomes 0.
+func unitSample(u float64) float64 {
+	switch {
+	case u >= 1:
+		return math.Nextafter(1, 0)
+	case u > 0:
+		return u
+	default:
+		return 0
+	}
 }
 
 func exponential(baseDelay time.Duration, o *exponentialOptions, sample func() float64) NextDelayFunc {
@@ -290,7 +313,7 @@ func exponential(baseDelay time.Duration, o *exponentialOptions, sample func() f
 		d := limit
 
 		if math.IsInf(multiplier, 1) || product >= float64(math.MaxInt64) {
-			if mode != JitterSymmetric {
+			if mode != JitterSymmetric && mode != JitterFull {
 				return limit
 			}
 		} else {
@@ -301,24 +324,37 @@ func exponential(baseDelay time.Duration, o *exponentialOptions, sample func() f
 		}
 
 		if jitter > 0 {
-			u := sample()
-			if mode == JitterSymmetric {
-				delay := float64(d) * (1 + jitter*(2*u-1))
-				if delay >= float64(limit) {
-					return limit
-				}
-
-				return time.Duration(delay)
-			}
-
-			extra := float64(d) * jitter * u
-			if extra >= float64(limit-d) {
-				return limit
-			}
-
-			d += time.Duration(extra)
+			return applyJitter(d, limit, jitter, sample(), mode)
 		}
 
 		return d
 	}
+}
+
+// applyJitter varies the capped delay d by the fraction j at sample u, never past limit.
+func applyJitter(d, limit time.Duration, j, u float64, mode JitterMode) time.Duration {
+	switch mode {
+	case JitterFull:
+		delay := float64(d) * (1 - j + j*u)
+		if delay >= float64(d) { // rounding at u close to 1; float64(d) may exceed math.MaxInt64
+			return d
+		}
+
+		return max(time.Duration(delay), 1)
+	case JitterSymmetric:
+		delay := float64(d) * (1 + j*(2*u-1))
+		if delay >= float64(limit) {
+			return limit
+		}
+
+		return time.Duration(delay)
+	case JitterAdditive:
+	}
+
+	extra := float64(d) * j * u
+	if extra >= float64(limit-d) {
+		return limit
+	}
+
+	return d + time.Duration(extra)
 }

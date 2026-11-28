@@ -22,8 +22,9 @@
 //	)
 //
 // [Exponential] uses deterministic delays by default. With jitter enabled,
-// [JitterAdditive] increases the delay and [JitterSymmetric] can also shorten it.
-// Select the mode with [WithExponentialJitterMode].
+// [JitterAdditive] increases the delay, [JitterSymmetric] can also shorten it and
+// [JitterFull] draws it below the capped delay. Select the mode with
+// [WithExponentialJitterMode] and the random source with [WithExponentialJitterSource].
 //
 // # Deadlines and test clocks
 //

@@ -39,6 +39,15 @@ func WithExponentialJitterMode(v JitterMode) ExponentialOption {
 	}
 }
 
+// WithExponentialJitterSource sets the jitterSource option.
+//
+// jitterSource draws the jitter samples. Nil means math/rand/v2; a sample outside [0, 1) is clamped into it.
+func WithExponentialJitterSource(v JitterSource) ExponentialOption {
+	return func(o *exponentialOptions) {
+		o.jitterSource = v
+	}
+}
+
 // WithExponentialMaxDelay sets the maxDelay option.
 //
 // maxDelay caps the computed delay. A zero or negative value leaves the

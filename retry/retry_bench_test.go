@@ -140,6 +140,22 @@ func BenchmarkExponential(b *testing.B) {
 			i++
 		}
 	})
+	b.Run("FullJitterCapped", func(b *testing.B) {
+		backoff := retry.Exponential(100*time.Millisecond,
+			retry.WithExponentialFactor(2),
+			retry.WithExponentialMaxDelay(30*time.Second),
+			retry.WithExponentialJitter(1),
+			retry.WithExponentialJitterMode(retry.JitterFull),
+		)
+
+		b.ReportAllocs()
+
+		i := 0
+		for b.Loop() {
+			backoff(i%16, nil)
+			i++
+		}
+	})
 	b.Run("JitterCappedParallel", func(b *testing.B) {
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
